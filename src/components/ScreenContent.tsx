@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
-
 import { EditScreenInfo } from './EditScreenInfo';
+
 
 type ScreenContentProps = {
   title: string;
