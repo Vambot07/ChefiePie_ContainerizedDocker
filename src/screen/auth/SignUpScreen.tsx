@@ -1,13 +1,13 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image, ScrollView, Alert } from 'react-native';
-import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '~/context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileToFirebase } from '~/utils/uploadImage';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, Platform } from 'react-native';
+import EditModal from '~/components/EditModal';
 
 const SignUpScreen = () => {
     const navigation = useNavigation<any>();
@@ -22,44 +22,64 @@ const SignUpScreen = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 
+
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 1 });
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,  // ← FIX INI
+            allowsEditing: true as boolean,
+            quality: 0.8,
+            aspect: [4, 3],
+        });
+
         if (!result.canceled && result.assets && result.assets.length > 0) {
             setProfileImage(result.assets[0].uri);
+            console.log('✅ Profile Image selected:', result.assets[0].uri);
+            console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
         }
     }
 
+
+
     const handleSignUp = async () => {
-        if (!username || !email || !password || !confirmPassword) {
-            Alert.alert('Error', 'Please fill in all fields');
-            return;
-        }
+        try {
+            if (!username || !email || !password || !confirmPassword) {
+                Alert.alert('Error', 'Please fill in all fields');
+                return;
+            }
 
-        if (password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
-            return;
-        }
+            if (password !== confirmPassword) {
+                Alert.alert('Error', 'Passwords do not match');
+                return;
+            }
 
-        if (password.length < 6) {
-            Alert.alert('Error', 'Password must be at least 6 characters long');
-            return;
-        }
+            if (password.length < 6) {
+                Alert.alert('Error', 'Password must be at least 6 characters long');
+                return;
+            }
 
-        setLoading(true);
-        let profileImageUrl = '';
-        if (profileImage) {
-            const fileName = `profile_${Date.now()}.jpg`;
-            profileImageUrl = await uploadProfileToFirebase(profileImage, fileName);
-        }
-        const response = await signup(username, email, password, profileImageUrl);
-        setLoading(false);
+            setLoading(true);
+            let profileImageUrl = '';
 
-        console.log('Signup response:', response);
+            // Upload profile image if selected
+            if (profileImage) {
+                const fileName = `profile_${Date.now()}.jpg`;
+                profileImageUrl = await uploadProfileToFirebase(profileImage, fileName);
+            }
 
-        if (response.success) {
-            Alert.alert('Signup Success', response.msg);
-        } else {
-            Alert.alert('Signup Failed', response.msg + '\nPlease try again later');
+            // Create user account
+            const response = await signup(username, email, password, profileImageUrl);
+
+            console.log('Signup response:', response);
+
+            if (response.success) {
+                Alert.alert('Signup Success', 'Account created successfully!');
+            } else {
+                Alert.alert('Signup Failed', response.msg + '\nPlease try again later');
+            }
+        } catch (error) {
+            Alert.alert('Error', error instanceof Error ? error.message : 'An unknown error occurred');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -69,7 +89,6 @@ const SignUpScreen = () => {
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={0}
             >
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.content}>
@@ -153,10 +172,18 @@ const SignUpScreen = () => {
                             </View>
 
                             <TouchableOpacity
-                                style={styles.button}
+                                style={[styles.button, loading && styles.buttonDisabled]}
                                 onPress={handleSignUp}
+                                disabled={loading}
                             >
-                                <Text style={styles.buttonText}>Sign Up</Text>
+                                {loading ? (
+                                    <View style={styles.loadingContainer}>
+                                        <ActivityIndicator size="small" color="#fff" />
+                                        <Text style={styles.buttonText}>Creating Account...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.buttonText}>Sign Up</Text>
+                                )}
                             </TouchableOpacity>
 
                             <View style={styles.signInContainer}>
@@ -169,6 +196,17 @@ const SignUpScreen = () => {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Loading Overlay */}
+            {loading && (
+                <View style={styles.loadingOverlay}>
+                    <View style={styles.loadingContent}>
+                        <ActivityIndicator size="large" color="#FF9966" />
+                        <Text style={styles.loadingText}>Creating your account...</Text>
+                        <Text style={styles.loadingSubtext}>Please wait while we set up your profile</Text>
+                    </View>
+                </View>
+            )}
         </SafeAreaView>
     );
 };
@@ -240,10 +278,59 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 10,
     },
+    buttonDisabled: {
+        backgroundColor: '#FF9966',
+        opacity: 0.7,
+    },
     buttonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    loadingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    loadingContent: {
+        backgroundColor: '#fff',
+        padding: 30,
+        borderRadius: 15,
+        alignItems: 'center',
+        minWidth: 250,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    loadingText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        marginTop: 15,
+        textAlign: 'center',
+    },
+    loadingSubtext: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 8,
+        textAlign: 'center',
     },
     signInContainer: {
         flexDirection: 'row',

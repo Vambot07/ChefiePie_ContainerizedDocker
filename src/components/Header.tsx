@@ -1,4 +1,3 @@
-import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,7 +24,7 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
     return (
         <SafeAreaView style={{ backgroundColor }}>
-            <View style={{ backgroundColor }} className="px-4 py-2">
+            <View style={{ backgroundColor }} className="px-4 pt-2">
                 <View className="flex-row items-center justify-between">
                     {/* Left side - Back button or spacer */}
                     <View className="w-8">
@@ -49,9 +48,9 @@ const Header: React.FC<HeaderProps> = ({
                         {rightIcon && (
                             <TouchableOpacity
                                 onPress={onRightAction}
-                                className="w-8 h-8 items-center justify-center rounded-full bg-gray-50"
+                                className="w-8 h-8 items-center justify-center rounded-full"
                             >
-                                <Ionicons name={rightIcon} size={18} color="#FF9966" />
+                                <Ionicons name={rightIcon} size={24} color="#FF9966" />
                             </TouchableOpacity>
                         )}
                     </View>

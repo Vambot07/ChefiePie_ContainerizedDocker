@@ -8,7 +8,8 @@ const colors = {
     white: '#FFFFFF',         // Chef outfit
     blush: '#FFA07A',         // Cheek blush
     accent: '#FFB86B',        // Lighter orange (phone screen)
-    black: '#000000',         // For contrast if needed
+    black: '#000000',
+    creamWhite: '#FFF7F0'    // For contrast if needed
 };
 
 export default colors;

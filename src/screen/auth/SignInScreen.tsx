@@ -1,5 +1,5 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image, Alert } from 'react-native';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '~/context/AuthContext';
@@ -12,6 +12,7 @@ const SignInScreen = () => {
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const { signin } = useAuth();
+
     const handleSignIn = async () => {
         if (!email || !password) {
             Alert.alert('Error', 'Please fill in all fields');

@@ -87,9 +87,17 @@ export default function AddRecipeScreen() {
 
     // Pick image from gallery
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 1 });
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],  // ✅ Changed from MediaTypeOptions.Images
+            allowsEditing: true,
+            quality: 0.8,  // ✅ Reduced quality to make upload faster
+            aspect: [4, 3],
+        });
+
         if (!result.canceled && result.assets && result.assets.length > 0) {
             setImage(result.assets[0].uri);
+            console.log('✅ Image selected:', result.assets[0].uri);
+            console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
         }
     };
 
@@ -117,7 +125,7 @@ export default function AddRecipeScreen() {
     // Handle form submission
     const handleAddRecipe = async () => {
         setIsLoading(true);
-
+        console.log("Sini Sal: " + image);
         try {
 
             if (!title || !intro || !ingredients || !steps) {
@@ -129,6 +137,7 @@ export default function AddRecipeScreen() {
 
             let imageUrl = '';
             if (image) {
+
                 const fileName = `recipe_${Date.now()}.jpg`;
                 imageUrl = await uploadImageToFirebase(image, fileName);
             }

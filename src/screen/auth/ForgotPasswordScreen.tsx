@@ -1,15 +1,37 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image, Alert } from 'react-native';
 import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '~/context/AuthContext';
+
 
 const ForgotPasswordScreen = () => {
     const navigation = useNavigation<any>();
     const [email, setEmail] = useState('');
+    const { resetPassword } = useAuth();
 
-    const handleResetPassword = () => {
+    const handleResetPassword = async () => {
         // TODO: Implement password reset logic
-        console.log('Reset password for:', email);
+        if (!email.trim()) {
+            alert('Please enter your email address');
+            return;
+
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            alert('Please enter a valid email address');
+            return;
+        }
+
+        console.log('Reset password for: ', email);
+
+        const result = await resetPassword(email);
+        if (result.success) {
+            Alert.alert('Success', result.msg);
+            navigation.goBack();
+        } else {
+            Alert.alert('Error', result.msg);
+        }
     };
 
     return (
