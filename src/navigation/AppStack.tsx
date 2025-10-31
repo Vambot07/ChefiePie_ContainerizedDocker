@@ -14,6 +14,9 @@ import ViewRecipeScreen from '~/screen/search/recipe/ViewRecipeScreen';
 import colors from '~/utils/color';
 import ViewSavedRecipeScreen from '~/screen/saved/recipe/ViewSavedRecipeScreen';
 import MigrateImagesScreen from '~/screen/admin/MigrateImagesScreen';
+import SettingScreen from '~/screen/profile/SettingScreen';
+import EditProfileScreen from '~/screen/profile/EditProfileScreen';
+import FoodPreferenceScreen from '~/screen/profile/FoodPreferenceScreen';
 
 export type RootStackParamList = {
     Tabs: undefined;
@@ -26,7 +29,10 @@ export type RootStackParamList = {
     Planner: undefined;
     Checklist: undefined;
     ViewSavedRecipe: { recipeId: String };
+    Setting: undefined;
     MigrateImages: undefined; // <-- Add this line!
+    EditProfile: undefined;
+    FoodPreference: undefined;
 };
 
 export type NavigationProps = NativeStackNavigationProp<RootStackParamList>;
@@ -108,6 +114,9 @@ const AppStack = () => {
             <Stack.Screen name="ViewRecipe" component={ViewRecipeScreen} />
             <Stack.Screen name="ViewSavedRecipe" component={ViewSavedRecipeScreen} />
             <Stack.Screen name="MigrateImages" component={MigrateImagesScreen} />
+            <Stack.Screen name="Setting" component={SettingScreen} />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+            <Stack.Screen name="FoodPreference" component={FoodPreferenceScreen} />
         </Stack.Navigator>
     );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { getRecipeById, unsaveRecipe, isRecipeSaved } from '../../../controller/
 import { addItemsToChecklist } from '../../../controller/checklist';
 import Header from '../../../components/Header';
 import * as Speech from 'expo-speech';
+import colors from '~/utils/color';
 
 const ViewSavedRecipeScreen = () => {
     const route = useRoute();
@@ -14,13 +15,13 @@ const ViewSavedRecipeScreen = () => {
     const { recipeId } = route.params as { recipeId: string };
 
     const [recipe, setRecipe] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [isSaved, setIsSaved] = useState(true);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [isSaved, setIsSaved] = useState<boolean>(true);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
     const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
-    const [selectedIngredients, setSelectedIngredients] = useState<any[]>([]);
-    const [voiceMode, setVoiceMode] = useState(false);
-    const [currentStep, setCurrentStep] = useState(0);
+    const [selectedIngredients, setSelectedIngredients] = useState<any[]>([]);;
+    const [voiceMode, setVoiceMode] = useState<boolean>(false);
+    const [currentStep, setCurrentStep] = useState<number>(0);
     const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
 
     useFocusEffect(
@@ -179,9 +180,9 @@ const ViewSavedRecipeScreen = () => {
                     <View className="p-4">
                         {/* Recipe Image with YouTube overlay */}
                         <View className="relative mb-4">
-                            <Image source={{ uri: recipe.image }} className="w-full h-56 rounded-2xl" />
                             {recipe.youtube ? (
                                 <>
+                                    <Image source={{ uri: recipe.image }} className="w-full h-56 rounded-2xl" />
                                     <TouchableOpacity
                                         className="absolute top-3 left-5 bg-black/60 px-3 py-1 rounded-full flex-row items-center"
                                     >
@@ -196,7 +197,13 @@ const ViewSavedRecipeScreen = () => {
                                         <Ionicons name="play-circle" size={48} color="#fff" />
                                     </TouchableOpacity>
                                 </>
-                            ) : null}
+                            ) : <>
+                                <View className="w-full h-56 rounded-2xl bg-gray-100 justify-center items-center">
+                                    <Text className="text-gray-700 font-bold mb-2">
+                                        Sorry, the video is not available
+                                    </Text>
+                                </View>
+                            </>}
                         </View>
 
                         <View className="flex-row items-start justify-between mb-4">

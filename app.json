@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "chefiePie",
-    "slug": "chefiePie",
+    "name": "",
+    "slug": "ChefiePie",
     "version": "1.0.0",
     "web": {
       "favicon": "./assets/ChefiePieMascotLogo.png"
@@ -9,7 +9,9 @@
     "experiments": {
       "tsconfigPaths": true
     },
-    "plugins": [],
+    "plugins": [
+      "expo-asset"
+    ],
     "orientation": "portrait",
     "icon": "./assets/ChefiePieLogo.png",
     "userInterfaceStyle": "light",

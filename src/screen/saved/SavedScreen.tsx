@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, ScrollView, Image, Alert, RefreshControl, ActivityIndicator } from 'react-native'
-import React, { useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { getSavedRecipes } from '~/controller/recipe'
@@ -82,7 +82,7 @@ export default function SavedScreen() {
             />
 
             {loading ? (
-                <View className="flex-1 justify-center items-center">
+                <View className="flex-1 bg-gray-150 justify-center items-center">
                     <ActivityIndicator size="large" color="#FFB47B" />
                 </View>
             ) : savedRecipes.length > 0 ? (

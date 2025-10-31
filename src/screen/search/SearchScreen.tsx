@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Image, Alert, RefreshControl } from 'react-native'
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Image, Alert, RefreshControl, ActivityIndicator } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { Entypo, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -63,20 +63,25 @@ export default function SearchScreen() {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const navigation = useNavigation<NavigationProp>();
+    const [loading, setLoading] = useState(false);
 
     const fetchRecipes = async () => {
         try {
+            setLoading(true);
+            console.log('Loading for fetching recipes: ')
             const results = await searchRecipes(searchQuery);
             setRecipes(results as Recipe[]);
         } catch (error) {
             Alert.alert('Error', 'Failed to fetch recipes');
         } finally {
             setRefreshing(false);
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchRecipes();
+        const timeout = setTimeout(() => fetchRecipes(), 500);
+        return () => clearTimeout(timeout);
     }, [searchQuery]);
 
     // Refresh recipes when screen comes into focus (e.g., after deleting a recipe)
@@ -136,18 +141,24 @@ export default function SearchScreen() {
             </View>
 
             {/* Recipe Grid */}
-            <ScrollView
-                className="flex-1 bg-lightPeach px-4 pt-4"
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-            >
-                <View className="flex-row flex-wrap justify-between">
-                    {recipes.map((recipe) => (
-                        <RecipeCard key={recipe.id} recipe={recipe} navigation={navigation} />
-                    ))}
-                </View>
-            </ScrollView>
+            {loading ? (
+                <View className='flex-1 bg-grey-150 justify-center items-center'>
+                    <ActivityIndicator size='large' color="#FF9966" />
+                </View>) : (
+                <ScrollView
+                    className="flex-1 bg-lightPeach px-4 pt-4"
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                    }
+                >
+                    <View className="flex-row flex-wrap justify-between">
+                        {recipes.map((recipe) => (
+                            <RecipeCard key={recipe.id} recipe={recipe} navigation={navigation} />
+                        ))}
+                    </View>
+                </ScrollView>)}
+
+
         </View>
     )
 }
