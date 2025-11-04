@@ -15,8 +15,6 @@ import { Ionicons, Feather, Fontisto } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '~/context/AuthContext';
 import colors from '~/utils/color';
-import { db } from 'firebaseConfig';
-import { updateDoc, doc } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileToFirebase } from '~/utils/uploadImage';
 import Header from '~/components/Header';
@@ -24,7 +22,7 @@ import EditModal from '~/components/EditModal';
 
 const EditProfileScreen = () => {
     const navigation = useNavigation();
-    const { user, updateUserProfile } = useAuth();
+    const { user, updateUserInFirestore } = useAuth(); // ✅ Get from context
 
     const profileImage = user?.profileImage;
     const username = user?.username;
@@ -36,7 +34,7 @@ const EditProfileScreen = () => {
     const [youtube, setYoutube] = useState<string>(user?.youtube || '');
     const [tiktok, setTiktok] = useState<string>(user?.tiktok || '');
     
-    // ✅ Image states
+    // Image states
     const [selectedImage, setSelectedImage] = useState<string | null>(profileImage || null);
     const [uploading, setUploading] = useState(false);
     
@@ -47,30 +45,6 @@ const EditProfileScreen = () => {
     const [loading, setLoading] = useState(false);
 
     const maxBioLength = 255;
-
-    type UserUpdate = {
-        username?: string;
-        bio?: string;
-        instagram?: string;
-        youtube?: string;
-        tiktok?: string;
-        profileImage?: string;
-    }
-
-    // Update user in Firestore
-    const updateUserInFirestore = async (
-        userId: string,
-        updatedData: UserUpdate
-    ) => {
-        try {
-            const userRef = doc(db, "users", userId);
-            await updateDoc(userRef, updatedData);
-            console.log("✅ Firestore: User data updated successfully!");
-        } catch (error) {
-            console.error("❌ Firestore update error:", error);
-            throw error;
-        }
-    };
 
     // ✅ Pick Image from Gallery
     const pickImage = async () => {
@@ -146,10 +120,12 @@ const EditProfileScreen = () => {
             setLoading(true);
 
             if (user?.userId) {
-                await updateUserInFirestore(user.userId, { instagram: trimmedInstagram });
+                const result = await updateUserInFirestore(user.userId, { instagram: trimmedInstagram });
+                
+                if (!result.success) {
+                    throw new Error('Failed to update');
+                }
             }
-
-            await updateUserProfile({ instagram: trimmedInstagram });
 
             Alert.alert('Success', 'Instagram updated successfully!');
             setShowEditInstagram(false);
@@ -175,10 +151,12 @@ const EditProfileScreen = () => {
             setLoading(true);
 
             if (user?.userId) {
-                await updateUserInFirestore(user.userId, { youtube: trimmedYoutube });
+                const result = await updateUserInFirestore(user.userId, { youtube: trimmedYoutube });
+                
+                if (!result.success) {
+                    throw new Error('Failed to update');
+                }
             }
-
-            await updateUserProfile({ youtube: trimmedYoutube });
 
             Alert.alert('Success', 'YouTube updated successfully!');
             setShowEditYoutube(false);
@@ -204,10 +182,12 @@ const EditProfileScreen = () => {
             setLoading(true);
 
             if (user?.userId) {
-                await updateUserInFirestore(user.userId, { tiktok: trimmedTiktok });
+                const result = await updateUserInFirestore(user.userId, { tiktok: trimmedTiktok });
+                
+                if (!result.success) {
+                    throw new Error('Failed to update');
+                }
             }
-
-            await updateUserProfile({ tiktok: trimmedTiktok });
 
             Alert.alert('Success', 'TikTok updated successfully!');
             setShowEditTiktok(false);
@@ -276,19 +256,16 @@ const EditProfileScreen = () => {
                 }
             }
 
-            // ✅ Update Firestore
-            await updateUserInFirestore(user.userId, {
+            // ✅ Use context function - single call updates both Firestore AND local state
+            const result = await updateUserInFirestore(user.userId, {
                 username: newUsername.trim(),
                 bio: bio.trim(),
                 profileImage: imageUrl,
             });
 
-            // ✅ Update local context
-            await updateUserProfile({
-                username: newUsername.trim(),
-                bio: bio.trim(),
-                profileImage: imageUrl,
-            });
+            if (!result.success) {
+                throw new Error('Failed to update profile');
+            }
 
             Alert.alert("Success", "Profile updated successfully!");
             navigation.goBack();

@@ -25,7 +25,7 @@ import {
     updateEmail,
     verifyBeforeUpdateEmail
 } from 'firebase/auth';
-import SettingItem from '~/components/SettingItem';
+import Item from '~/components/Item';
 import EditModal from '~/components/EditModal';
 import CryptoJS from "crypto-js";
 
@@ -273,7 +273,7 @@ const SettingScreen = () => {
                         className="rounded-2xl p-1 mb-6"
                         style={{ backgroundColor: colors.creamWhite }}
                     >
-                        <SettingItem
+                        <Item
                             title="Email Address"
                             subtitle={user?.email || 'Not set'}
                             onPress={() => setShowEditEmailModal(true)}
@@ -282,7 +282,7 @@ const SettingScreen = () => {
 
                         <View className="h-px bg-gray-300 mx-4" />
 
-                        <SettingItem
+                        <Item
                             title="Change Password"
                             subtitle="Update your password"
                             onPress={() => setShowChangePasswordModal(true)}
@@ -298,7 +298,7 @@ const SettingScreen = () => {
                         style={{ backgroundColor: colors.creamWhite }}
                     >
 
-                        <SettingItem
+                        <Item
                             title="Privacy & Security"
                             subtitle="Manage your privacy settings"
                             onPress={() => Alert.alert('Coming Soon', 'Privacy settings will be available soon!')}
@@ -307,7 +307,7 @@ const SettingScreen = () => {
 
                         <View className="h-px bg-gray-300 mx-4" />
 
-                        <SettingItem
+                        <Item
                             title="About"
                             subtitle="App version and information"
                             onPress={() => Alert.alert('About ChefiePie', 'Version 1.0.0\nBuilt with React Native & Expo')}
@@ -322,7 +322,7 @@ const SettingScreen = () => {
                         className="rounded-2xl p-1 mb-8"
                         style={{ backgroundColor: colors.creamWhite }}
                     >
-                        <SettingItem
+                        <Item
                             title="Sign Out"
                             subtitle="Sign out of your account"
                             onPress={() => {

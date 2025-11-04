@@ -4,40 +4,156 @@ import {
     TouchableOpacity,
     ScrollView,
     Alert,
-    Modal,
-    FlatList
+    TextInput,
+    Platform,
+    KeyboardAvoidingView,
+    Keyboard,
+    ActivityIndicator
 } from 'react-native';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import colors from '~/utils/color';
+import { useAuth } from '~/context/AuthContext';
 import Header from '~/components/Header';
+import EditModal from '~/components/EditModal';
+import Item from '~/components/Item';
+
+// ✅ EXTRACT COMPONENT KELUAR - Put BEFORE FoodPreferenceScreen
+const IngredientsToAvoidContent = React.memo(({ 
+    customIngredient,
+    onCustomIngredientChange,
+    ingredientsToAvoid,
+    onIngredientToggle,
+    onAddCustomIngredient,
+    ingredientOptions
+}: {
+    customIngredient: string;
+    onCustomIngredientChange: (text: string) => void;
+    ingredientsToAvoid: string[];
+    onIngredientToggle: (option: string) => void;
+    onAddCustomIngredient: () => void;
+    ingredientOptions: string[];
+}) => (
+    <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={100}
+    >
+        <View>
+            {/* Custom Ingredient Input Section */}
+            <View className="mb-4 p-3 bg-gray-50 rounded-xl">
+                <Text className="text-gray-700 font-medium mb-2">Add Custom Ingredient</Text>
+                <View className="flex-row items-center">
+                    <TextInput
+                        className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 mr-2"
+                        placeholder="e.g., Papaya, Durian..."
+                        value={customIngredient}
+                        onChangeText={onCustomIngredientChange}
+                        style={{ color: colors.darkBrown }}
+                        returnKeyType="done"
+                        onSubmitEditing={onAddCustomIngredient}  
+                        blurOnSubmit={true}
+                    />
+                    <TouchableOpacity
+                        className="px-4 py-2 rounded-lg"
+                        style={{ backgroundColor: colors.primary }}
+                        onPress={onAddCustomIngredient}
+                    >
+                        <Text className="text-white font-semibold">Add</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Scrollable List */}
+            <ScrollView 
+                style={{ maxHeight: 300 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                {ingredientOptions.map((option) => (
+                    <TouchableOpacity
+                        key={option}
+                        className="flex-row items-center justify-between py-3 border-b border-gray-200"
+                        onPress={() => onIngredientToggle(option)}
+                    >
+                        <Text className="text-gray-800 text-base">{option}</Text>
+                        <View
+                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
+                                ingredientsToAvoid.includes(option)
+                                    ? 'border-orange-400 bg-orange-400'
+                                    : 'border-gray-400'
+                            }`}
+                        >
+                            {ingredientsToAvoid.includes(option) && (
+                                <Ionicons name="checkmark" size={16} color="white" />
+                            )}
+                        </View>
+                    </TouchableOpacity>
+                ))}
+                
+                {ingredientsToAvoid
+                    .filter(item => !ingredientOptions.includes(item))
+                    .map((option) => (
+                        <TouchableOpacity
+                            key={option}
+                            className="flex-row items-center justify-between py-3 border-b border-gray-200 bg-orange-50"
+                            onPress={() => onIngredientToggle(option)}
+                        >
+                            <View className="flex-row items-center flex-1">
+                                <Text className="text-gray-800 text-base">{option}</Text>
+                                <Text className="text-xs text-orange-600 ml-2">(Custom)</Text>
+                            </View>
+                            <View className="w-6 h-6 rounded-full border-2 items-center justify-center border-orange-400 bg-orange-400">
+                                <Ionicons name="checkmark" size={16} color="white" />
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+            </ScrollView>
+        </View>
+    </KeyboardAvoidingView>
+));
 
 const FoodPreferenceScreen = () => {
     const navigation = useNavigation();
+    const { user, updateUserInFirestore } = useAuth();
 
-    const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
-    const [cookingGoal, setCookingGoal] = useState<string>('');
-    const [ingredientsToAvoid, setIngredientsToAvoid] = useState<string[]>([]);
-    const [servingSize, setServingSize] = useState<number>(4);
+    // ✅ Load existing data from user
+    const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>(user?.dietaryRestrictions || []);
+    const [cookingGoal, setCookingGoal] = useState<string>(user?.cookingGoal || '');
+    const [ingredientsToAvoid, setIngredientsToAvoid] = useState<string[]>(user?.ingredientsToAvoid || []);
+    const [servingSize, setServingSize] = useState<number>(user?.servingSize || 4);
 
     const [showDietaryModal, setShowDietaryModal] = useState(false);
     const [showCookingGoalModal, setShowCookingGoalModal] = useState(false);
     const [showIngredientsModal, setShowIngredientsModal] = useState(false);
 
+    const [customIngredient, setCustomIngredient] = useState<string>('');
+    const [saving, setSaving] = useState(false);
+
+    // ✅ Update local state bila user data berubah
+    useEffect(() => {
+        if (user) {
+            setDietaryRestrictions(user.dietaryRestrictions || []);
+            setCookingGoal(user.cookingGoal || '');
+            setIngredientsToAvoid(user.ingredientsToAvoid || []);
+            setServingSize(user.servingSize || 4);
+        }
+    }, [user]);
+
     const dietaryOptions = [
-        'Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free',
-        'Nut-Free', 'Keto', 'Paleo', 'Halal', 'Kosher', 'Low-Carb'
+        'None', 'Vegetarian', 'Vegan', 'Pescatarian', 'Paleo', 'Low-Carb', 'Keto', 'Kosher',
+        'Gluten', 'Dairy', 'Egg', 'Soy', 'Peanut', 'Tree Nut', 'Fish', 'Shellfish'
     ];
 
     const cookingGoalOptions = [
-        'Lose Weight', 'Gain Muscle', 'Maintain Weight',
-        'Improve Health', 'Learn Cooking', 'Save Time', 'Save Money'
+        'Get Inspired', 'Eat Healthy', 'Budget-Friendly',
+        'Plan Better', 'Learn Cooking', 'Save Time'
     ];
 
     const ingredientOptions = [
-        'Dairy', 'Nuts', 'Seafood', 'Eggs', 'Soy', 'Wheat',
-        'Spicy Foods', 'Onions', 'Garlic', 'Mushrooms'
+        'Mushroom', 'Celery', 'Brussels Sprouts', 'Broccoli', 'Tofu', 'Avocado',
+        'Beet', 'Olives', 'Cilantro', 'Eggplant', 'Tomato', 'Cheese', 'Cauliflower', 'Onion',
+        'Lamb', 'Pork', 'Chicken', 'Shrimp'
     ];
 
     const handleDietaryToggle = (option: string) => {
@@ -47,6 +163,10 @@ const FoodPreferenceScreen = () => {
                 : [...prev, option]
         );
     };
+
+    const handleGoalToggle = (option: string) => {
+        setCookingGoal(option === cookingGoal ? '' : option);
+    }
 
     const handleIngredientToggle = (option: string) => {
         setIngredientsToAvoid(prev =>
@@ -64,107 +184,133 @@ const FoodPreferenceScreen = () => {
         }
     };
 
-    const handleSave = () => {
-        Alert.alert('Success', 'Food preferences saved successfully!');
-        navigation.goBack();
+    const handleDietaryRestrictionsSave = () => {     
+        setShowDietaryModal(false);
+    }
+
+    const handleCookingGoalSave = () => {     
+        setShowCookingGoalModal(false);
+    }
+
+    const handleIngredientsToAvoidSave = () => {     
+        setShowIngredientsModal(false);
+    }
+
+    // ✅ FIX: Proper save function
+    const handleSave = async () => {
+        try {
+            if (!user?.userId) {
+                Alert.alert('Error', 'User not found. Please login again.');
+                return;
+            }
+
+            setSaving(true);
+
+            // ✅ Save to Firestore
+            const result = await updateUserInFirestore(user.userId, {
+                dietaryRestrictions,
+                cookingGoal,
+                ingredientsToAvoid,
+                servingSize
+            });
+
+            if (!result.success) {
+                throw new Error('Failed to save preferences');
+            }
+
+            Alert.alert('Success', 'Food preferences saved successfully!');
+            navigation.goBack();
+
+        } catch (error) {
+            console.error('❌ Error saving preferences:', error);
+            Alert.alert('Error', 'Failed to save preferences. Please try again.');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const PreferenceItem = ({
-        title,
-        subtitle,
-        onPress,
-        showChevron = true
-    }: {
-        title: string;
-        subtitle?: string;
-        onPress: () => void;
-        showChevron?: boolean;
-    }) => (
-        <TouchableOpacity
-            className="flex-row items-center justify-between py-4"
-            onPress={onPress}
+    const handleAddCustomIngredient = () => {
+        const trimmedIngredient = customIngredient.trim();
+        
+        if (trimmedIngredient === '') {
+            Alert.alert('Error', 'Please enter an ingredient name');
+            return;
+        }
+        
+        const allIngredients = [...ingredientOptions, ...ingredientsToAvoid];
+        const ingredientExists = allIngredients.some(
+            item => item.toLowerCase() === trimmedIngredient.toLowerCase()
+        );
+        
+        if (ingredientExists) {
+            Alert.alert('Error', 'This ingredient already exists');
+            return;
+        }
+        
+        setIngredientsToAvoid(prev => [...prev, trimmedIngredient]);
+        setCustomIngredient('');
+        Keyboard.dismiss();
+        Alert.alert('Success', `${trimmedIngredient} has been added`);
+    };
+
+    const DietaryRestrictionsContent = () => (
+        <ScrollView 
+            style={{ maxHeight: 400 }}
+            showsVerticalScrollIndicator={false}
         >
-            <View className="flex-1">
-                <Text className="text-gray-800 text-base font-medium">{title}</Text>
-                {subtitle && (
-                    <Text className="text-gray-500 text-sm mt-1">{subtitle}</Text>
-                )}
-            </View>
-            {showChevron && (
-                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-            )}
-        </TouchableOpacity>
+            {dietaryOptions.map((option) => (
+                <TouchableOpacity
+                    key={option}
+                    className="flex-row items-center justify-between py-3 border-b border-gray-200"
+                    onPress={() => handleDietaryToggle(option)}
+                >
+                    <Text className="text-gray-800 text-base">{option}</Text>
+                    <View
+                        className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
+                            dietaryRestrictions.includes(option)
+                                ? 'border-orange-400 bg-orange-400'
+                                : 'border-gray-400'
+                        }`}
+                    >
+                        {dietaryRestrictions.includes(option) && (
+                            <Ionicons name="checkmark" size={16} color="white" />
+                        )}
+                    </View>
+                </TouchableOpacity>
+            ))}
+        </ScrollView>
     );
 
-    const OptionModal = ({
-        visible,
-        onClose,
-        title,
-        options,
-        selectedItems,
-        onToggle,
-        multiSelect = true
-    }: {
-        visible: boolean;
-        onClose: () => void;
-        title: string;
-        options: string[];
-        selectedItems: string[];
-        onToggle: (option: string) => void;
-        multiSelect?: boolean;
-    }) => (
-        <Modal visible={visible} animationType="slide" transparent>
-            <View className="flex-1 bg-black/50 justify-end">
-                <View
-                    className="rounded-t-3xl px-6 py-6"
-                    style={{ backgroundColor: colors.creamWhite }}
+    const CookingGoalContent = () => (
+        <ScrollView 
+            style={{ maxHeight: 400 }}
+            showsVerticalScrollIndicator={false}
+        >
+            {cookingGoalOptions.map((option) => (
+                <TouchableOpacity
+                    key={option}
+                    className="flex-row items-center justify-between py-3 border-b border-gray-200"
+                    onPress={() => handleGoalToggle(option)}
                 >
-                    <View className="flex-row items-center justify-between mb-6">
-                        <Text className="text-lg font-bold text-gray-800">{title}</Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <Ionicons name="close" size={24} color={colors.primary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <FlatList
-                        data={options}
-                        keyExtractor={(item) => item}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity
-                                className="flex-row items-center justify-between py-3"
-                                onPress={() => onToggle(item)}
-                            >
-                                <Text className="text-gray-800 text-base">{item}</Text>
-                                <View
-                                    className={`w-6 h-6 rounded-full border-2 items-center justify-center ${selectedItems.includes(item)
-                                        ? 'border-orange-400 bg-orange-400'
-                                        : 'border-gray-400'
-                                        }`}
-                                >
-                                    {selectedItems.includes(item) && (
-                                        <Ionicons name="checkmark" size={16} color="white" />
-                                    )}
-                                </View>
-                            </TouchableOpacity>
-                        )}
-                        showsVerticalScrollIndicator={false}
-                    />
-
-                    <TouchableOpacity
-                        className="mt-6 py-4 rounded-xl items-center"
-                        style={{ backgroundColor: colors.primary }}
-                        onPress={onClose}
+                    <Text className="text-gray-800 text-base">{option}</Text>
+                    <View
+                        className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
+                            cookingGoal === option
+                                ? 'border-orange-400 bg-orange-400'
+                                : 'border-gray-400'
+                        }`}
                     >
-                        <Text className="text-white font-semibold text-lg">Done</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </Modal>
+                        {cookingGoal === option && (
+                            <Ionicons name="checkmark" size={16} color="white" />
+                        )}
+                    </View>
+                </TouchableOpacity>
+            ))}
+        </ScrollView>
     );
 
     return (
         <View className="flex-1" style={{ backgroundColor: colors.white }}>
-            {/* Header */}
             <Header
                 title="My Food Preferences"
                 showBackButton={true}
@@ -179,18 +325,22 @@ const FoodPreferenceScreen = () => {
                 >
                     <Text className="text-xl font-bold text-gray-800 mb-4">General Preferences</Text>
 
-                    <PreferenceItem
+                    <Item
                         title="Dietary Restrictions"
                         subtitle={dietaryRestrictions.length > 0 ? dietaryRestrictions.join(', ') : 'None selected'}
                         onPress={() => setShowDietaryModal(true)}
+                        icon="restaurant-outline"
+                        showChevron={true}
                     />
 
                     <View className="h-px bg-gray-300 my-2" />
 
-                    <PreferenceItem
+                    <Item
                         title="Cooking Goal"
                         subtitle={cookingGoal || 'Not selected'}
                         onPress={() => setShowCookingGoalModal(true)}
+                        icon="flag-outline"
+                        showChevron={true}
                     />
                 </View>
 
@@ -201,10 +351,12 @@ const FoodPreferenceScreen = () => {
                 >
                     <Text className="text-xl font-bold text-gray-800 mb-4">Meal Plan Preferences</Text>
 
-                    <PreferenceItem
+                    <Item
                         title="Ingredients to Avoid"
                         subtitle={ingredientsToAvoid.length > 0 ? ingredientsToAvoid.join(', ') : 'None selected'}
                         onPress={() => setShowIngredientsModal(true)}
+                        icon="close-circle-outline"
+                        showChevron={true}
                     />
 
                     <View className="h-px bg-gray-300 my-2" />
@@ -227,43 +379,55 @@ const FoodPreferenceScreen = () => {
                 {/* Save Button */}
                 <TouchableOpacity
                     className="py-4 rounded-xl items-center mb-8"
-                    style={{ backgroundColor: colors.primary }}
+                    style={{ backgroundColor: saving ? colors.lightBrown : colors.primary }}
                     onPress={handleSave}
+                    disabled={saving}
                 >
-                    <Text className="font-semibold text-lg text-white">Save</Text>
+                    {saving ? (
+                        <View className="flex-row items-center">
+                            <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />
+                            <Text className="font-semibold text-lg text-white">Saving...</Text>
+                        </View>
+                    ) : (
+                        <Text className="font-semibold text-lg text-white">Save</Text>
+                    )}
                 </TouchableOpacity>
             </ScrollView>
 
             {/* Modals */}
-            <OptionModal
+            <EditModal
                 visible={showDietaryModal}
                 onClose={() => setShowDietaryModal(false)}
                 title="Dietary Restrictions"
-                options={dietaryOptions}
-                selectedItems={dietaryRestrictions}
-                onToggle={handleDietaryToggle}
-                multiSelect={true}
-            />
+                onSave={handleDietaryRestrictionsSave}
+            >
+                <DietaryRestrictionsContent />
+            </EditModal>
 
-            <OptionModal
+            <EditModal
                 visible={showCookingGoalModal}
                 onClose={() => setShowCookingGoalModal(false)}
                 title="Cooking Goal"
-                options={cookingGoalOptions}
-                selectedItems={cookingGoal ? [cookingGoal] : []}
-                onToggle={(option) => setCookingGoal(option === cookingGoal ? '' : option)}
-                multiSelect={false}
-            />
+                onSave={handleCookingGoalSave}
+            >   
+                <CookingGoalContent />
+            </EditModal>
 
-            <OptionModal
+            <EditModal
                 visible={showIngredientsModal}
                 onClose={() => setShowIngredientsModal(false)}
                 title="Ingredients to Avoid"
-                options={ingredientOptions}
-                selectedItems={ingredientsToAvoid}
-                onToggle={handleIngredientToggle}
-                multiSelect={true}
-            />
+                onSave={handleIngredientsToAvoidSave}
+            >
+                <IngredientsToAvoidContent 
+                    customIngredient={customIngredient}
+                    onCustomIngredientChange={setCustomIngredient}
+                    ingredientsToAvoid={ingredientsToAvoid}
+                    onIngredientToggle={handleIngredientToggle}
+                    onAddCustomIngredient={handleAddCustomIngredient}
+                    ingredientOptions={ingredientOptions}
+                />
+            </EditModal>
         </View>
     );
 };

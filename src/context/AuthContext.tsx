@@ -7,7 +7,7 @@ import {
     sendPasswordResetEmail,
     User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"; // ✅ Tambah updateDoc
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"; 
 import { auth, db } from "../../firebaseConfig";
 import CryptoJS from "crypto-js";
 
@@ -23,7 +23,11 @@ interface UserData {
     youtube?: string;
     tiktok?: string;
     role?: string;
-    emailVerified?: boolean; // ✅ Tambah ini
+    emailVerified?: boolean; 
+    dietaryRestrictions?: string[];
+    cookingGoal?: string;
+    ingredientsToAvoid?: string[];
+    servingSize?: number;
 }
 
 interface AuthContextType {
@@ -36,6 +40,7 @@ interface AuthContextType {
     verifyPasswordHash: (inputPassword: string, storedHash: string) => boolean;
     resetPassword: (email: string) => Promise<{ success: boolean; msg?: string }>;
     updateUserProfile: (updates: Partial<UserData>) => Promise<{ success: boolean; error?: any }>;
+    updateUserInFirestore: (userId: string, updates: Partial<UserData>) => Promise<{ success: boolean; error?: any }>;
 }
 
 interface AuthProviderProps {
@@ -67,7 +72,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return () => unsubscribe();
     }, []);
 
-    // ✅ Update: Fetch user data dari Firestore dan sync email kalau perlu
     const updateUserData = async (firebaseUser: FirebaseUser) => {
         const docRef = doc(db, "users", firebaseUser.uid);
         const docSnap = await getDoc(docRef);
@@ -221,6 +225,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
     };
 
+    const updateUserInFirestore = async (userId: string, updates: Partial<UserData>) => {
+        try {
+            const userRef = doc(db, "users", userId);
+            await updateDoc(userRef, updates);
+
+            setUser((prev) => (prev ? { ...prev, ...updates } : null));
+
+           console.log("✅ Firestore: User data updated successfully!");
+           return { success: true };
+        } catch (error) {
+           console.error("❌ Firestore: Error updating user data:", error);
+           return { success: false, error };
+        }   
+    }
+
     return (
         <AuthContext.Provider
             value={{
@@ -233,6 +252,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 verifyPasswordHash,
                 resetPassword,
                 updateUserProfile,
+                updateUserInFirestore,
             }}
         >
             {children}
