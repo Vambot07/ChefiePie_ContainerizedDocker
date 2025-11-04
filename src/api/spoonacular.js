@@ -1,7 +1,7 @@
 import axios from "axios";
 
-const API_KEY = "72a870065d194958b779f1fab2323a03"; // Replace with your Spoonacular key
-const BASE_URL = "https://api.spoonacular.com";
+const API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY 
+const BASE_URL = process.env.EXPO_PUBLIC_SPOONACULAR_BASE_URL;
 
 // Map category names to Spoonacular cuisine names
 const categoryToCuisine = {

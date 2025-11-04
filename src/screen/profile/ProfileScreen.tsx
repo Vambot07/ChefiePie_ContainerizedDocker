@@ -129,10 +129,10 @@ export default function ProfileScreen() {
 
                         <View className='pt-12'>
                             {/* ✅ Flex row with dynamic social icons from left to right */}
-                            <View className='flex-row flex-wrap items-center' style={{ gap: 8 }}>
+                            <View className='flex-row flex-wrap items-center' style={{ gap: 4 }}>
                                 {/* Edit Profile Button - Always first */}
                                 <TouchableOpacity 
-                                    className="bg-[#FFB47B] py-2 px-4 rounded-full" 
+                                    className="bg-[#FFB47B] py-2 px-3 rounded-full" 
                                     onPress={() => navigation.navigate('EditProfile')}
                                 >
                                     <Text className="text-white font-semibold text-sm">Edit Profile</Text>
@@ -146,7 +146,7 @@ export default function ProfileScreen() {
                                         activeOpacity={0.7}
                                     >
                                         <View
-                                            className="w-10 h-10 rounded-full items-center justify-center"
+                                            className="w-9 h-9 rounded-full items-center justify-center"
                                             style={{ backgroundColor: colors.lightPeach }}
                                         >
                                             {social.icon}

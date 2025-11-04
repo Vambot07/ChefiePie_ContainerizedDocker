@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import colors from '../utils/color';
 
 // 1️⃣ Nyatakan struktur props menggunakan interface (macam Header)
-interface SettingItemProps {
+interface ItemProps {
     title: string;
     subtitle?: string;
     onPress: () => void;
@@ -12,8 +12,8 @@ interface SettingItemProps {
     danger?: boolean;
 }
 
-// 2️⃣ Gunakan React.FC<SettingItemProps>
-const SettingItem: React.FC<SettingItemProps> = ({
+// 2️⃣ Gunakan React.FC<ItemProps>
+const Item: React.FC<ItemProps> = ({
     title,
     subtitle,
     onPress,
@@ -63,4 +63,4 @@ const SettingItem: React.FC<SettingItemProps> = ({
     );
 };
 
-export default SettingItem;
+export default Item;
