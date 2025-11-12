@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState,useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, Linking, Modal, Alert, ActivityIndicator } from 'react-native';
-import { Ionicons, } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
-import { deleteRecipe, saveRecipe, unsaveRecipe, isRecipeSaved } from '../../../controller/recipe';
+import { deleteRecipe, saveRecipe, unsaveRecipe, isRecipeSaved, saveApiRecipe } from '../../../controller/recipe';
 import Header from '../../../components/Header';
 import { getAuth, type Auth } from 'firebase/auth';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 const auth: Auth = getAuth();
+
+// Spoonacular API Key
+const SPOONACULAR_API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY // Replace with your actual API key
 
 interface Ingredient {
     name: string;
@@ -27,54 +30,127 @@ const ViewRecipeScreen = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
     const [isSaved, setIsSaved] = useState(false);
+    const [apiIsSaved, setApiIsSaved] = useState(false);
     const [savedStatusLoading, setSavedStatusLoading] = useState(true);
+    const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
+    
+    // API Recipe state
+    const [apiRecipeDetails, setApiRecipeDetails] = useState<any>(null);
+    const [loadingApiDetails, setLoadingApiDetails] = useState(false);
 
-    // Get recipe from params, fallback to mock for dev
+    // Get recipe from params
     const { recipe } = (route.params as any) || { recipe: {} };
 
-    // Get current user ID and check ownership
+    // Detect if it's an API recipe (Spoonacular) or user-created recipe (Firebase)
+    const isApiRecipe = !recipe?.userId;
+
+    // Get current user ID and check ownership (only for user recipes)
     const currentUserId = auth.currentUser?.uid;
     const isOwner = recipe?.userId === currentUserId;
 
-    useFocusEffect(() => {
+    // Fetch full API recipe details
+    useEffect(() => {
+        const fetchApiRecipeDetails = async () => {
+            if (!isApiRecipe || !recipe?.id) return;
+
+            try {
+                setLoadingApiDetails(true);
+                const response = await fetch(
+                    `https://api.spoonacular.com/recipes/${recipe.id}/information?apiKey=${SPOONACULAR_API_KEY}`
+                );
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch recipe details');
+                }
+
+                const data = await response.json();
+                console.log('✅ API Recipe Details:', data);
+                setApiRecipeDetails(data);
+            } catch (error) {
+                console.error('❌ Error fetching API recipe details:', error);
+                Alert.alert('Error', 'Failed to load full recipe details');
+            } finally {
+                setLoadingApiDetails(false);
+            }
+        };
+
+        fetchApiRecipeDetails();
+    }, [recipe?.id, isApiRecipe]);
+
+
+    useFocusEffect(
+    useCallback(() => {
         const checkSavedStatus = async () => {
             setSavedStatusLoading(true);
-            const currentRecipeId = (route.params as any)?.recipe?.id;
-            if (auth.currentUser && currentRecipeId) {
-                try {
-                    const saved = await isRecipeSaved(currentRecipeId);
-                    setIsSaved(saved);
-                } catch (error) {
-                    console.error('Error checking saved status:', error);
-                    setIsSaved(false);
-                }
-            } else {
+            
+            if (!auth.currentUser || !recipe?.id) {
                 setIsSaved(false);
+                setSavedStatusLoading(false);
+                return;
             }
-            setSavedStatusLoading(false);
+
+            try {
+                // Check if recipe is saved (works for both API and created)
+                const saved = await isRecipeSaved(recipe.id.toString());
+                setIsSaved(saved);
+            } catch (error) {
+                console.error('Error checking saved status:', error);
+                setIsSaved(false);
+            } finally {
+                setSavedStatusLoading(false);
+            }
         };
+        
         checkSavedStatus();
-    });
-
-    useEffect(() => {
-
-    })
+    }, [recipe?.id])
+);
 
 
-
-    // Get YouTube link from recipe data
+    // Get YouTube link from recipe data (only user recipes have this)
     const youtubeLink = recipe?.youtube;
 
-    // Fallbacks for demo
-    const image = recipe?.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
-    const title = recipe?.title;
-    const time = recipe?.totalTime;
-    const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : mockIngredients;
-    const serves = recipe?.serves;
-    const items = recipe?.items;
-    const profileImage = recipe?.profileImage || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
+    // Prepare data based on recipe type
+    let image, title, time, ingredients, serves, items, profileImage, steps, intro, sourceUrl;
 
-    const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
+    if (isApiRecipe && apiRecipeDetails) {
+        // Use API recipe details
+        image = apiRecipeDetails.image || recipe.image;
+        title = apiRecipeDetails.title || recipe.title;
+        time = apiRecipeDetails.readyInMinutes ? `${apiRecipeDetails.readyInMinutes}` : 'N/A';
+        serves = apiRecipeDetails.servings || 'N/A';
+        sourceUrl = apiRecipeDetails.sourceUrl || null;
+        
+        // Transform API ingredients to our format
+        ingredients = apiRecipeDetails.extendedIngredients?.map((ing: any) => ({
+            name: ing.name || ing.original,
+            amount: ing.amount?.toString() || '',
+            unit: ing.unit || ''
+        })) || [];
+        
+        items = ingredients.length;
+        
+        // Transform API instructions to our format
+        steps = apiRecipeDetails.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) => ({
+            title: `Step ${idx + 1}`,
+            details: step.step,
+            time: ''
+        })) || [];
+        
+        intro = apiRecipeDetails.summary?.replace(/<[^>]*>/g, '') || ''; // Remove HTML tags
+        
+    } else {
+        // Use user-created recipe data
+        image = recipe?.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
+        title = recipe?.title || 'Recipe';
+        time = recipe?.totalTime || recipe?.time || 'N/A';
+        ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : mockIngredients;
+        serves = recipe?.serves;
+        items = recipe?.items;
+        profileImage = recipe?.profileImage || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
+        steps = recipe?.steps || [];
+        intro = recipe?.intro;
+        sourceUrl = recipe?.sourceUrl || null;
+    }
 
     const handleOptionLink = () => {
         if (!youtubeLink) {
@@ -87,12 +163,18 @@ const ViewRecipeScreen = () => {
         });
     };
 
-
-
     const handleSaveRecipe = async () => {
         setLoadingAction('saving');
+
         try {
-            await saveRecipe(recipe.id);
+            if (isApiRecipe) {
+                console.log('Saving API recipe:', apiRecipeDetails);
+                await saveApiRecipe(apiRecipeDetails);
+            } else {
+                const { id, title, source, image, totalTime, sourceUrl } = recipe;
+                await saveRecipe({ id, title, source, image, totalTime, sourceUrl });
+            }
+
             setIsSaved(true);
             Alert.alert('Success', 'Recipe saved successfully!');
         } catch (error) {
@@ -115,7 +197,6 @@ const ViewRecipeScreen = () => {
         }
     };
 
-
     const handleDelete = async () => {
         setLoadingAction('deleting');
         try {
@@ -135,7 +216,6 @@ const ViewRecipeScreen = () => {
             setLoadingAction(null);
         }
     };
-
 
     const toggleSave = () => {
         if (isSaved) {
@@ -164,6 +244,24 @@ const ViewRecipeScreen = () => {
         );
     };
 
+    // Show loading while fetching API details
+    if (isApiRecipe && loadingApiDetails) {
+        return (
+            <View className="flex-1 bg-[#FFF6F0]">
+                <Header
+                    title="Loading..."
+                    showBackButton={true}
+                    onBack={() => navigation.goBack()}
+                    backgroundColor="#FFF6F0"
+                    textColor="#222"
+                />
+                <View className="flex-1 justify-center items-center">
+                    <ActivityIndicator size="large" color="#FFB47B" />
+                    <Text className="mt-4 text-gray-600">Loading recipe details...</Text>
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View className="flex-1 bg-[#FFF6F0]">
@@ -176,8 +274,9 @@ const ViewRecipeScreen = () => {
                 backgroundColor="#FFF6F0"
                 textColor="#222"
             />
-            {/* Show Manage button if owner */}
-            {isOwner && (
+
+            {/* Show Manage button ONLY for user-created recipes that user owns */}
+            {isOwner && !isApiRecipe && (
                 <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}>
                     <TouchableOpacity
                         className="bg-orange-400 p-2 rounded-full"
@@ -200,64 +299,64 @@ const ViewRecipeScreen = () => {
                                     ? 'Saving recipe...'
                                     : loadingAction === 'unsaving'
                                         ? 'Unsaving recipe...'
-                                        : loadingAction === 'adding-to-checklist'
-                                            ? 'Adding to checklist...'
-                                            : 'Processing...'}
+                                        : 'Processing...'}
                         </Text>
                     </View>
                 </View>
             )}
 
-            {/* Modal */}
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={modalVisible}
-                onRequestClose={() => !loadingAction && setModalVisible(false)}
-            >
-                <TouchableOpacity
-                    className="flex-1 justify-end bg-black/50"
-                    activeOpacity={1}
-                    onPress={() => !loadingAction && setModalVisible(false)}
-                    disabled={!!loadingAction}
+            {/* Modal - ONLY for user-created recipes */}
+            {!isApiRecipe && (
+                <Modal
+                    animationType="slide"
+                    transparent={true}
+                    visible={modalVisible}
+                    onRequestClose={() => !loadingAction && setModalVisible(false)}
                 >
-                    <View className="bg-white rounded-t-3xl">
-                        <View className="w-12 h-1 bg-gray-300 rounded-full mx-auto mt-2 mb-4" />
-                        <TouchableOpacity
-                            className={`flex-row items-center px-6 py-4 border-b border-gray-200 ${loadingAction ? 'opacity-50' : ''}`}
-                            onPress={showDeleteConfirmation}
-                            disabled={!!loadingAction}
-                        >
-                            {loadingAction === 'deleting' ? (
-                                <ActivityIndicator size="small" color="#FF3B30" />
-                            ) : (
-                                <Ionicons name="trash-outline" size={24} color="#FF3B30" />
-                            )}
-                            <Text className="text-[#FF3B30] text-lg font-semibold ml-3">
-                                {loadingAction === 'deleting' ? 'Deleting...' : 'Delete Recipe'}
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            className="flex-row items-center px-6 py-4"
-                            onPress={() => setModalVisible(false)}
-                            disabled={!!loadingAction}
-                        >
-                            <Ionicons name="close-circle-outline" size={24} color="#666" />
-                            <Text className="text-gray-600 text-lg font-semibold ml-3">Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
+                    <TouchableOpacity
+                        className="flex-1 justify-end bg-black/50"
+                        activeOpacity={1}
+                        onPress={() => !loadingAction && setModalVisible(false)}
+                        disabled={!!loadingAction}
+                    >
+                        <View className="bg-white rounded-t-3xl">
+                            <View className="w-12 h-1 bg-gray-300 rounded-full mx-auto mt-2 mb-4" />
+                            <TouchableOpacity
+                                className={`flex-row items-center px-6 py-4 border-b border-gray-200 ${loadingAction ? 'opacity-50' : ''}`}
+                                onPress={showDeleteConfirmation}
+                                disabled={!!loadingAction}
+                            >
+                                {loadingAction === 'deleting' ? (
+                                    <ActivityIndicator size="small" color="#FF3B30" />
+                                ) : (
+                                    <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+                                )}
+                                <Text className="text-[#FF3B30] text-lg font-semibold ml-3">
+                                    {loadingAction === 'deleting' ? 'Deleting...' : 'Delete Recipe'}
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className="flex-row items-center px-6 py-4"
+                                onPress={() => setModalVisible(false)}
+                                disabled={!!loadingAction}
+                            >
+                                <Ionicons name="close-circle-outline" size={24} color="#666" />
+                                <Text className="text-gray-600 text-lg font-semibold ml-3">Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </TouchableOpacity>
+                </Modal>
+            )}
 
             <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Recipe Image with YouTube overlay */}
+                {/* Recipe Image */}
                 <View className="relative items-center">
                     <Image source={{ uri: image }} className="w-11/12 h-44 rounded-2xl" />
-                    {youtubeLink ? (
+                    
+                    {/* YouTube overlay - ONLY for user recipes */}
+                    {!isApiRecipe && youtubeLink && (
                         <>
-                            <TouchableOpacity
-                                className="absolute top-3 left-5 bg-black/60 px-3 py-1 rounded-full flex-row items-center"
-                            >
+                            <TouchableOpacity className="absolute top-3 left-5 bg-black/60 px-3 py-1 rounded-full flex-row items-center">
                                 <Ionicons name="logo-youtube" size={16} color="#fff" />
                                 <Text className="text-white ml-2 text-xs">Watch on YouTube</Text>
                             </TouchableOpacity>
@@ -269,101 +368,180 @@ const ViewRecipeScreen = () => {
                                 <Ionicons name="play-circle" size={48} color="#fff" />
                             </TouchableOpacity>
                         </>
-                    ) : null}
+                    )}
+                    
+                    {/* Time badge */}
                     <View className="absolute bottom-3 right-5 bg-black/60 px-2 py-1 rounded-full flex-row items-center">
                         <Ionicons name="time-outline" size={14} color="#fff" />
-                        <Text className="ml-1 text-xs text-white">{time}</Text>
+                        <Text className="ml-1 text-xs text-white">{time} Mins</Text>
                     </View>
                 </View>
 
                 {/* Recipe Info */}
                 <View className="px-5 mt-3">
                     <Text className="text-lg font-bold text-gray-900">{title}</Text>
-                    {recipe?.intro ? (
-                        <Text className="text-gray-700 mt-2">{recipe.intro}</Text>
-                    ) : null}
-                </View>
+                    {intro && (
+                        <Text className="text-gray-700 mt-2" numberOfLines={4}>{intro}</Text>
+                    )}
 
-                {/* Author Info */}
-                <View className="flex-row items-center px-5 mt-3">
-                    <Image source={{ uri: profileImage }} className="w-10 h-10 rounded-full" />
-                    <View className="ml-3 flex-1">
-                        <Text className="text-xs text-gray-400">By</Text>
-                        <Text className="font-semibold text-gray-800">{recipe.username}</Text>
-
-                    </View>
-                    <TouchableOpacity
-                        className={`px-4 py-2 rounded-full ${isSaved ? 'bg-green-500' : 'bg-[#FFB47B]'}`}
-                        onPress={toggleSave}
-                        disabled={!!loadingAction}
-                    >
-                        <Text className="text-white font-semibold">
-                            {isSaved ? 'Saved' : 'Save for Cooking'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Tabs */}
-                <View className="flex-row px-5 mt-5">
-                    <TouchableOpacity
-                        className={`flex-1 py-2 rounded-full ${tab === 'ingredient' ? 'bg-[#FFB47B]' : 'bg-gray-100'}`}
-                        onPress={() => setTab('ingredient')}
-                    >
-                        <Text className={`text-center font-semibold ${tab === 'ingredient' ? 'text-white' : 'text-gray-700'}`}>Ingredient</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        className={`flex-1 py-2 rounded-full ml-2 ${tab === 'procedure' ? 'bg-[#FFB47B]' : 'bg-gray-100'}`}
-                        onPress={() => setTab('procedure')}
-                    >
-                        <Text className={`text-center font-semibold ${tab === 'procedure' ? 'text-white' : 'text-gray-700'}`}>Procedure</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Serving & Items */}
-                <View className="flex-row justify-between px-5 mt-4 mb-2">
-                    <Text className="text-xs text-gray-400">{serves} serve</Text>
-                    <Text className="text-xs text-gray-400">{items} items</Text>
-                </View>
-
-                {/* Ingredient List */}
-                {tab === 'ingredient' && (
-                    <View className="px-5">
-                        <View className="flex-row justify-between items-center mb-4">
-                            <Text className="text-lg font-semibold text-gray-800">Ingredients</Text>
+                    {/* Badge for API recipes */}
+                    {isApiRecipe && (
+                        <View className="mt-3 bg-orange-50 border border-orange-200 p-3 rounded-xl flex-row items-center">
+                            <Ionicons name="globe-outline" size={20} color="#FF9966" />
+                            <Text className="text-sm text-gray-700 ml-2 flex-1">
+                                Recipe from Spoonacular • ID: {recipe?.id}
+                            </Text>
                         </View>
-                        {Array.isArray(ingredients) &&
-                            ingredients.map((ing: { name: string; amount: string; unit: string }, idx: number) => (
-                                <TouchableOpacity key={idx} className="flex-row items-center bg-white rounded-xl mb-3 px-4 py-3 shadow-sm">
-                                    <Text className="flex-1 font-semibold text-gray-800">{ing.name}</Text>
-                                    <Text className="text-gray-400">{ing.amount + ' ' + ing.unit}</Text>
-                                </TouchableOpacity>
-                            ))}
+                    )}
+                </View>
+
+                {/* Author Info - ONLY for user recipes */}
+                {!isApiRecipe && (
+                    <View className="flex-row items-center px-5 mt-3">
+                        <Image source={{ uri: profileImage }} className="w-10 h-10 rounded-full" />
+                        <View className="ml-3 flex-1">
+                            <Text className="text-xs text-gray-400">By</Text>
+                            <Text className="font-semibold text-gray-800">{recipe?.username || 'Unknown'}</Text>
+                        </View>
+                        <TouchableOpacity
+                            className={`px-4 py-2 rounded-full ${isSaved ? 'bg-green-500' : 'bg-[#FFB47B]'}`}
+                            onPress={toggleSave}
+                            disabled={!!loadingAction}
+                        >
+                            <Text className="text-white font-semibold">
+                                {isSaved ? 'Saved' : 'Save for Cooking'}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 )}
 
-                {/* Procedure Tab Placeholder */}
-                {tab === 'procedure' && (
-                    <View className="px-5 py-6">
-                        <Text className="text-lg font-semibold text-gray-800 mb-4">Step-by-Step Instructions</Text>
-                        {Array.isArray(recipe?.steps) && recipe.steps.length > 0 ? (
-                            recipe.steps.map((step: any, idx: number) => (
-                                <View key={idx} className="mb-6 bg-white rounded-xl p-4 shadow-sm">
-                                    <View className="flex-row items-center mb-2">
-                                        <Text className="text-[#FFB47B] font-bold mr-2">{idx + 1}.</Text>
-                                        <Text className="font-semibold text-gray-800 flex-1">{step.title || `Step ${idx + 1}`}</Text>
-                                        {step.time ? (
-                                            <View className="flex-row items-center ml-2">
-                                                <Ionicons name="time-outline" size={14} color="#FFB47B" />
-                                                <Text className="ml-1 text-xs text-gray-500">{step.time}</Text>
-                                            </View>
-                                        ) : null}
-                                    </View>
-                                    <Text className="text-gray-700">{step.details}</Text>
-                                </View>
-                            ))
-                        ) : (
-                            <Text className="text-gray-400 text-center">No procedure steps available.</Text>
+                {/* Simple action for API recipes */}
+                    {isApiRecipe && (
+                        <View className="px-5 mt-4">
+                            <TouchableOpacity
+                                className={`py-3 rounded-full flex-row items-center justify-center ${
+                                    isSaved ? 'bg-green-500' : 'bg-orange-400'
+                                }`}
+                                onPress={() => {
+                                    if (isSaved) {
+                                        handleUnsaveRecipe();
+                                    } else {
+                                        handleSaveRecipe();
+                                    }
+                                }}
+                                disabled={savedStatusLoading || !!loadingAction}
+                            >
+                                {savedStatusLoading ? (
+                                    <ActivityIndicator size="small" color="white" />
+                                ) : (
+                                    <>
+                                        <Feather 
+                                            name={isSaved ? "check" : "bookmark"} 
+                                            size={20} 
+                                            color="white" 
+                                        />
+                                        <Text className="text-white font-bold ml-2">
+                                            {isSaved ? 'Saved' : 'Save Recipe'}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                {/* Tabs - Show for both user recipes and API recipes with data */}
+                {((isApiRecipe && apiRecipeDetails) || (!isApiRecipe && recipe?.ingredients)) && (
+                    <>
+                        <View className="flex-row px-5 mt-5">
+                            <TouchableOpacity
+                                className={`flex-1 py-2 rounded-full ${tab === 'ingredient' ? 'bg-[#FFB47B]' : 'bg-gray-100'}`}
+                                onPress={() => setTab('ingredient')}
+                            >
+                                <Text className={`text-center font-semibold ${tab === 'ingredient' ? 'text-white' : 'text-gray-700'}`}>
+                                    Ingredients
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className={`flex-1 py-2 rounded-full ml-2 ${tab === 'procedure' ? 'bg-[#FFB47B]' : 'bg-gray-100'}`}
+                                onPress={() => setTab('procedure')}
+                            >
+                                <Text className={`text-center font-semibold ${tab === 'procedure' ? 'text-white' : 'text-gray-700'}`}>
+                                    Procedure
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Serving & Items */}
+                        {(serves || items) && (
+                            <View className="flex-row justify-between px-5 mt-4 mb-2">
+                                {serves && <Text className="text-xs text-gray-400">{serves} serve{serves > 1 ? 's' : ''}</Text>}
+                                {items && <Text className="text-xs text-gray-400">{items} item{items > 1 ? 's' : ''}</Text>}
+                            </View>
                         )}
+
+                        {/* Ingredient List */}
+                        {tab === 'ingredient' && (
+                            <View className="px-5 pb-6">
+                                <View className="flex-row justify-between items-center mb-4">
+                                    <Text className="text-lg font-semibold text-gray-800">Ingredients</Text>
+                                </View>
+                                {Array.isArray(ingredients) && ingredients.length > 0 ? (
+                                    ingredients.map((ing: { name: string; amount: string; unit: string }, idx: number) => (
+                                        <View key={idx} className="flex-row items-center bg-white rounded-xl mb-3 px-4 py-3 shadow-sm">
+                                            <Text className="flex-1 font-semibold text-gray-800 capitalize">{ing.name}</Text>
+                                            {(ing.amount || ing.unit) && (
+                                                <Text className="text-gray-400">
+                                                    {ing.amount} {ing.unit}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    ))
+                                ) : (
+                                    <Text className="text-gray-400 text-center">No ingredients available.</Text>
+                                )}
+                            </View>
+                        )}
+
+                        {/* Procedure */}
+                        {tab === 'procedure' && (
+                            <View className="px-5 py-6">
+                                <Text className="text-lg font-semibold text-gray-800 mb-4">Step-by-Step Instructions</Text>
+                                {Array.isArray(steps) && steps.length > 0 ? (
+                                    steps.map((step: any, idx: number) => (
+                                        <View key={idx} className="mb-6 bg-white rounded-xl p-4 shadow-sm">
+                                            <View className="flex-row items-center mb-2">
+                                                <Text className="text-[#FFB47B] font-bold mr-2">{idx + 1}.</Text>
+                                                <Text className="font-semibold text-gray-800 flex-1">{step.title || `Step ${idx + 1}`}</Text>
+                                                {step.time && (
+                                                    <View className="flex-row items-center ml-2">
+                                                        <Ionicons name="time-outline" size={14} color="#FFB47B" />
+                                                        <Text className="ml-1 text-xs text-gray-500">{step.time}</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text className="text-gray-700">{step.details}</Text>
+                                        </View>
+                                    ))
+                                ) : (
+                                    <Text className="text-gray-400 text-center">No procedure steps available.</Text>
+                                )}
+                            </View>
+                        )}
+                    </>
+                )}
+
+                {/* Show message if no API details could be loaded */}
+                {isApiRecipe && !apiRecipeDetails && !loadingApiDetails && (
+                    <View className="px-5 py-6">
+                        <View className="bg-white rounded-2xl p-6 items-center">
+                            <Ionicons name="information-circle-outline" size={48} color="#FF9966" />
+                            <Text className="text-lg font-semibold text-gray-800 mt-4 text-center">
+                                Could Not Load Full Details
+                            </Text>
+                            <Text className="text-gray-600 mt-2 text-center">
+                                Unable to fetch detailed recipe information. Please check your API key or try again later.
+                            </Text>
+                        </View>
                     </View>
                 )}
             </ScrollView>

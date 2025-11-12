@@ -36,8 +36,7 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => (
             <Text className="font-bold text-base text-gray-800 mb-1" numberOfLines={1}>{recipe.title}</Text>
             <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center space-x-2">
-                    <Ionicons name="time-outline" size={16} color="#FFB47B" />
-                    <Text className="text-sm text-gray-500">{recipe.totalTime}</Text>
+                    <Text className="text-sm font-bold text-gray-500">See More</Text>
                 </View>
             </View>
         </View>

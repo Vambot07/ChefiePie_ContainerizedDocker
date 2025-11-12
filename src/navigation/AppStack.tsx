@@ -20,9 +20,13 @@ import FoodPreferenceScreen from '~/screen/profile/FoodPreferenceScreen';
 
 export type RootStackParamList = {
     Tabs: undefined;
-    Profile: undefined;
+    Profile: { userId?: string };
     AddRecipe: undefined;
-    ViewRecipe: { recipeId: string };
+    ViewRecipe: { 
+        recipeId?: string;  // ✅ For created recipes
+        recipe?: any;       // ✅ For API recipes
+    };
+    ViewApiRecipe: { recipe: string };
     Home: undefined;
     Search: undefined;
     Saved: undefined;
