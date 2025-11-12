@@ -44,6 +44,7 @@ export default function AddRecipeScreen() {
     const [serving, setServing] = useState('');
     const [nutrition, setNutrition] = useState('');
     const [youtube, setYoutube] = useState('');
+    const [sourceUrl, setSourceUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showUnitModal, setShowUnitModal] = useState(false);
     const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(0);
@@ -73,12 +74,11 @@ export default function AddRecipeScreen() {
 
         if (totalMinutes > 0) {
             // Format the total time
-            if (totalMinutes >= 60) {
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
-                setTotalTime(`${hours} hr ${minutes > 0 ? `${minutes} min` : ''}`.trim());
+            if (totalMinutes > 0) {
+            // Always keep in minutes
+                setTotalTime(`${totalMinutes}`);
             } else {
-                setTotalTime(`${totalMinutes} min`);
+                setTotalTime('');
             }
         } else {
             setTotalTime('');
@@ -156,6 +156,7 @@ export default function AddRecipeScreen() {
                 serving,
                 nutrition,
                 youtube,
+                sourceUrl,
             };
 
             const successMessage = await addRecipe(recipeData);
@@ -325,6 +326,14 @@ export default function AddRecipeScreen() {
                                 <Ionicons name="logo-youtube" size={18} color="#FFB47B" /> YouTube Link
                             </Text>
                             <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="YouTube Video Link" value={youtube} onChangeText={setYoutube} />
+                        </View>
+
+                        {/* Source URL */}
+                        <View className="mb-8">
+                            <Text className="font-semibold text-gray-700 mb-1 flex-row items-center">  
+                                <MaterialCommunityIcons name="link-variant" size={18} color="#FFB47B" /> Source URL
+                            </Text>
+                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Source URL" value={sourceUrl} onChangeText={setSourceUrl} />
                         </View>
 
                         {/* Submit Button */}

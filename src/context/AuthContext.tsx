@@ -14,10 +14,11 @@ import CryptoJS from "crypto-js";
 // --- Types ---
 
 interface UserData {
+    uid?: string;
     username?: string;
     email?: string;
     userId?: string;
-    profileImage?: string;
+    profileImage?: any;
     bio?: string;
     instagram?: string;
     youtube?: string;
@@ -28,6 +29,7 @@ interface UserData {
     cookingGoal?: string;
     ingredientsToAvoid?: string[];
     servingSize?: number;
+    source?: string;
 }
 
 interface AuthContextType {

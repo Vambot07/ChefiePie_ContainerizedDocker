@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking, Vibration } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking, Vibration, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -7,7 +7,6 @@ import { getRecipeById, unsaveRecipe, isRecipeSaved } from '../../../controller/
 import { addItemsToChecklist } from '../../../controller/checklist';
 import Header from '../../../components/Header';
 import * as Speech from 'expo-speech';
-import colors from '~/utils/color';
 
 const ViewSavedRecipeScreen = () => {
     const route = useRoute();
@@ -19,11 +18,21 @@ const ViewSavedRecipeScreen = () => {
     const [isSaved, setIsSaved] = useState<boolean>(true);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
     const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
-    const [selectedIngredients, setSelectedIngredients] = useState<any[]>([]);;
+    const [selectedIngredients, setSelectedIngredients] = useState<any[]>([]);
     const [voiceMode, setVoiceMode] = useState<boolean>(false);
-    const [currentStep, setCurrentStep] = useState<number>(0);
     const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
+    const [overlaySize, setOverlaySize] = useState({ w: 0, h: 0 });
 
+    const shadowStyle = Platform.select({
+        android: { elevation: 3},
+        ios: { shadowColor: '#000',
+               shadowOffset: { width: 0, height: 1 },
+               shadowOpacity: 0.18,
+               shadowRadius: 1.00,
+        },
+    })
+
+    // Fetch recipe details on focus
     useFocusEffect(
         useCallback(() => {
             const fetchRecipeDetails = async () => {
@@ -34,8 +43,16 @@ const ViewSavedRecipeScreen = () => {
                 }
                 setLoading(true);
                 try {
+                    console.log('Fetching recipe with ID:', recipeId);
                     const recipeData = await getRecipeById(recipeId);
-                    setRecipe(recipeData);
+                    console.log('Fetched recipe data:', recipeData);
+                    const cleanedIntro = recipeData.intro?.replace(/<[^>]+>/g, '') || '';
+                    const recipeToSet = {
+                        ...recipeData,
+                        intro: cleanedIntro,
+                    }
+                    setRecipe(recipeToSet);
+
                     const savedStatus = await isRecipeSaved(recipeId);
                     setIsSaved(savedStatus);
                 } catch (error) {
@@ -67,10 +84,7 @@ const ViewSavedRecipeScreen = () => {
 
     const toggleIngredientSelection = (ingredient: any) => {
         setSelectedIngredients((currentSelected) => {
-            const isIngredientSelected = currentSelected.some(
-                (item) => item.name === ingredient.name
-            );
-
+            const isIngredientSelected = currentSelected.some((item) => item.name === ingredient.name);
             if (isIngredientSelected) {
                 return currentSelected.filter((item) => item.name !== ingredient.name);
             } else {
@@ -80,6 +94,8 @@ const ViewSavedRecipeScreen = () => {
     };
 
     const handleAddSelectedToChecklist = async () => {
+        console.log("sdkmskldm");
+        console.log(selectedIngredients);
         if (selectedIngredients.length === 0) {
             Alert.alert('No Ingredients Selected', 'Please tap on ingredients to select them first.');
             return;
@@ -88,6 +104,7 @@ const ViewSavedRecipeScreen = () => {
         setLoadingAction('adding-to-list');
         try {
             await addItemsToChecklist(selectedIngredients);
+            console.log('Added ingredients to checklist:', selectedIngredients);
             Alert.alert('Success!', 'Selected ingredients have been added to your shopping list.');
             setSelectedIngredients([]);
         } catch (error) {
@@ -102,10 +119,35 @@ const ViewSavedRecipeScreen = () => {
             Alert.alert('No Video', 'This recipe does not have a video tutorial.');
             return;
         }
-        Linking.openURL(recipe.youtube).catch((error) => {
-            console.error('Error opening link:', error);
-            Alert.alert('Error', 'Could not open the video link. Please try again.');
+        Linking.openURL(recipe.youtube).catch(() => {
+            Alert.alert('Error', 'Could not open the video link.');
         });
+    };
+
+    const handleSourceURL = () => {
+        if (!recipe?.sourceUrl) {  
+            Alert.alert('No Source URL', 'This recipe does not have a source URL.');
+            return;
+        }      
+        Linking.openURL(recipe.sourceUrl).catch(() => {
+            Alert.alert('Error', 'Could not open the source URL.');
+        });
+    };
+
+    const handlePressIn = () => {
+        const timer = setTimeout(() => {
+            setVoiceMode(true);
+            Vibration.vibrate(1000);
+            Speech.speak('Start the cooking');
+        }, 1000);
+        setPressTimer(timer);
+    };
+
+    const handlePressOut = () => {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            setPressTimer(null);
+        }
     };
 
     if (loading) {
@@ -133,28 +175,8 @@ const ViewSavedRecipeScreen = () => {
         );
     }
 
-    const handlePressIn = () => {
-        // Start timer when the button is pressed down
-        const timer = setTimeout(() => {
-            setVoiceMode(true);
-            // Trigger vibration after the user holds for 3 seconds
-            Vibration.vibrate(1000); // Vibrates for 1 second
-            Speech.speak('Start the cooking');
-        }, 1000); // 1 seconds
-        setPressTimer(timer);
-    };
-
-
-    const handlePressOut = () => {
-        // Clear the timer if the user releases the button before 3 seconds
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            setPressTimer(null);
-        }
-    };
-
     return (
-        <SafeAreaView className="flex-1 bg-[#FFF6F0]">
+        <View className="flex-1 bg-[#FFF6F0]">
             <View className="flex-1">
                 <Header
                     title={recipe.title}
@@ -178,33 +200,102 @@ const ViewSavedRecipeScreen = () => {
 
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
                     <View className="p-4">
-                        {/* Recipe Image with YouTube overlay */}
+                        {/* Recipe Image and YouTube */}
                         <View className="relative mb-4">
-                            {recipe.youtube ? (
+                            <Image
+                                source={{ uri: recipe.image }}
+                                className="w-full h-56 rounded-2xl"
+                            />
+
+                            {/* YOUTUBE */}
+                            {recipe.youtube && (
                                 <>
-                                    <Image source={{ uri: recipe.image }} className="w-full h-56 rounded-2xl" />
+                                    {/* Badge */}
                                     <TouchableOpacity
-                                        className="absolute top-3 left-5 bg-black/60 px-3 py-1 rounded-full flex-row items-center"
+                                        onPress={handleYouTubeLink}
+                                        className="absolute top-3 left-5 bg-black/30 px-3 py-1 rounded-full flex-row items-center"
                                     >
                                         <Ionicons name="logo-youtube" size={16} color="#fff" />
                                         <Text className="text-white ml-2 text-xs">Watch on YouTube</Text>
                                     </TouchableOpacity>
+
+                                    {/* Center Play Button */}
                                     <TouchableOpacity
-                                        className="absolute top-1/2 left-1/2"
                                         onPress={handleYouTubeLink}
-                                        style={{ transform: [{ translateX: -24 }, { translateY: -24 }] }}
+                                        style={{
+                                            position: 'absolute',
+                                            top: "50%",
+                                            left: "50%",
+                                            transform: [{ translateX: -24 }, { translateY: -24 }],
+                                        }}
                                     >
                                         <Ionicons name="play-circle" size={48} color="#fff" />
                                     </TouchableOpacity>
                                 </>
-                            ) : <>
-                                <View className="w-full h-56 rounded-2xl bg-gray-100 justify-center items-center">
-                                    <Text className="text-gray-700 font-bold mb-2">
-                                        Sorry, the video is not available
+                            )}
+
+                            {/* SOURCE URL */}
+                            {!recipe.youtube && recipe.sourceUrl && (
+                                <TouchableOpacity
+                                    onPress={handleSourceURL}
+                                    onLayout={(e) => {
+                                        const { width, height } = e.nativeEvent.layout;
+                                        setOverlaySize({ w: width, h: height });
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: '50%',
+                                        transform: [
+                                            { translateX: -(overlaySize.w / 2) },
+                                            { translateY: -(overlaySize.h / 2) }
+                                        ],
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                    }}
+                                >
+
+                                    <View
+                                        style={{
+                                            backgroundColor: 'rgba(0,0,0,0.4)',
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 18,
+                                            borderRadius: 16,
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                    <Ionicons name="link-sharp" size={48} color="#fff" />
+                                    <Text className="font-bold text-base text-white mt-1">
+                                        Go to Recipe Page
                                     </Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                            )}
+
+                            {/* TIME BADGE */}
+                            {(recipe.youtube || recipe.sourceUrl) && (
+                                <View className="absolute bottom-3 right-5 bg-black/60 px-2 py-1 rounded-full flex-row items-center">
+                                    <Ionicons name="time-outline" size={14} color="#fff" />
+                                    <Text className="ml-1 text-xs text-white">{recipe.totalTime} Mins</Text>
                                 </View>
-                            </>}
+                            )}
+
+                            {/* FALLBACK: NOTHING AVAILABLE */}
+                            {!recipe.youtube && !recipe.sourceUrl && (
+                                <View className="absolute inset-0 justify-center items-center bg-black/30 rounded-2xl">
+                                    <Text className="text-white font-bold text-sm px-4 text-center">
+                                        Source for this recipe is not available
+                                    </Text>
+                                    <View className="absolute bottom-3 right-5 bg-black/60 px-2 py-1 rounded-full flex-row items-center">
+                                    <Ionicons name="time-outline" size={14} color="#fff" />
+                                    <Text className="ml-1 text-xs text-white">{recipe.totalTime} Mins</Text>
+                                </View>
+                                </View>
+                            )}
                         </View>
+
 
                         <View className="flex-row items-start justify-between mb-4">
                             <View className="flex-1 pr-4">
@@ -223,19 +314,6 @@ const ViewSavedRecipeScreen = () => {
 
                         {recipe.intro && <Text className="text-gray-700 mb-4">{recipe.intro}</Text>}
 
-                        {recipe.author && (
-                            <View className="flex-row justify-between items-center bg-white p-4 rounded-2xl mb-4">
-                                <View className="flex-row items-center">
-                                    {recipe.author.avatar && <Image source={{ uri: recipe.author.avatar }} className="w-10 h-10 rounded-full" />}
-                                    <View className="ml-3">
-                                        <Text className="font-semibold text-gray-800">{recipe.author.name || 'Unknown Chef'}</Text>
-                                        <Text className="text-sm text-gray-500">Creator</Text>
-                                    </View>
-                                </View>
-                                <Ionicons name="chevron-forward" size={24} color="#FFB47B" />
-                            </View>
-                        )}
-
                         <View className="flex-row justify-around mb-4">
                             <TouchableOpacity
                                 className={`flex-1 py-3 rounded-xl ${tab === 'ingredient' ? 'bg-[#FFB47B]' : 'bg-white'}`}
@@ -252,13 +330,19 @@ const ViewSavedRecipeScreen = () => {
                         </View>
 
                         {tab === 'ingredient' && (
-                            <View>
+                            <View> 
                                 <View className="flex-row justify-between items-center mb-2">
                                     <Text className="text-lg font-bold text-gray-800">Ingredients ({recipe.ingredients?.length || 0})</Text>
                                     <TouchableOpacity
-                                        className={`rounded-xl px-4 py-2 shadow-sm ${selectedIngredients.length > 0 ? 'bg-green-500' : 'bg-gray-200'}`}
                                         onPress={handleAddSelectedToChecklist}
                                         disabled={selectedIngredients.length === 0 || !!loadingAction}
+                                        style={{
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 8,
+                                        borderRadius: 16,
+                                        backgroundColor: selectedIngredients.length > 0 ? '#22C55E' : '#D1D5DB',
+                                        ...shadowStyle,
+                                        }}
                                     >
                                         <Text className={`font-semibold ${selectedIngredients.length > 0 ? 'text-white' : 'text-gray-400'}`}>
                                             Add to List
@@ -270,9 +354,19 @@ const ViewSavedRecipeScreen = () => {
                                     return (
                                         <TouchableOpacity
                                             key={idx}
-                                            className={`flex-row items-center rounded-xl mb-3 px-4 py-3 shadow-sm transition-colors duration-200 ${isSelected ? 'bg-green-100 border border-green-300' : 'bg-white'}`}
                                             onPress={() => toggleIngredientSelection(ing)}
-                                        >
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                padding: 12,
+                                                marginBottom: 8,
+                                                borderRadius: 16,
+                                                backgroundColor: isSelected ? '#DCFCE7' : '#fff',
+                                                borderWidth: isSelected ? 1 : 0,
+                                                borderColor: isSelected ? '#22C55E' : 'transparent',
+                                                ...shadowStyle,
+                                            }}
+                                            >
                                             <Text className="flex-1 font-semibold text-gray-800 capitalize">{ing.name}</Text>
                                             <Text className="text-gray-500 mr-2">{ing.amount + ' ' + ing.unit}</Text>
                                             <View className="w-7 h-7">
@@ -290,7 +384,7 @@ const ViewSavedRecipeScreen = () => {
                             <View>
                                 <Text className="text-lg font-semibold text-gray-800 mb-4">Instructions</Text>
                                 {recipe.steps?.map((step: any, idx: number) => (
-                                    <View key={idx} className="mb-6 bg-white rounded-xl p-4 shadow-sm">
+                                    <View key={idx} className="mb-6 bg-white rounded-xl p-4 ">
                                         <View className="flex-row items-center mb-2">
                                             <Text className="text-[#FFB47B] font-bold mr-3 text-lg">{idx + 1}</Text>
                                             <Text className="font-semibold text-gray-800 flex-1">{step.title || `Step ${idx + 1}`}</Text>
@@ -317,9 +411,9 @@ const ViewSavedRecipeScreen = () => {
                         borderRadius: 30,
                         justifyContent: 'center',
                         alignItems: 'center',
-                        elevation: 5,
+                        ...shadowStyle,
                     }}
-                >
+                    >
                     <Ionicons name={voiceMode ? "mic" : "mic-outline"} size={30} color="white" />
                 </TouchableOpacity>
 
@@ -343,7 +437,7 @@ const ViewSavedRecipeScreen = () => {
                     </TouchableOpacity>
                 )}
             </View>
-        </SafeAreaView>
+        </View>
     );
 };
 

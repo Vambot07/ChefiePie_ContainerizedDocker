@@ -23,23 +23,29 @@ export const addItemsToChecklist = async (ingredients) => {
     const batch = writeBatch(db);
 
     ingredients.forEach((ingredient) => {
-        const itemAmountStr = ingredient.amount || '';
-        const match = itemAmountStr.match(/^(\d*\.?\d+)\s*(.*)$/);
-        const amount = match ? match[1] : itemAmountStr;
-        const unit = match ? match[2].trim() : '';
+    let amount = ingredient.amount;
+    let unit = ingredient.unit || '';
 
-        const newDocRef = doc(checklistRef);
-        batch.set(newDocRef, {
-            userId: user.uid,
-            name: ingredient.name,
-            amount,
-            unit: ingredient.unit,
-            notes: '',
-            timestamp: Timestamp.now(),
-            checked: false,
-            status: 'shopping' // Default status
-        });
+    // Convert amount to string if it's a number
+    if (typeof amount === 'number') {
+        amount = amount.toString();
+    }
+
+    // Default fallback
+    if (!ingredient.name) ingredient.name = "Unknown";
+
+    const newDocRef = doc(checklistRef);
+    batch.set(newDocRef, {
+        userId: user.uid,
+        name: ingredient.name,
+        amount: amount || '',
+        unit: unit || '',
+        notes: '',
+        timestamp: Timestamp.now(),
+        checked: false,
+        status: 'shopping'
     });
+});
 
     await batch.commit();
 };
