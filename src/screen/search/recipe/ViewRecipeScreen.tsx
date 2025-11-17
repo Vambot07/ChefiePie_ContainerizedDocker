@@ -1,8 +1,9 @@
-import { useEffect, useState,useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, Linking, Modal, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { deleteRecipe, saveRecipe, unsaveRecipe, isRecipeSaved, saveApiRecipe } from '../../../controller/recipe';
+import { NavigationProps } from '~/navigation/AppStack';
 import Header from '../../../components/Header';
 import { getAuth, type Auth } from 'firebase/auth';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -10,49 +11,92 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 const auth: Auth = getAuth();
 
 // Spoonacular API Key
-const SPOONACULAR_API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY // Replace with your actual API key
-
-interface Ingredient {
-    name: string;
-    amount: string;
-    unit: string;
-}
-
-const mockIngredients: Ingredient[] = [
-    { name: 'Tomatos', amount: '500', unit: 'g' },
-    { name: 'Cabbage', amount: '300', unit: 'g' },
-    { name: 'Taco', amount: '', unit: '' },
-];
+const SPOONACULAR_API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY;
 
 const ViewRecipeScreen = () => {
     const route = useRoute();
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProps>();
+
     const [modalVisible, setModalVisible] = useState(false);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
     const [isSaved, setIsSaved] = useState(false);
-    const [apiIsSaved, setApiIsSaved] = useState(false);
     const [savedStatusLoading, setSavedStatusLoading] = useState(true);
+    const [ownerRecipeId, setOwnerRecipeId] = useState<string | null>(null);
     const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
     
     // API Recipe state
     const [apiRecipeDetails, setApiRecipeDetails] = useState<any>(null);
     const [loadingApiDetails, setLoadingApiDetails] = useState(false);
 
-    // Get recipe from params
-    const { recipe } = (route.params as any) || { recipe: {} };
+    // ✅ Get recipe and viewMode from params
+    const { 
+        recipe, 
+        viewMode = 'discover',
+        profileUserId
+    } = (route.params as any) || { 
+        recipe: {}, 
+        viewMode: 'discover',
+        profileUserId: ''
+    };
 
     // Detect if it's an API recipe (Spoonacular) or user-created recipe (Firebase)
-    const isApiRecipe = !recipe?.userId;
+    const isApiRecipe = recipe?.source === 'api';
 
     // Get current user ID and check ownership (only for user recipes)
     const currentUserId = auth.currentUser?.uid;
     const isOwner = recipe?.userId === currentUserId;
 
+    
+    const shouldShowSaveButton = () => {
+        // Always show for discover mode (Home/Search/Saved pages)
+        if (viewMode === 'discover') return true;
+        
+        // For profile mode - only show if viewing own recipe
+        if (viewMode === 'profile') {
+            // If profileUserId exists and is NOT current user - hide
+            if (profileUserId && profileUserId !== currentUserId) {
+                return false;
+            }
+            // Own profile - show
+            return true;
+        }
+        
+        return true; // Default: show
+    };
+
+
+    const canSaveRecipe = shouldShowSaveButton();
+
+   
+     const shouldShowManageButton = () => {
+        // Never show for API recipes
+        if (isApiRecipe) return false;
+        
+        // Never show if not the owner
+        if (!isOwner) return false;
+        
+        // If viewing from someone else's profile - hidez
+        if (profileUserId && profileUserId !== currentUserId) {
+            return false;
+        }
+        
+        // If in profile mode and viewing someone else's recipe - hide
+        if (viewMode === 'profile' && recipe?.userId !== currentUserId) {
+            return false;
+        }
+        
+        // All checks passed - show manage button
+        return true;
+    };
+    const canManageRecipe = shouldShowManageButton();
+
     // Fetch full API recipe details
     useEffect(() => {
         const fetchApiRecipeDetails = async () => {
             if (!isApiRecipe || !recipe?.id) return;
-
+            console.log(recipe);
+            console.log("Sini sal utniuk", !isApiRecipe);
+            console.log(!recipe?.id)
             try {
                 setLoadingApiDetails(true);
                 const response = await fetch(
@@ -77,34 +121,49 @@ const ViewRecipeScreen = () => {
         fetchApiRecipeDetails();
     }, [recipe?.id, isApiRecipe]);
 
-
     useFocusEffect(
-    useCallback(() => {
-        const checkSavedStatus = async () => {
-            setSavedStatusLoading(true);
+        useCallback(() => {
+            const checkSavedStatus = async () => {
+                setSavedStatusLoading(true);
+                
+                if (!auth.currentUser || !recipe?.id) {
+                    setIsSaved(false);
+                    setSavedStatusLoading(false);
+                    return;
+                }
+
+                try {
+                    const saved = await isRecipeSaved(recipe.id.toString());
+                    setIsSaved(saved);
+                } catch (error) {
+                    console.error('Error checking saved status:', error);
+                    setIsSaved(false);
+                } finally {
+                    setSavedStatusLoading(false);
+                }
+            };
             
-            if (!auth.currentUser || !recipe?.id) {
-                setIsSaved(false);
-                setSavedStatusLoading(false);
-                return;
-            }
+            checkSavedStatus();
+        }, [recipe?.id])
+    );
 
-            try {
-                // Check if recipe is saved (works for both API and created)
-                const saved = await isRecipeSaved(recipe.id.toString());
-                setIsSaved(saved);
-            } catch (error) {
-                console.error('Error checking saved status:', error);
-                setIsSaved(false);
-            } finally {
-                setSavedStatusLoading(false);
-            }
-        };
-        
-        checkSavedStatus();
-    }, [recipe?.id])
-);
+    useEffect(() => {
+        const ownerId = getOwnerId();
+        setOwnerRecipeId(ownerId);
+        console.log("Owner Recipe ID:", ownerId);
+        console.log("View Mode:", viewMode);
+        console.log("Current User ID:", currentUserId);
+        console.log("Can Save Recipe:", canSaveRecipe);
+        console.log("Current profile: ", profileUserId);
+        console.log("Can Manage Recipe:", canManageRecipe);
+    }, []);
 
+    const getOwnerId = () => {
+        if (!isApiRecipe){
+            return recipe.userId;
+        }
+        return null;
+    }
 
     // Get YouTube link from recipe data (only user recipes have this)
     const youtubeLink = recipe?.youtube;
@@ -136,14 +195,14 @@ const ViewRecipeScreen = () => {
             time: ''
         })) || [];
         
-        intro = apiRecipeDetails.summary?.replace(/<[^>]*>/g, '') || ''; // Remove HTML tags
+        intro = apiRecipeDetails.summary?.replace(/<[^>]*>/g, '') || '';
         
     } else {
         // Use user-created recipe data
         image = recipe?.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
         title = recipe?.title || 'Recipe';
         time = recipe?.totalTime || recipe?.time || 'N/A';
-        ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : mockIngredients;
+        ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
         serves = recipe?.serves;
         items = recipe?.items;
         profileImage = recipe?.profileImage || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
@@ -275,8 +334,8 @@ const ViewRecipeScreen = () => {
                 textColor="#222"
             />
 
-            {/* Show Manage button ONLY for user-created recipes that user owns */}
-            {isOwner && !isApiRecipe && (
+            {/* ✅ Show Manage button ONLY if canManageRecipe */}
+            {canManageRecipe && (
                 <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}>
                     <TouchableOpacity
                         className="bg-orange-400 p-2 rounded-full"
@@ -305,8 +364,8 @@ const ViewRecipeScreen = () => {
                 </View>
             )}
 
-            {/* Modal - ONLY for user-created recipes */}
-            {!isApiRecipe && (
+            {/* ✅ Modal - ONLY if canManageRecipe */}
+            {canManageRecipe && (
                 <Modal
                     animationType="slide"
                     transparent={true}
@@ -398,37 +457,50 @@ const ViewRecipeScreen = () => {
                 {/* Author Info - ONLY for user recipes */}
                 {!isApiRecipe && (
                     <View className="flex-row items-center px-5 mt-3">
-                        <Image source={{ uri: profileImage }} className="w-10 h-10 rounded-full" />
+                        <TouchableOpacity onPress={() => {
+                            if (ownerRecipeId) {
+                                console.log(ownerRecipeId);
+                                navigation.navigate('Profile', {
+                                    userId: ownerRecipeId, 
+                                    viewMode: 'profile'
+                                });
+                            } else {
+                                console.warn('No owner ID found');
+                            }
+                        }}>
+                            <Image source={{ uri: profileImage }} className="w-10 h-10 rounded-full" />
+                        </TouchableOpacity>
+                        
                         <View className="ml-3 flex-1">
                             <Text className="text-xs text-gray-400">By</Text>
                             <Text className="font-semibold text-gray-800">{recipe?.username || 'Unknown'}</Text>
                         </View>
-                        <TouchableOpacity
-                            className={`px-4 py-2 rounded-full ${isSaved ? 'bg-green-500' : 'bg-[#FFB47B]'}`}
-                            onPress={toggleSave}
-                            disabled={!!loadingAction}
-                        >
-                            <Text className="text-white font-semibold">
-                                {isSaved ? 'Saved' : 'Save for Cooking'}
-                            </Text>
-                        </TouchableOpacity>
+                        
+                        {/* ✅ Only show Save button if canSaveRecipe */}
+                        {canSaveRecipe && (
+                            <TouchableOpacity
+                                className={`px-4 py-2 rounded-full ${isSaved ? 'bg-green-500' : 'bg-[#FFB47B]'}`}
+                                onPress={toggleSave}
+                                disabled={!!loadingAction}
+                            >
+                                <Text className="text-white font-semibold">
+                                    {isSaved ? 'Saved' : 'Save for Cooking'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
 
                 {/* Simple action for API recipes */}
-                    {isApiRecipe && (
-                        <View className="px-5 mt-4">
+                {isApiRecipe && (
+                    <View className="px-5 mt-4">
+                        {/* ✅ Only show Save button if canSaveRecipe */}
+                        {canSaveRecipe && (
                             <TouchableOpacity
                                 className={`py-3 rounded-full flex-row items-center justify-center ${
                                     isSaved ? 'bg-green-500' : 'bg-orange-400'
                                 }`}
-                                onPress={() => {
-                                    if (isSaved) {
-                                        handleUnsaveRecipe();
-                                    } else {
-                                        handleSaveRecipe();
-                                    }
-                                }}
+                                onPress={toggleSave}
                                 disabled={savedStatusLoading || !!loadingAction}
                             >
                                 {savedStatusLoading ? (
@@ -446,8 +518,9 @@ const ViewRecipeScreen = () => {
                                     </>
                                 )}
                             </TouchableOpacity>
-                        </View>
-                    )}
+                        )}
+                    </View>
+                )}
 
                 {/* Tabs - Show for both user recipes and API recipes with data */}
                 {((isApiRecipe && apiRecipeDetails) || (!isApiRecipe && recipe?.ingredients)) && (

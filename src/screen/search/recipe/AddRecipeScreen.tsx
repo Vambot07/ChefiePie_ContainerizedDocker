@@ -3,13 +3,16 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Alert, Keyb
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { addRecipe } from '../../../controller/recipe';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { ActivityIndicator } from 'react-native';
 import Header from '../../../components/Header';
 import { uploadImageToFirebase } from '~/utils/uploadImage';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useAuth } from '~/context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
+import { addRecipeToDay } from '~/controller/planner';
+
 
 interface Ingredient {
     name: string;
@@ -30,6 +33,8 @@ const units = ['cup', 'piece', 'clove', 'tablespoon', 'teaspoon', 'ml', 'gram', 
 export default function AddRecipeScreen() {
 
     const navigation = useNavigation();
+    const route = useRoute();
+    const { user } = useAuth();
 
     const [image, setImage] = useState<string | null>(null);
     const [title, setTitle] = useState<string>('');
@@ -48,6 +53,9 @@ export default function AddRecipeScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [showUnitModal, setShowUnitModal] = useState(false);
     const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(0);
+
+    const { viewMode, selectedDayIndex, weekOffset } = (route.params as any) || {viewMode: 'search'};
+    const userId = user?.uid;
 
     // Helper function to convert time string to minutes
     const convertToMinutes = (timeStr: string): number => {
@@ -123,55 +131,80 @@ export default function AddRecipeScreen() {
 
 
     // Handle form submission
-    const handleAddRecipe = async () => {
-        setIsLoading(true);
-        console.log("Sini Sal: " + image);
-        try {
+const handleAddRecipe = async () => {
+    setIsLoading(true);
 
-            if (!title || !intro || !ingredients || !steps) {
-                Alert.alert("Missing Fields", "Please fill in all required fields (Title, Intro, Ingredients, Steps).");
-                setIsLoading(false);
-                return;
+    try {
+        if (!title || !intro || !ingredients || !steps) {
+            Alert.alert("Missing Fields", "Please fill in all required fields (Title, Intro, Ingredients, Steps).");
+            setIsLoading(false);
+            return;
+        }
+
+        // Upload image if exists
+        let imageUrl = '';
+        if (image) {
+            const fileName = `recipe_${Date.now()}.jpg`;
+            imageUrl = await uploadImageToFirebase(image, fileName);
+        }
+
+        // Prepare recipe data
+        const recipeData = {
+            image: imageUrl,
+            title,
+            intro,
+            prepTime,
+            cookTime,
+            totalTime,
+            difficulty,
+            ingredients,
+            steps,
+            tips,
+            serving,
+            nutrition,
+            youtube,
+            sourceUrl,
+        };
+
+        // 1️⃣ Save recipe → return recipeId
+        const recipeId = await addRecipe(recipeData);
+
+        // 2️⃣ Convert to planner format
+        const plannerRecipe = {
+            id: recipeId,
+            title: recipeData.title,
+            image: recipeData.image,
+            totalTime: recipeData.totalTime || "",
+            difficulty: recipeData.difficulty || "",
+            source: "created" as const,
+        };
+
+        // 3️⃣ If planner mode → save into planner
+        if (viewMode === 'planner') {
+            console.log("Sini skdjnskjn ",weekOffset);
+            console.log(selectedDayIndex);
+            console.log(plannerRecipe);
+            if (userId) {
+                await addRecipeToDay(
+                    userId,
+                    weekOffset,
+                    selectedDayIndex,
+                    plannerRecipe         
+                );
             }
-
-
-            let imageUrl = '';
-            if (image) {
-
-                const fileName = `recipe_${Date.now()}.jpg`;
-                imageUrl = await uploadImageToFirebase(image, fileName);
-            }
-
-            const recipeData = {
-                image: imageUrl,
-                title,
-                intro,
-                prepTime,
-                cookTime,
-                totalTime,
-                difficulty,
-                ingredients,
-                steps,
-                tips,
-                serving,
-                nutrition,
-                youtube,
-                sourceUrl,
-            };
-
-            const successMessage = await addRecipe(recipeData);
-            Alert.alert('Success', successMessage, [
+             Alert.alert('Success', "Recipe added successfully!", [
                 {
                     text: 'OK',
                     onPress: () => navigation.goBack(),
                 }
             ]);
-        } catch (error) {
-            Alert.alert('Error', error instanceof Error ? error.message : 'An unknown error occurred');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+        } 
+    } catch (error) {
+        Alert.alert('Error', error instanceof Error ? error.message : 'An unknown error occurred');
+    } finally {
+        setIsLoading(false);
+    }
+};
 
 
     return (

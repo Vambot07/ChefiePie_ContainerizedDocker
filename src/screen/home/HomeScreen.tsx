@@ -1,11 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, Alert, ActivityIndicator, Pressable, TextInput } from 'react-native';
 import { Ionicons, Feather, Fontisto } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NavigationProps } from '~/navigation/AppStack';
 import { useAuth } from '~/context/AuthContext';
-import { fetchRecipes, fetchRecipesByIngredients } from '~/api/spoonacular';
+import { 
+    fetchRecipesByCategory, 
+    fetchRecipesByIngredients, 
+    fetchRecipeById 
+} from '~/api/spoonacular';
 import { saveApiRecipe, unsaveRecipe } from '~/controller/recipe';
 import colors from '~/utils/color';
 
@@ -58,6 +62,32 @@ const FeaturedRecipeCard = ({
     </TouchableOpacity>
 );
 
+// --- LOADING MODAL COMPONENT ---
+const LoadingModal = ({ visible, message }: { visible: boolean; message?: string }) => (
+    visible ? (
+        <View 
+            style={{ 
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 999,
+            }}
+        >
+            <View className="bg-white rounded-3xl p-8 items-center min-w-[200px]">
+                <ActivityIndicator size="large" color="#FF9966" />
+                <Text className="text-gray-800 font-semibold mt-4 text-center">
+                    {message || "Loading..."}
+                </Text>
+            </View>
+        </View>
+    ) : null
+);
+
 // --- HOME SCREEN ---
 export const HomeScreen = () => {
     const [activeCategory, setActiveCategory] = useState('All');
@@ -69,24 +99,25 @@ export const HomeScreen = () => {
     const [initialLoading, setInitialLoading] = useState<boolean>(true);
     const [loadingIngredients, setLoadingIngredients] = useState<boolean>(false);
     const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
+    const [showAddIngredients, setShowAddIngredients] = useState<boolean>(false);
     const [showModal, setShowModal] = useState<boolean>(false);
     const [hasChanges, setHasChanges] = useState<boolean>(false);
-    const [loadingAction, setLoadingAction] = useState<string | null>(null);
-    const [isSaved, setIsSaved] = useState<boolean>(false);
     const [savedRecipes, setSavedRecipes] = useState<Record<string, boolean>>({});
     const [showLoadingModal, setShowLoadingModal] = useState<boolean>(false);
     const [loadingMessage, setLoadingMessage] = useState<string>("Loading...");
-
+    const [newIngredient, setNewIngredient] = useState(''); // ✅ NEW
+    const [modalSelectedIngredients, setModalSelectedIngredients] = useState<string[]>([]); // ✅ NEW
 
     const navigation = useNavigation<NavigationProps>();
     const { user } = useAuth();
 
     const profileImage = user?.profileImage;
     const username = user?.username;
+    const userId = user?.uid || user?.userId;
 
     // Display data for ingredients section
     const displayedIngredientRecipes = ingredientRecipes.slice(0, 10);
-    const ingredientFinalData = [...displayedIngredientRecipes, { id: 'see-more-ingredients', type: 'seeMore' }];
+    const ingredientFinalData = [...displayedIngredientRecipes];
 
     // Display data for categories section
     const displayedCategoryRecipes = categoryRecipes.slice(0, 10);
@@ -124,12 +155,11 @@ export const HomeScreen = () => {
         }
     }, [hasChanges]);
 
-
     // --- LOAD RECIPES BY CATEGORY ---
     const loadRecipes = async () => {
         try {
             setLoadingCategories(true);
-            const results = await fetchRecipes(activeCategory, 30);
+            const results = await fetchRecipesByCategory(activeCategory, 30);
 
             const recipesData =
                 activeCategory === 'All' ? results.recipes || [] : results.results || [];
@@ -142,7 +172,6 @@ export const HomeScreen = () => {
             }));
 
             setCategoryRecipes(transformedRecipes);
-            console.log('Loaded recipes for category:', categoryRecipes);
         } catch (error) {
             console.error('Error fetching recipes:', error);
             Alert.alert('Error', 'Failed to fetch recipes');
@@ -187,6 +216,90 @@ export const HomeScreen = () => {
         }
     };
 
+    // ✅ NEW: Toggle ingredient in modal
+    const toggleModalIngredient = (ingredient: string) => {
+        if (modalSelectedIngredients.includes(ingredient)) {
+            setModalSelectedIngredients(prev => prev.filter(i => i !== ingredient));
+        } else {
+            setModalSelectedIngredients(prev => [...prev, ingredient]);
+        }
+    };
+
+    // ✅ NEW: Add new ingredient
+    const handleAddIngredient = () => {
+        const trimmed = newIngredient.trim();
+        
+        if (!trimmed) {
+            Alert.alert('Error', 'Please enter an ingredient name');
+            return;
+        }
+        
+        // Check if already exists (case insensitive)
+        const exists = ingredients.some(ing => ing.toLowerCase() === trimmed.toLowerCase());
+        if (exists) {
+            Alert.alert('Error', 'This ingredient already exists');
+            return;
+        }
+        
+        // Add to ingredients list
+        setIngredients(prev => [...prev, trimmed]);
+        
+        // Automatically select the new ingredient
+        setModalSelectedIngredients(prev => [...prev, trimmed]);
+        
+        // Clear input
+        setNewIngredient('');
+        
+        Alert.alert('Success', `"${trimmed}" added and selected!`);
+    };
+
+    // ✅ NEW: Remove ingredient
+    const handleRemoveIngredient = (ingredient: string) => {
+        Alert.alert(
+            'Remove Ingredient',
+            `Remove "${ingredient}" from the list?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: () => {
+                        // Remove from all lists
+                        setIngredients(prev => prev.filter(i => i !== ingredient));
+                        setModalSelectedIngredients(prev => prev.filter(i => i !== ingredient));
+                        setTempSelectedIngredients(prev => prev.filter(i => i !== ingredient));
+                        setSelectedIngredients(prev => prev.filter(i => i !== ingredient));
+                    }
+                }
+            ]
+        );
+    };
+
+    // ✅ NEW: Open modal with current selections
+    const handleShowAddIngredientsModal = () => {
+        setModalSelectedIngredients([...tempSelectedIngredients]); // Copy current selections
+        setShowAddIngredients(true);
+    };
+
+    // ✅ NEW: Search with selected ingredients from modal
+    const handleSearchFromModal = () => {
+        if (modalSelectedIngredients.length === 0) {
+            Alert.alert('Error', 'Please select at least one ingredient');
+            return;
+        }
+
+        // Update all selection states
+        setSelectedIngredients(modalSelectedIngredients);
+        setTempSelectedIngredients(modalSelectedIngredients);
+        
+        // Close modal
+        setShowAddIngredients(false);
+        
+        // Search recipes
+        loadRecipesByIngredients(modalSelectedIngredients);
+        
+        console.log('🔍 Searching with ingredients:', modalSelectedIngredients);
+    };
 
     // --- HANDLE SHOW RECIPES FROM MODAL ---
     const handleShowRecipes = () => {
@@ -208,184 +321,188 @@ export const HomeScreen = () => {
         setHasChanges(false);
     };
 
-    // --- HANDLE RECIPE CARD PRESS (Navigate to ViewRecipe) ---
-    const handleRecipePress = (recipe: any) => {
-    console.log('Navigating to ViewRecipe with recipe:', recipe);
-    navigation.navigate('ViewRecipe', { recipe });
-};
+    // --- HANDLE RECIPE CARD PRESS WITH FULL DETAILS FETCH ---
+    const handleRecipePress = async (recipe: any) => {
+        console.log('Fetching full details for recipe:', recipe.id);
+        
+        setLoadingMessage("Loading recipe details...");
+        setShowLoadingModal(true);
+        
+        try {
+            const fullRecipe = await fetchRecipeById(recipe.id);
+            
+            if (!fullRecipe) {
+                throw new Error('Failed to fetch recipe details');
+            }
+            
+            const completeRecipe = {
+                id: fullRecipe.id?.toString() || recipe.id,
+                title: fullRecipe.title || recipe.title,
+                image: fullRecipe.image || recipe.image,
+                totalTime: fullRecipe.readyInMinutes?.toString() || '30',
+                difficulty: '',
+                source: 'api' as const,
+                servings: fullRecipe.servings || 4,
+                ingredients: fullRecipe.extendedIngredients?.map((ing: any) => ing.original) || [],
+                instructions: fullRecipe.instructions || 
+                             fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) => 
+                                `${idx + 1}. ${step.step}`
+                             ).join('\n\n') || 'No instructions available',
+                summary: fullRecipe.summary || '',
+                cuisines: fullRecipe.cuisines || [],
+                dishTypes: fullRecipe.dishTypes || [],
+                diets: fullRecipe.diets || [],
+            };
+            
+            console.log('✅ Complete recipe ready:', completeRecipe.title);
+            navigation.navigate('ViewRecipe', { recipe: completeRecipe, viewMode: 'discover' });
+        } catch (error) {
+            console.error('❌ Error fetching recipe details:', error);
+            Alert.alert('Error', 'Failed to load recipe details. Please try again.');
+        } finally {
+            setShowLoadingModal(false);
+        }
+    };
 
-const handleSaveRecipe = async (recipe: any) => {
-    setLoadingMessage(`Saving ...`);
-    /*setLoadingMessage(`Saving "${recipe.title.substring(0, 20)}..."`); */
-    setShowLoadingModal(true);
-    
-    try {
-        await saveApiRecipe(recipe);
-        setSavedRecipes(prev => ({ ...prev, [recipe.id]: true }));
-        Alert.alert("Success", `${recipe.title} saved successfully!`);
-    } catch (err) {
-        console.error(err);
-        Alert.alert("Error", "Failed to save recipe.");
-    } finally {
-        setShowLoadingModal(false);
-    }
-};
+    // --- HANDLE SAVE RECIPE ---
+    const handleSaveRecipe = async (recipe: any) => {
+        setLoadingMessage("Saving recipe...");
+        setShowLoadingModal(true);
+        
+        try {
+            await saveApiRecipe(recipe);
+            setSavedRecipes(prev => ({ ...prev, [recipe.id]: true }));
+            Alert.alert("Success", `${recipe.title} saved successfully!`);
+        } catch (err) {
+            console.error(err);
+            Alert.alert("Error", "Failed to save recipe.");
+        } finally {
+            setShowLoadingModal(false);
+        }
+    };
 
-const handleUnsaveRecipe = async (recipeId: string) => {
-    setLoadingMessage("Removing recipe...");
-    setShowLoadingModal(true);
-    
-    try {
-        await unsaveRecipe(recipeId);
-        setSavedRecipes(prev => ({ ...prev, [recipeId]: false }));
-        Alert.alert("Success", "Recipe removed from saved list.");
-    } catch (err) {
-        console.error(err);
-        Alert.alert("Error", "Failed to unsave recipe.");
-    } finally {
-        setShowLoadingModal(false);
-    }
-};
-const LoadingModal = ({ visible, message }: { visible: boolean; message?: string }) => (
-        visible ? (
-            <View 
-                style={{ 
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.7)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 999,
-                }}
-            >
-                <View className="bg-white rounded-3xl p-8 items-center min-w-[200px]">
-                    <ActivityIndicator size="large" color="#FF9966" />
-                    <Text className="text-gray-800 font-semibold mt-4 text-center">
-                        {message || "Loading..."}
-                    </Text>
-                </View>
-            </View>
-        ) : null
-    );
+    // --- HANDLE UNSAVE RECIPE ---
+    const handleUnsaveRecipe = async (recipeId: string) => {
+        setLoadingMessage("Removing recipe...");
+        setShowLoadingModal(true);
+        
+        try {
+            await unsaveRecipe(recipeId);
+            setSavedRecipes(prev => ({ ...prev, [recipeId]: false }));
+            Alert.alert("Success", "Recipe removed from saved list.");
+        } catch (err) {
+            console.error(err);
+            Alert.alert("Error", "Failed to unsave recipe.");
+        } finally {
+            setShowLoadingModal(false);
+        }
+    };
 
-  return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.white }}>
-        <View style={{ flex: 1, overflow: 'visible' }}>
-            {initialLoading ? (
-                <View className="flex-1 justify-center items-center">
-                    <ActivityIndicator size="large" color="#FF9966" />
-                </View>
-            ) : (
-                <ScrollView className="px-2 pt-4" showsVerticalScrollIndicator={false}>
-                    {/* ALL YOUR EXISTING CONTENT */}
-                    {/* HEADER */}
-                    <View className="flex-row justify-between px-4">
-                        <TouchableOpacity onPress={() => navigation.navigate('Profile', {})}>
-                            <View
-                                className="w-16 h-16 rounded-full items-center justify-center border-line"
-                                style={{ backgroundColor: colors.white, borderWidth: 2, borderColor: colors.lightBrown }}
-                            >
-                                {profileImage ? (
-                                    <Image source={{ uri: profileImage }} className="w-16 h-16 rounded-full" />
-                                ) : (
-                                    <Fontisto name="male" size={24} color={colors.lightBrown} />
-                                )}
-                            </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity className="p-2 rounded-lg" onPress={() => navigation.navigate('Setting')}>
-                            <Ionicons name="settings" size={24} color="#FF9966" />
-                        </TouchableOpacity>
+    return (
+        <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.white }}>
+            <View style={{ flex: 1, overflow: 'visible' }}>
+                {initialLoading ? (
+                    <View className="flex-1 justify-center items-center">
+                        <ActivityIndicator size="large" color="#FF9966" />
                     </View>
+                ) : (
+                    <ScrollView className="px-2 pt-4" showsVerticalScrollIndicator={false}>
+                        {/* HEADER */}
+                        <View className="flex-row justify-between px-4">
+                            <TouchableOpacity onPress={() => navigation.navigate('Profile', {userId: userId, viewMode:'discover'} )}>
+                                <View
+                                    className="w-16 h-16 rounded-full items-center justify-center border-line"
+                                    style={{ backgroundColor: colors.white, borderWidth: 2, borderColor: colors.lightBrown }}
+                                >
+                                    {profileImage ? (
+                                        <Image source={{ uri: profileImage }} className="w-16 h-16 rounded-full" />
+                                    ) : (
+                                        <Fontisto name="male" size={24} color={colors.lightBrown} />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
 
-                    {/* GREETING */}
-                    <View className="mt-4 px-4">
-                        <Text className="text-3xl font-bold text-gray-800">
-                            Hello {username || 'Guest'}
-                        </Text>
-                        <Text className="text-gray-500 mt-1">What are we cooking today?</Text>
-                    </View>
-
-                    {/* SEARCH BY INGREDIENTS */}
-                    <View className="rounded-2xl justify-between mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
-                        <View className="flex-row justify-between px-4 pt-4">
-                            <Text className="text-2xl font-semibold text-gray-800">Search By Ingredients</Text>
-                            <TouchableOpacity>
-                                <Text className="text-2xl font-semibold">Add</Text>
+                            <TouchableOpacity className="p-2 rounded-lg" onPress={() => navigation.navigate('Setting')}>
+                                <Ionicons name="settings" size={24} color="#FF9966" />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
-                        >
-                            {ingredients.map((ingredient, idx) => {
-                                const isSelected = tempSelectedIngredients.includes(ingredient);
-                                return (
-                                    <TouchableOpacity
-                                        key={idx}
-                                        onPress={() => toggleIngredient(ingredient)}
-                                        className={`mr-3 px-3 py-2 rounded-full ${isSelected ? 'bg-orange-400' : 'bg-gray-100'}`}
-                                    >
-                                        <Text className={`font-semibold ${isSelected ? 'text-white' : 'text-gray-600'}`}>
-                                            {ingredient}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
+                        {/* GREETING */}
+                        <View className="mt-4 px-4">
+                            <Text className="text-3xl font-bold text-gray-800">
+                                Hello {username || 'Guest'}
+                            </Text>
+                            <Text className="text-gray-500 mt-1">What are we cooking today?</Text>
+                        </View>
 
-                        {/* INGREDIENTS RECIPES SECTION */}
-                        <View style={{ position: 'relative', minHeight: 280 }}>
-                            {selectedIngredients.length > 0 && (
-                                <>
-                                    <Text className="text-lg font-bold text-gray-700 mb-2 px-4">
-                                        Recipes with {selectedIngredients.join(', ')}
-                                    </Text>
+                        {/* SEARCH BY INGREDIENTS */}
+                        <View className="rounded-2xl justify-between mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
+                            <View className="flex-row justify-between px-4 pt-4">
+                                <Text className="text-2xl font-semibold text-gray-800">Search By Ingredients</Text>
+                                <TouchableOpacity onPress={handleShowAddIngredientsModal}>
+                                    <Text className="text-2xl font-semibold text-orange-500">Add</Text>
+                                </TouchableOpacity>
+                            </View>
 
-                                    {loadingIngredients ? (
-                                        <ScrollView
-                                            horizontal
-                                            showsHorizontalScrollIndicator={false}
-                                            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                            >
+                                {ingredients.map((ingredient, idx) => {
+                                    const isSelected = tempSelectedIngredients.includes(ingredient);
+                                    return (
+                                        <TouchableOpacity
+                                            key={idx}
+                                            onPress={() => toggleIngredient(ingredient)}
+                                            className={`mr-3 px-3 py-2 rounded-full ${isSelected ? 'bg-orange-400' : 'bg-gray-100'}`}
                                         >
-                                            {[1, 2, 3].map((item) => (
-                                                <View
-                                                    key={item}
-                                                    className="bg-gray-200 rounded-2xl w-36 h-56 mr-4 overflow-hidden"
-                                                >
-                                                    <View className="w-full h-32 bg-gray-300" />
-                                                    <View className="p-3">
-                                                        <View className="h-4 bg-gray-300 rounded mb-2 w-full" />
-                                                        <View className="h-3 bg-gray-300 rounded w-3/4" />
-                                                    </View>
-                                                    <View className="absolute inset-0 justify-center items-center">
-                                                        <ActivityIndicator size="small" color="#FF9966" />
-                                                    </View>
-                                                </View>
-                                            ))}
-                                        </ScrollView>
-                                    ) : (
-                                        <FlatList
-                                            data={ingredientFinalData}
-                                            horizontal
-                                            keyExtractor={item => item.id?.toString()}
-                                            showsHorizontalScrollIndicator={false}
-                                            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
-                                            renderItem={({ item }) =>
-                                                item.type === 'seeMore' ? (
-                                                    <TouchableOpacity
-                                                        className="bg-orange-400 rounded-2xl justify-center items-center w-36 h-56 mr-4"
-                                                        onPress={() => navigation.navigate('Search')}
+                                            <Text className={`font-semibold ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                                                {ingredient}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+
+                            {/* INGREDIENTS RECIPES SECTION */}
+                            <View style={{ position: 'relative', minHeight: 280 }}>
+                                {selectedIngredients.length > 0 && (
+                                    <>
+                                        <Text className="text-lg font-bold text-gray-700 mb-2 px-4">
+                                            Recipes with {selectedIngredients.join(', ')}
+                                        </Text>
+
+                                        {loadingIngredients ? (
+                                            <ScrollView
+                                                horizontal
+                                                showsHorizontalScrollIndicator={false}
+                                                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                                            >
+                                                {[1, 2, 3].map((item) => (
+                                                    <View
+                                                        key={item}
+                                                        className="bg-gray-200 rounded-2xl w-36 h-56 mr-4 overflow-hidden"
                                                     >
-                                                        <Text className="text-white font-bold text-lg mb-2">Discover More</Text>
-                                                        <Feather name="search" size={28} color="white" />
-                                                    </TouchableOpacity>
-                                                ) : (
+                                                        <View className="w-full h-32 bg-gray-300" />
+                                                        <View className="p-3">
+                                                            <View className="h-4 bg-gray-300 rounded mb-2 w-full" />
+                                                            <View className="h-3 bg-gray-300 rounded w-3/4" />
+                                                        </View>
+                                                        <View className="absolute inset-0 justify-center items-center">
+                                                            <ActivityIndicator size="small" color="#FF9966" />
+                                                        </View>
+                                                    </View>
+                                                ))}
+                                            </ScrollView>
+                                        ) : (
+                                            <FlatList
+                                                data={ingredientFinalData}
+                                                horizontal
+                                                keyExtractor={item => item.id?.toString()}
+                                                showsHorizontalScrollIndicator={false}
+                                                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                                                renderItem={({ item }) => (
                                                     <FeaturedRecipeCard 
                                                         recipe={item}
                                                         onPress={() => handleRecipePress(item)}
@@ -398,155 +515,284 @@ const LoadingModal = ({ visible, message }: { visible: boolean; message?: string
                                                         }}
                                                         isSaved={!!savedRecipes[item.id]}
                                                     />
-                                                )
-                                            }
-                                        />
-                                    )}
-                                </>
-                            )}
+                                                )}
+                                            />
+                                        )}
+                                    </>
+                                )}
 
-                            {/* LOCAL MODAL */}
-                            {showModal && (
-                                <View 
-                                    style={{ 
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        right: 0,
-                                        bottom: 0,
-                                        backgroundColor: 'rgba(0,0,0,0.7)',
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                        zIndex: 10,
-                                        paddingHorizontal: 16,
-                                    }}
-                                >
-                                    <View className="bg-white rounded-3xl p-6 w-full max-w-sm">
-                                        <Text className="text-xl font-bold text-gray-800 mb-4 text-center">
-                                            {tempSelectedIngredients.length === 0 
-                                                ? 'Clear all ingredients?'
-                                                : `Search with ${tempSelectedIngredients.length} ingredient${tempSelectedIngredients.length > 1 ? 's' : ''}?`
-                                            }
-                                        </Text>
-                                        <Text className="text-gray-600 mb-6 text-center">
-                                            {tempSelectedIngredients.length === 0 
-                                                ? 'No ingredients selected'
-                                                : tempSelectedIngredients.join(', ')
-                                            }
-                                        </Text>
-                                        
-                                        <TouchableOpacity
-                                            className="bg-orange-400 rounded-full py-3 mb-3"
-                                            onPress={handleShowRecipes}
-                                        >
-                                            <Text className="text-white font-bold text-center text-lg">
-                                                {tempSelectedIngredients.length === 0 ? 'Clear' : 'Show Recipes'}
+                                {/* CONFIRMATION MODAL (existing) */}
+                                {showModal && (
+                                    <View 
+                                        style={{ 
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            backgroundColor: 'rgba(0,0,0,0.7)',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            zIndex: 10,
+                                            paddingHorizontal: 16,
+                                        }}
+                                    >
+                                        <View className="bg-white rounded-3xl p-6 w-full max-w-sm">
+                                            <Text className="text-xl font-bold text-gray-800 mb-4 text-center">
+                                                {tempSelectedIngredients.length === 0 
+                                                    ? 'Clear all ingredients?'
+                                                    : `Search with ${tempSelectedIngredients.length} ingredient${tempSelectedIngredients.length > 1 ? 's' : ''}?`
+                                                }
                                             </Text>
-                                        </TouchableOpacity>
+                                            <Text className="text-gray-600 mb-6 text-center">
+                                                {tempSelectedIngredients.length === 0 
+                                                    ? 'No ingredients selected'
+                                                    : tempSelectedIngredients.join(', ')
+                                                }
+                                            </Text>
+                                            
+                                            <TouchableOpacity
+                                                className="bg-orange-400 rounded-full py-3 mb-3"
+                                                onPress={handleShowRecipes}
+                                            >
+                                                <Text className="text-white font-bold text-center text-lg">
+                                                    {tempSelectedIngredients.length === 0 ? 'Clear' : 'Show Recipes'}
+                                                </Text>
+                                            </TouchableOpacity>
 
-                                        <TouchableOpacity
-                                            className="bg-gray-200 rounded-full py-3"
-                                            onPress={handleUndo}
-                                        >
-                                            <Text className="text-gray-700 font-semibold text-center text-lg">
-                                                Cancel
-                                            </Text>
-                                        </TouchableOpacity>
+                                            <TouchableOpacity
+                                                className="bg-gray-200 rounded-full py-3"
+                                                onPress={handleUndo}
+                                            >
+                                                <Text className="text-gray-700 font-semibold text-center text-lg">
+                                                    Cancel
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
+                                )}
+                            </View>
+                        </View>
+
+                        {/* CATEGORIES */}
+                        <View className="rounded-2xl mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
+                            <Text className="text-2xl font-semibold text-gray-800 mb-3 px-4 pt-4">Categories</Text>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ paddingHorizontal: 16 }}
+                            >
+                                {categories.map(category => (
+                                    <TouchableOpacity
+                                        key={category}
+                                        className={`mr-3 px-3 py-2 rounded-full ${activeCategory === category ? 'bg-orange-400' : 'bg-gray-100'}`}
+                                        onPress={() => setActiveCategory(category)}
+                                    >
+                                        <Text className={`font-semibold ${activeCategory === category ? 'text-white' : 'text-gray-600'}`}>
+                                            {category}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+
+                            <View className="pt-4 pb-4 rounded-3xl p-2">
+                                <Text className="text-lg font-bold text-gray-700 mb-4 px-4">
+                                    {activeCategory === 'All' ? 'Featured Recipes' : `${activeCategory} Recipes`}
+                                </Text>
+
+                                {loadingCategories ? (
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={{ paddingHorizontal: 16 }}
+                                    >
+                                        {[1, 2, 3].map((item) => (
+                                            <View
+                                                key={item}
+                                                className="bg-gray-200 rounded-2xl w-36 h-56 mr-4 overflow-hidden"
+                                            >
+                                                <View className="w-full h-32 bg-gray-300" />
+                                                <View className="p-3">
+                                                    <View className="h-4 bg-gray-300 rounded mb-2 w-full" />
+                                                    <View className="h-3 bg-gray-300 rounded w-3/4" />
+                                                </View>
+                                                <View className="absolute inset-0 justify-center items-center">
+                                                    <ActivityIndicator size="small" color="#FF9966" />
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </ScrollView>
+                                ) : (
+                                    <FlatList
+                                        data={categoryFinalData}
+                                        horizontal
+                                        keyExtractor={item => item.id?.toString()}
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={{ paddingHorizontal: 16 }}
+                                        renderItem={({ item }) =>
+                                            item.type === 'seeMore' ? (
+                                                <TouchableOpacity
+                                                    className="bg-orange-400 rounded-2xl justify-center items-center w-36 h-56 mr-4"
+                                                    onPress={() => navigation.navigate('Search')}
+                                                >
+                                                    <Text className="text-white font-bold text-lg mb-2">Discover More</Text>
+                                                    <Feather name="search" size={28} color="white" />
+                                                </TouchableOpacity>
+                                            ) : (
+                                               <FeaturedRecipeCard 
+                                                    recipe={item}
+                                                    onPress={() => handleRecipePress(item)}
+                                                    onSave={() => {
+                                                        if (savedRecipes[item.id]) {
+                                                            handleUnsaveRecipe(item.id);
+                                                        } else {
+                                                            handleSaveRecipe(item);
+                                                        }
+                                                    }}
+                                                    isSaved={!!savedRecipes[item.id]}
+                                                />
+                                            )
+                                        }
+                                    />
+                                )}
+                            </View>
+                        </View>
+                    </ScrollView>
+                )}
+                
+                {/* LOADING MODAL */}
+                <LoadingModal visible={showLoadingModal} message={loadingMessage} />
+            </View>
+
+            {/* ✅ ADD INGREDIENTS MODAL */}
+            {showAddIngredients && (
+                <View style={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    right: 0, 
+                    bottom: 0, 
+                    backgroundColor: 'rgba(0,0,0,0.5)', 
+                    justifyContent: 'center', 
+                    alignItems: 'center',
+                    zIndex: 1000
+                }}>
+                    <Pressable 
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
+                        onPress={() => setShowAddIngredients(false)}
+                    />
+
+                    <View style={{ 
+                        width: '90%', 
+                        maxHeight: '80%', 
+                        backgroundColor: 'white', 
+                        borderRadius: 20, 
+                        overflow: 'hidden' 
+                    }}>
+                        {/* Header */}
+                        <View className="bg-orange-500 px-5 py-4 flex-row justify-between items-center">
+                            <Text className="text-white font-bold text-lg">Add & Select Ingredients</Text>
+                            <TouchableOpacity onPress={() => setShowAddIngredients(false)}>
+                                <Ionicons name="close" size={24} color="white" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Body */}
+                        <ScrollView className="px-5 py-4" showsVerticalScrollIndicator={false}>
+                            {/* Add New Ingredient Section */}
+                            <View className="mb-4">
+                                <Text className="text-gray-700 font-semibold mb-3">Add New Ingredient</Text>
+                                <View className="flex-row items-center">
+                                    <TextInput
+                                        className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-3 mr-2"
+                                        placeholder="e.g., Papaya, Durian..."
+                                        value={newIngredient}
+                                        onChangeText={setNewIngredient}
+                                        returnKeyType="done"
+                                        onSubmitEditing={handleAddIngredient}
+                                    />
+                                    <TouchableOpacity
+                                        className="px-4 py-3 rounded-lg bg-orange-500"
+                                        onPress={handleAddIngredient}
+                                    >
+                                        <Text className="text-white font-semibold">Add</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Ingredients List with Selection */}
+                            <View>
+                                <Text className="text-gray-700 font-semibold mb-3">
+                                    Select Ingredients ({modalSelectedIngredients.length} selected)
+                                </Text>
+                                <View className="flex-row flex-wrap">
+                                    {ingredients.map((ingredient, idx) => {
+                                        const isSelected = modalSelectedIngredients.includes(ingredient);
+                                        return (
+                                            <View 
+                                                key={idx}
+                                                className={`rounded-full px-3 py-2 mr-2 mb-2 flex-row items-center ${
+                                                    isSelected ? 'bg-orange-500' : 'bg-gray-100'
+                                                }`}
+                                            >
+                                                <TouchableOpacity
+                                                    onPress={() => toggleModalIngredient(ingredient)}
+                                                    className="flex-row items-center"
+                                                >
+                                                    <Text className={`text-sm font-medium ${
+                                                        isSelected ? 'text-white' : 'text-gray-600'
+                                                    }`}>
+                                                        {ingredient}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                                
+                                                {/* Remove button (only for non-base ingredients) */}
+                                                {!baseIngredients.includes(ingredient) && (
+                                                    <TouchableOpacity
+                                                        className="ml-2"
+                                                        onPress={() => handleRemoveIngredient(ingredient)}
+                                                    >
+                                                        <Ionicons 
+                                                            name="close-circle" 
+                                                            size={16} 
+                                                            color={isSelected ? "white" : "#F97316"} 
+                                                        />
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+
+                            {/* Info Message */}
+                            {modalSelectedIngredients.length === 0 && (
+                                <View className="mt-4 bg-orange-50 p-3 rounded-lg">
+                                    <Text className="text-orange-600 text-sm text-center">
+                                        ℹ️ Please select at least one ingredient to search
+                                    </Text>
                                 </View>
                             )}
-                        </View>
-                    </View>
-
-                    {/* CATEGORIES */}
-                    <View className="rounded-2xl mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
-                        <Text className="text-2xl font-semibold text-gray-800 mb-3 px-4 pt-4">Categories</Text>
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={{ paddingHorizontal: 16 }}
-                        >
-                            {categories.map(category => (
-                                <TouchableOpacity
-                                    key={category}
-                                    className={`mr-3 px-3 py-2 rounded-full ${activeCategory === category ? 'bg-orange-400' : 'bg-gray-100'}`}
-                                    onPress={() => setActiveCategory(category)}
-                                >
-                                    <Text className={`font-semibold ${activeCategory === category ? 'text-white' : 'text-gray-600'}`}>
-                                        {category}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
                         </ScrollView>
 
-                        <View className="pt-4 pb-4 rounded-3xl p-2">
-                            <Text className="text-lg font-bold text-gray-700 mb-4 px-4">
-                                {activeCategory === 'All' ? 'Featured Recipes' : `${activeCategory} Recipes`}
-                            </Text>
-
-                            {loadingCategories ? (
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={{ paddingHorizontal: 16 }}
-                                >
-                                    {[1, 2, 3].map((item) => (
-                                        <View
-                                            key={item}
-                                            className="bg-gray-200 rounded-2xl w-36 h-56 mr-4 overflow-hidden"
-                                        >
-                                            <View className="w-full h-32 bg-gray-300" />
-                                            <View className="p-3">
-                                                <View className="h-4 bg-gray-300 rounded mb-2 w-full" />
-                                                <View className="h-3 bg-gray-300 rounded w-3/4" />
-                                            </View>
-                                            <View className="absolute inset-0 justify-center items-center">
-                                                <ActivityIndicator size="small" color="#FF9966" />
-                                            </View>
-                                        </View>
-                                    ))}
-                                </ScrollView>
-                            ) : (
-                                <FlatList
-                                    data={categoryFinalData}
-                                    horizontal
-                                    keyExtractor={item => item.id?.toString()}
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={{ paddingHorizontal: 16 }}
-                                    renderItem={({ item }) =>
-                                        item.type === 'seeMore' ? (
-                                            <TouchableOpacity
-                                                className="bg-orange-400 rounded-2xl justify-center items-center w-36 h-56 mr-4"
-                                                onPress={() => navigation.navigate('Search')}
-                                            >
-                                                <Text className="text-white font-bold text-lg mb-2">Discover More</Text>
-                                                <Feather name="search" size={28} color="white" />
-                                            </TouchableOpacity>
-                                        ) : (
-                                           <FeaturedRecipeCard 
-                                                recipe={item}
-                                                onPress={() => handleRecipePress(item)}
-                                                onSave={() => {
-                                                    if (savedRecipes[item.id]) {
-                                                        handleUnsaveRecipe(item.id);
-                                                    } else {
-                                                        handleSaveRecipe(item);
-                                                    }
-                                                }}
-                                                isSaved={!!savedRecipes[item.id]}
-                                            />
-                                        )
-                                    }
-                                />
-                            )}
+                        {/* Footer */}
+                        <View className="px-5 py-4 border-t border-gray-200">
+                            <TouchableOpacity
+                                className="py-3 rounded-xl"
+                                style={{ 
+                                    backgroundColor: modalSelectedIngredients.length > 0 ? '#F97316' : '#D1D5DB' 
+                                }}
+                                onPress={handleSearchFromModal}
+                                disabled={modalSelectedIngredients.length === 0}
+                            >
+                                <Text className="text-white text-center font-bold text-lg">
+                                    Search with {modalSelectedIngredients.length} Ingredient{modalSelectedIngredients.length !== 1 ? 's' : ''}
+                                </Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
-                </ScrollView>
+                </View>
             )}
-            
-            {/* 🔥 CRITICAL: ADD THIS LINE - LoadingModal Component 🔥 */}
-            <LoadingModal visible={showLoadingModal} message={loadingMessage} />
-        </View>
-    </SafeAreaView>
-);
+        </SafeAreaView>
+    );
 };

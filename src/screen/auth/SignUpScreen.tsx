@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
@@ -21,11 +21,9 @@ const SignUpScreen = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-
-
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,  // ← FIX INI
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true as boolean,
             quality: 0.8,
             aspect: [4, 3],
@@ -37,8 +35,6 @@ const SignUpScreen = () => {
             console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
         }
     }
-
-
 
     const handleSignUp = async () => {
         try {
@@ -84,37 +80,37 @@ const SignUpScreen = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView className="flex-1 bg-white">
             <StatusBar style="auto" />
             <KeyboardAvoidingView
-                style={{ flex: 1 }}
+                className="flex-1"
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent}>
-                    <View style={styles.content}>
+                <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+                    <View className="flex-1 items-center p-5">
                         <Image
                             source={require('../../../assets/ChefiePieLogo.png')}
-                            style={styles.logo}
+                            className="w-[120px] h-[120px] mt-5 mb-5"
                             resizeMode="contain"
                         />
 
-                        <Text style={styles.title}>Create Account</Text>
-                        <Text style={styles.subtitle}>Join Chefie Pie today!</Text>
+                        <Text className="text-[28px] font-bold text-[#333] mb-2.5">Create Account</Text>
+                        <Text className="text-base text-[#666] mb-[30px]">Join Chefie Pie today!</Text>
 
-                        <View style={styles.form}>
+                        <View className="w-full gap-[15px]">
                             <TouchableOpacity className="items-center" onPress={pickImage}>
                                 {profileImage ? (
-                                    <Image source={{ uri: profileImage }} style={{ width: 80, height: 80, borderRadius: 10 }} />
+                                    <Image source={{ uri: profileImage }} className="w-20 h-20 rounded-[10px]" />
                                 ) : (
-                                    <View style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: '#f3f3f3', alignItems: 'center', justifyContent: 'center' }}>
+                                    <View className="w-20 h-20 rounded-[10px] bg-[#f3f3f3] items-center justify-center">
                                         <Feather name="image" size={24} color="#FFB47B" />
-                                        <Text style={{ color: '#aaa', fontSize: 12, marginTop: 4 }}>Pick Photo</Text>
+                                        <Text className="text-[#aaa] text-xs mt-1">Pick Photo</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
 
                             <TextInput
-                                style={styles.input}
+                                className="bg-[#f5f5f5] p-[15px] rounded-[10px] text-base w-full"
                                 placeholder="Username"
                                 value={username}
                                 onChangeText={setUsername}
@@ -123,7 +119,7 @@ const SignUpScreen = () => {
                             />
 
                             <TextInput
-                                style={styles.input}
+                                className="bg-[#f5f5f5] p-[15px] rounded-[10px] text-base w-full"
                                 placeholder="Email"
                                 value={email}
                                 onChangeText={setEmail}
@@ -131,16 +127,16 @@ const SignUpScreen = () => {
                                 autoCapitalize="none"
                             />
 
-                            <View style={styles.passwordContainer}>
+                            <View className="relative w-full">
                                 <TextInput
-                                    style={styles.passwordInput}
+                                    className="bg-[#f5f5f5] p-[15px] pr-[50px] rounded-[10px] text-base w-full"
                                     placeholder="Password"
                                     value={password}
                                     onChangeText={setPassword}
                                     secureTextEntry={!showPassword}
                                 />
                                 <TouchableOpacity
-                                    style={styles.eyeIcon}
+                                    className="absolute right-[15px] top-[15px] z-10"
                                     onPress={() => setShowPassword(!showPassword)}
                                 >
                                     <Ionicons
@@ -151,16 +147,16 @@ const SignUpScreen = () => {
                                 </TouchableOpacity>
                             </View>
 
-                            <View style={styles.passwordContainer}>
+                            <View className="relative w-full">
                                 <TextInput
-                                    style={styles.passwordInput}
+                                    className="bg-[#f5f5f5] p-[15px] pr-[50px] rounded-[10px] text-base w-full"
                                     placeholder="Confirm Password"
                                     value={confirmPassword}
                                     onChangeText={setConfirmPassword}
                                     secureTextEntry={!showConfirmPassword}
                                 />
                                 <TouchableOpacity
-                                    style={styles.eyeIcon}
+                                    className="absolute right-[15px] top-[15px] z-10"
                                     onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                                 >
                                     <Ionicons
@@ -172,24 +168,24 @@ const SignUpScreen = () => {
                             </View>
 
                             <TouchableOpacity
-                                style={[styles.button, loading && styles.buttonDisabled]}
+                                className={`bg-[#FF9966] p-[15px] rounded-[10px] w-full items-center mt-2.5 ${loading ? 'opacity-70' : ''}`}
                                 onPress={handleSignUp}
                                 disabled={loading}
                             >
                                 {loading ? (
-                                    <View style={styles.loadingContainer}>
+                                    <View className="flex-row items-center justify-center gap-2.5">
                                         <ActivityIndicator size="small" color="#fff" />
-                                        <Text style={styles.buttonText}>Creating Account...</Text>
+                                        <Text className="text-white text-base font-semibold">Creating Account...</Text>
                                     </View>
                                 ) : (
-                                    <Text style={styles.buttonText}>Sign Up</Text>
+                                    <Text className="text-white text-base font-semibold">Sign Up</Text>
                                 )}
                             </TouchableOpacity>
 
-                            <View style={styles.signInContainer}>
-                                <Text style={styles.signInText}>Already have an account? </Text>
+                            <View className="flex-row justify-center mt-5 mb-5">
+                                <Text className="text-[#666] text-sm">Already have an account? </Text>
                                 <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
-                                    <Text style={styles.signInLink}>Sign In</Text>
+                                    <Text className="text-[#FF6B6B] text-sm font-semibold">Sign In</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -199,154 +195,16 @@ const SignUpScreen = () => {
 
             {/* Loading Overlay */}
             {loading && (
-                <View style={styles.loadingOverlay}>
-                    <View style={styles.loadingContent}>
+                <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/50 justify-center items-center z-[1000]">
+                    <View className="bg-white p-[30px] rounded-[15px] items-center min-w-[250px] shadow-lg">
                         <ActivityIndicator size="large" color="#FF9966" />
-                        <Text style={styles.loadingText}>Creating your account...</Text>
-                        <Text style={styles.loadingSubtext}>Please wait while we set up your profile</Text>
+                        <Text className="text-lg font-semibold text-[#333] mt-[15px] text-center">Creating your account...</Text>
+                        <Text className="text-sm text-[#666] mt-2 text-center">Please wait while we set up your profile</Text>
                     </View>
                 </View>
             )}
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    scrollContent: {
-        flexGrow: 1,
-    },
-    content: {
-        flex: 1,
-        alignItems: 'center',
-        padding: 20,
-    },
-    logo: {
-        width: 120,
-        height: 120,
-        marginTop: 20,
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 30,
-    },
-    form: {
-        width: '100%',
-        gap: 15,
-    },
-    input: {
-        backgroundColor: '#f5f5f5',
-        padding: 15,
-        borderRadius: 10,
-        fontSize: 16,
-        width: '100%',
-    },
-    passwordContainer: {
-        position: 'relative',
-        width: '100%',
-    },
-    passwordInput: {
-        backgroundColor: '#f5f5f5',
-        padding: 15,
-        paddingRight: 50,
-        borderRadius: 10,
-        fontSize: 16,
-        width: '100%',
-    },
-    eyeIcon: {
-        position: 'absolute',
-        right: 15,
-        top: 15,
-        zIndex: 1,
-    },
-    button: {
-        backgroundColor: '#FF9966',
-        padding: 15,
-        borderRadius: 10,
-        width: '100%',
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    buttonDisabled: {
-        backgroundColor: '#FF9966',
-        opacity: 0.7,
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    loadingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-    },
-    loadingOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-    },
-    loadingContent: {
-        backgroundColor: '#fff',
-        padding: 30,
-        borderRadius: 15,
-        alignItems: 'center',
-        minWidth: 250,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    loadingText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        marginTop: 15,
-        textAlign: 'center',
-    },
-    loadingSubtext: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 8,
-        textAlign: 'center',
-    },
-    signInContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 20,
-        marginBottom: 20,
-    },
-    signInText: {
-        color: '#666',
-        fontSize: 14,
-    },
-    signInLink: {
-        color: '#FF6B6B',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-});
 
 export default SignUpScreen;
