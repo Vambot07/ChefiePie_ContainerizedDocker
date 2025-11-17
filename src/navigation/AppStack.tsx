@@ -17,6 +17,7 @@ import MigrateImagesScreen from '~/screen/admin/MigrateImagesScreen';
 import SettingScreen from '~/screen/profile/SettingScreen';
 import EditProfileScreen from '~/screen/profile/EditProfileScreen';
 import FoodPreferenceScreen from '~/screen/profile/FoodPreferenceScreen';
+import createRecipeScreen from '~/components/CreateRecipeScreen';
 
 export type RootStackParamList = {
     Tabs: undefined;
@@ -46,6 +47,8 @@ export type RootStackParamList = {
     MigrateImages: undefined;
     EditProfile: undefined;
     FoodPreference: undefined;
+    CreateRecipe: undefined;
+    
 };
 
 export type NavigationProps = NativeStackNavigationProp<RootStackParamList>;
@@ -130,6 +133,7 @@ const AppStack = () => {
             <Stack.Screen name="Setting" component={SettingScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="FoodPreference" component={FoodPreferenceScreen} />
+            <Stack.Screen name="CreateRecipe" component={createRecipeScreen} />
         </Stack.Navigator>
     );
 }
