@@ -657,6 +657,10 @@ export const HomeScreen = () => {
                                 )}
                             </View>
                         </View>
+
+                         <TouchableOpacity className='py-6 rounded-xl' style={{backgroundColor: '#F97316'}} onPress={()=> navigation.navigate('CreateRecipe')}>
+                            <Text>Bring me to test Speech recognition</Text>
+                        </TouchableOpacity>
                     </ScrollView>
                 )}
                 
@@ -793,6 +797,7 @@ export const HomeScreen = () => {
                     </View>
                 </View>
             )}
+
         </SafeAreaView>
     );
 };

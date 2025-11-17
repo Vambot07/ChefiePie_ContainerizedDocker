@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "",
+    "name": "Chefie Pie",
     "slug": "ChefiePie",
     "version": "1.0.0",
     "web": {
@@ -10,7 +10,14 @@
       "tsconfigPaths": true
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Chefie Pie to access your microphone for voice input.",
+          "speechRecognitionPermission": "Allow Chefie Pie to use speech recognition."
+        }
+      ]
     ],
     "orientation": "portrait",
     "icon": "./assets/ChefiePieLogo.png",
@@ -24,14 +31,28 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow Chefie Pie to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow Chefie Pie to access your microphone for voice input.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.anonymous.chefiePie"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.chefiePie"
+      "package": "com.anonymous.chefiePie",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "19c50855-8c98-4695-b140-f768ad27baad"
+      }
     }
   }
 }
