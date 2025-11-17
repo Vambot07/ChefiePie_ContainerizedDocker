@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Image, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Image, Alert, Modal, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
@@ -28,43 +28,45 @@ const SignInScreen = () => {
         if (response.success) {
             Alert.alert('Signin Success', response.msg);
         } else {
-            Alert.alert('Signin Failed', response.msg + '\nPlease try again later');
+            Alert.alert('Signin Failed', response.msg + '\nPlease try again later');
         }
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView className="flex-1 bg-white">
             <StatusBar style="auto" />
-            <View style={styles.content}>
+            <View className="flex-1 items-center p-5">
                 <Image
                     source={require('../../../assets/ChefiePieLogo.png')}
-                    style={styles.logo}
+                    className="w-[120px] h-[120px] mt-10 mb-5"
                     resizeMode="contain"
                 />
 
-                <Text style={styles.title}>Welcome Back!</Text>
-                <Text style={styles.subtitle}>Sign in to continue</Text>
+                <Text className="text-[28px] font-bold text-[#333] mb-2.5">Welcome Back!</Text>
+                <Text className="text-base text-[#666] mb-[30px]">Sign in to continue</Text>
 
-                <View style={styles.form}>
+                <View className="w-full gap-[15px]">
                     <TextInput
-                        style={styles.input}
+                        className="bg-[#f5f5f5] rounded-[10px] text-base w-full"
+                        style={{ paddingVertical: 15, paddingHorizontal: 15, lineHeight: 15 }}
                         placeholder="Email"
                         value={email}
                         onChangeText={setEmail}
                         keyboardType="email-address"
                         autoCapitalize="none"
-                    />
+                        />
 
-                    <View style={styles.passwordContainer}>
+
+                    <View className="relative w-full">
                         <TextInput
-                            style={styles.passwordInput}
+                            className="bg-[#f5f5f5] p-[15px] pr-[50px] rounded-[10px] text-base w-full"
                             placeholder="Password"
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry={!showPassword}
                         />
                         <TouchableOpacity
-                            style={styles.eyeIcon}
+                            className="absolute right-[15px] top-[15px] z-10"
                             onPress={() => setShowPassword(!showPassword)}
                         >
                             <Ionicons
@@ -76,121 +78,44 @@ const SignInScreen = () => {
                     </View>
 
                     <TouchableOpacity
-                        style={styles.forgotPassword}
+                        className="self-end"
                         onPress={() => navigation.navigate('ForgotPassword')}
                     >
-                        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                        <Text className="text-[#FF6B6B] text-sm">Forgot Password?</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.button}
+                        className="bg-[#FF9966] p-[15px] rounded-[10px] w-full items-center mt-2.5"
                         onPress={handleSignIn}
                     >
-                        <Text style={styles.buttonText}>Sign In</Text>
+                        <Text className="text-white text-base font-semibold">Sign In</Text>
                     </TouchableOpacity>
 
-                    <View style={styles.signUpContainer}>
-                        <Text style={styles.signUpText}>Don't have an account? </Text>
+                    <View className="flex-row justify-center mt-5">
+                        <Text className="text-[#666] text-sm">Don't have an account? </Text>
                         <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-                            <Text style={styles.signUpLink}>Sign Up</Text>
+                            <Text className="text-[#FF6B6B] text-sm font-semibold">Sign Up</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </View>
+
+            {/* Loading Modal */}
+            <Modal
+                transparent={true}
+                animationType="fade"
+                visible={loading}
+                onRequestClose={() => setLoading(false)}
+            >
+                <View className="flex-1 bg-black/30 justify-center items-center">
+                    <View className="bg-white p-[30px] rounded-[15px] items-center shadow-lg">
+                        <ActivityIndicator size="large" color="#FF9966" />
+                        <Text className="mt-2.5 text-base text-[#333]">Signing in...</Text>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    content: {
-        flex: 1,
-        alignItems: 'center',
-        padding: 20,
-    },
-    logo: {
-        width: 120,
-        height: 120,
-        marginTop: 40,
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 30,
-    },
-    form: {
-        width: '100%',
-        gap: 15,
-    },
-    input: {
-        backgroundColor: '#f5f5f5',
-        padding: 15,
-        borderRadius: 10,
-        fontSize: 16,
-        width: '100%',
-    },
-    passwordContainer: {
-        position: 'relative',
-        width: '100%',
-    },
-    passwordInput: {
-        backgroundColor: '#f5f5f5',
-        padding: 15,
-        paddingRight: 50,
-        borderRadius: 10,
-        fontSize: 16,
-        width: '100%',
-    },
-    eyeIcon: {
-        position: 'absolute',
-        right: 15,
-        top: 15,
-        zIndex: 1,
-    },
-    forgotPassword: {
-        alignSelf: 'flex-end',
-    },
-    forgotPasswordText: {
-        color: '#FF6B6B',
-        fontSize: 14,
-    },
-    button: {
-        backgroundColor: '#FF9966',
-        padding: 15,
-        borderRadius: 10,
-        width: '100%',
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    signUpContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 20,
-    },
-    signUpText: {
-        color: '#666',
-        fontSize: 14,
-    },
-    signUpLink: {
-        color: '#FF6B6B',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-});
 
 export default SignInScreen;

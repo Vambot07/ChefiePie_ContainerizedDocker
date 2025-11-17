@@ -20,11 +20,20 @@ import FoodPreferenceScreen from '~/screen/profile/FoodPreferenceScreen';
 
 export type RootStackParamList = {
     Tabs: undefined;
-    Profile: { userId?: string };
-    AddRecipe: undefined;
+    Profile: { 
+        userId?: string;
+        viewMode?: string;
+     };
+    AddRecipe: { 
+        viewMode?: string;              // 'planner' or 'search'
+        selectedDayIndex?: number | null;  // 0-6 for days (Monday-Sunday)
+        weekOffset?: number;
+    };
     ViewRecipe: { 
-        recipeId?: string;  // ✅ For created recipes
-        recipe?: any;       // ✅ For API recipes
+        recipeId?: string; 
+        recipe?: any;
+        viewMode?: string;
+        profileUserId?: string;      
     };
     ViewApiRecipe: { recipe: string };
     Home: undefined;
@@ -34,7 +43,7 @@ export type RootStackParamList = {
     Checklist: undefined;
     ViewSavedRecipe: { recipeId: String };
     Setting: undefined;
-    MigrateImages: undefined; // <-- Add this line!
+    MigrateImages: undefined;
     EditProfile: undefined;
     FoodPreference: undefined;
 };

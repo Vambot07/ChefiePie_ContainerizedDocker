@@ -6,13 +6,15 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchRecipes } from '~/controller/recipe';
-import { fetchRecipes } from '~/api/spoonacular'; // Import Spoonacular API
+import { fetchRecipesByCategory } from '~/api/spoonacular'; // Import Spoonacular API
 import Header from '../../components/Header';
 
 // Add navigation type
 type RootStackParamList = {
     AddRecipe: undefined;
-    ViewRecipe: { recipe: Recipe };
+    ViewRecipe: { 
+        recipe: Recipe,
+        viewMode: string };
 };
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -52,7 +54,7 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
     return (
         <TouchableOpacity 
             className="bg-white rounded-xl shadow-sm mb-4 w-[48%]" 
-            onPress={() => navigation.navigate('ViewRecipe', { recipe })}
+            onPress={() => navigation.navigate('ViewRecipe', { recipe, viewMode:'discover' })}
         >
             <View className="w-full h-32 rounded-t-xl bg-gray-200 justify-center items-center">
                 {/* Spinner centered */}
@@ -141,7 +143,7 @@ export default function SearchScreen() {
                 results = { results: data.results || [] };
             } else {
                 console.log('Fetching random recipes');
-                results = await fetchRecipes('All', 20);
+                results = await fetchRecipesByCategory('All', 20);
             }
             
             const recipesData = results.recipes || results.results || [];

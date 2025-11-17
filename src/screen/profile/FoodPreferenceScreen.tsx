@@ -130,7 +130,6 @@ const FoodPreferenceScreen = () => {
     const [customIngredient, setCustomIngredient] = useState<string>('');
     const [saving, setSaving] = useState(false);
 
-    // ✅ Update local state bila user data berubah
     useEffect(() => {
         if (user) {
             setDietaryRestrictions(user.dietaryRestrictions || []);
@@ -196,7 +195,6 @@ const FoodPreferenceScreen = () => {
         setShowIngredientsModal(false);
     }
 
-    // ✅ FIX: Proper save function
     const handleSave = async () => {
         try {
             if (!user?.userId) {
@@ -206,7 +204,6 @@ const FoodPreferenceScreen = () => {
 
             setSaving(true);
 
-            // ✅ Save to Firestore
             const result = await updateUserInFirestore(user.userId, {
                 dietaryRestrictions,
                 cookingGoal,

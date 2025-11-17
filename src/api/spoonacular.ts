@@ -14,7 +14,7 @@ const categoryToCuisine: Record<string, string> = {
 };
 
 // Fetch recipes (random or by cuisine)
-export const fetchRecipes = async (cuisine: string = 'All', number: number = 10) => {
+export const fetchRecipesByCategory = async (cuisine: string = 'All', number: number = 10) => {
   try {
     let url = '';
     let params: any = { apiKey: API_KEY, number };
@@ -103,5 +103,39 @@ export const fetchRecipeApiById = async (recipeId: string | number) => {
   } catch (error) {
     console.error(`Error fetching recipe by ID (${recipeId}):`, error);
     throw error;
+  }
+};
+
+export const fetchRandomRecipes = async (number: number = 10) => {
+  try {
+    const url = `${BASE_URL}/recipes/random`;
+    const params = {
+      apiKey: API_KEY,
+      number,
+    };
+
+    const response = await axios.get(url, { params });
+
+    return response.data.recipes || [];
+  } catch (error) {
+    console.error('Error fetching random recipes:', error);
+    throw error;
+  }
+};
+
+// Fetch a single recipe by ID from Spoonacular
+export const fetchRecipeById = async (recipeId: string) => {
+  try {
+    const apiKey = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY;
+    const url = `https://api.spoonacular.com/recipes/${recipeId}/information?apiKey=${apiKey}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    console.log('✅ Recipe fetched by ID:', data.title);
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching recipe by ID:', error);
+    return null;
   }
 };

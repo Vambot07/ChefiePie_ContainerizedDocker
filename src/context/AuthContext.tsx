@@ -100,6 +100,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                     setUser({
                         ...userData,
                         email: authEmail,
+                        
                         userId: firebaseUser.uid,
                         emailVerified: firebaseUser.emailVerified
                     });
@@ -108,6 +109,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                     // Tetap set user walaupun update fail
                     setUser({
                         ...userData,
+                        uid: firebaseUser.uid,
                         userId: firebaseUser.uid,
                         emailVerified: firebaseUser.emailVerified
                     });
@@ -116,6 +118,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 // Email sama, set user macam biasa
                 setUser({
                     ...userData,
+                    uid: firebaseUser.uid,
                     userId: firebaseUser.uid,
                     emailVerified: firebaseUser.emailVerified
                 });
