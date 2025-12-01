@@ -38,7 +38,7 @@ const SignInScreen = () => {
             <View className="flex-1 items-center p-5">
                 <Image
                     source={require('../../../assets/ChefiePieLogo.png')}
-                    className="w-[120px] h-[120px] mt-10 mb-5"
+                    className="w-[180px] h-[180px] mt-10 mb-5 rounded-3xl"
                     resizeMode="contain"
                 />
 
@@ -54,8 +54,7 @@ const SignInScreen = () => {
                         onChangeText={setEmail}
                         keyboardType="email-address"
                         autoCapitalize="none"
-                        />
-
+                    />
 
                     <View className="relative w-full">
                         <TextInput

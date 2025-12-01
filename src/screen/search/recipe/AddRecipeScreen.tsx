@@ -54,7 +54,7 @@ export default function AddRecipeScreen() {
     const [showUnitModal, setShowUnitModal] = useState(false);
     const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(0);
 
-    const { viewMode, selectedDayIndex, weekOffset } = (route.params as any) || {viewMode: 'search'};
+    const { viewMode, selectedDayIndex, weekOffset } = (route.params as any) || { viewMode: 'search' };
     const userId = user?.uid;
 
     // Helper function to convert time string to minutes
@@ -83,7 +83,7 @@ export default function AddRecipeScreen() {
         if (totalMinutes > 0) {
             // Format the total time
             if (totalMinutes > 0) {
-            // Always keep in minutes
+                // Always keep in minutes
                 setTotalTime(`${totalMinutes}`);
             } else {
                 setTotalTime('');
@@ -131,80 +131,87 @@ export default function AddRecipeScreen() {
 
 
     // Handle form submission
-const handleAddRecipe = async () => {
-    setIsLoading(true);
+    const handleAddRecipe = async () => {
+        setIsLoading(true);
 
-    try {
-        if (!title || !intro || !ingredients || !steps) {
-            Alert.alert("Missing Fields", "Please fill in all required fields (Title, Intro, Ingredients, Steps).");
-            setIsLoading(false);
-            return;
-        }
-
-        // Upload image if exists
-        let imageUrl = '';
-        if (image) {
-            const fileName = `recipe_${Date.now()}.jpg`;
-            imageUrl = await uploadImageToFirebase(image, fileName);
-        }
-
-        // Prepare recipe data
-        const recipeData = {
-            image: imageUrl,
-            title,
-            intro,
-            prepTime,
-            cookTime,
-            totalTime,
-            difficulty,
-            ingredients,
-            steps,
-            tips,
-            serving,
-            nutrition,
-            youtube,
-            sourceUrl,
-        };
-
-        // 1️⃣ Save recipe → return recipeId
-        const recipeId = await addRecipe(recipeData);
-
-        // 2️⃣ Convert to planner format
-        const plannerRecipe = {
-            id: recipeId,
-            title: recipeData.title,
-            image: recipeData.image,
-            totalTime: recipeData.totalTime || "",
-            difficulty: recipeData.difficulty || "",
-            source: "created" as const,
-        };
-
-        // 3️⃣ If planner mode → save into planner
-        if (viewMode === 'planner') {
-            console.log("Sini skdjnskjn ",weekOffset);
-            console.log(selectedDayIndex);
-            console.log(plannerRecipe);
-            if (userId) {
-                await addRecipeToDay(
-                    userId,
-                    weekOffset,
-                    selectedDayIndex,
-                    plannerRecipe         
-                );
+        try {
+            if (!title || !intro || !ingredients || !steps) {
+                Alert.alert("Missing Fields", "Please fill in all required fields (Title, Intro, Ingredients, Steps).");
+                setIsLoading(false);
+                return;
             }
-             Alert.alert('Success', "Recipe added successfully!", [
-                {
-                    text: 'OK',
-                    onPress: () => navigation.goBack(),
+
+            // Upload image if exists
+            let imageUrl = '';
+            if (image) {
+                const fileName = `recipe_${Date.now()}.jpg`;
+                imageUrl = await uploadImageToFirebase(image, fileName);
+            }
+
+            // Prepare recipe data
+            const recipeData = {
+                image: imageUrl,
+                title,
+                intro,
+                prepTime,
+                cookTime,
+                totalTime,
+                difficulty,
+                ingredients,
+                steps,
+                tips,
+                serving,
+                nutrition,
+                youtube,
+                sourceUrl,
+            };
+
+            // 1️⃣ Save recipe → return recipeId
+            const recipeId = await addRecipe(recipeData);
+
+            // 2️⃣ Convert to planner format
+            const plannerRecipe = {
+                id: recipeId,
+                title: recipeData.title,
+                image: recipeData.image,
+                totalTime: recipeData.totalTime || "",
+                difficulty: recipeData.difficulty || "",
+                source: "created" as const,
+            };
+
+            // 3️⃣ If planner mode → save into planner
+            if (viewMode === 'planner') {
+                console.log("Sini skdjnskjn ", weekOffset);
+                console.log(selectedDayIndex);
+                console.log(plannerRecipe);
+                if (userId) {
+                    await addRecipeToDay(
+                        userId,
+                        weekOffset,
+                        selectedDayIndex,
+                        plannerRecipe
+                    );
                 }
-            ]);
-        } 
-    } catch (error) {
-        Alert.alert('Error', error instanceof Error ? error.message : 'An unknown error occurred');
-    } finally {
-        setIsLoading(false);
-    }
-};
+                Alert.alert('Success', "Recipe added successfully!", [
+                    {
+                        text: 'OK',
+                        onPress: () => navigation.goBack(),
+                    }
+                ]);
+            } else {
+                Alert.alert('Success', "Recipe added successfully!", [
+                    {
+                        text: 'OK',
+                        onPress: () => navigation.goBack(),
+                    }
+                ]);
+            }
+        } catch (error) {
+            Alert.alert('Error', error instanceof Error ? error.message : 'An unknown error occurred');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
 
     return (
@@ -363,7 +370,7 @@ const handleAddRecipe = async () => {
 
                         {/* Source URL */}
                         <View className="mb-8">
-                            <Text className="font-semibold text-gray-700 mb-1 flex-row items-center">  
+                            <Text className="font-semibold text-gray-700 mb-1 flex-row items-center">
                                 <MaterialCommunityIcons name="link-variant" size={18} color="#FFB47B" /> Source URL
                             </Text>
                             <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Source URL" value={sourceUrl} onChangeText={setSourceUrl} />

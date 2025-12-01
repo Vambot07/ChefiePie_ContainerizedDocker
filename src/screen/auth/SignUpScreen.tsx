@@ -90,7 +90,7 @@ const SignUpScreen = () => {
                     <View className="flex-1 items-center p-5">
                         <Image
                             source={require('../../../assets/ChefiePieLogo.png')}
-                            className="w-[120px] h-[120px] mt-5 mb-5"
+                            className="w-[120px] h-[120px] mt-5 mb-5 rounded-3xl"
                             resizeMode="contain"
                         />
 

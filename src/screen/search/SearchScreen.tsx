@@ -6,15 +6,17 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchRecipes } from '~/controller/recipe';
-import { fetchRecipesByCategory } from '~/api/spoonacular'; // Import Spoonacular API
+import { fetchRecipesByCategory } from '~/api/spoonacular';
+import { detectIngredientsFromImage, formatIngredientsForSearch } from '~/api/roboflow';
 import Header from '../../components/Header';
 
-// Add navigation type
+// Navigation types
 type RootStackParamList = {
     AddRecipe: undefined;
-    ViewRecipe: { 
+    ViewRecipe: {
         recipe: Recipe,
-        viewMode: string };
+        viewMode: string
+    };
 };
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -24,24 +26,9 @@ interface Recipe {
     image: string;
     totalTime?: string;
     difficulty?: string;
-    source?: 'created' | 'api'; 
+    serving?: string;
+    source?: 'created' | 'api';
 }
-
-const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-        Alert.alert('Camera permission is required!');
-        return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ 
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, 
-        allowsEditing: true, 
-        quality: 1 
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-        console.log(result.assets[0].uri);
-    }
-};
 
 interface RecipeCardProps {
     recipe: Recipe;
@@ -52,12 +39,11 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
     const [loading, setLoading] = useState(true);
 
     return (
-        <TouchableOpacity 
-            className="bg-white rounded-xl shadow-sm mb-4 w-[48%]" 
-            onPress={() => navigation.navigate('ViewRecipe', { recipe, viewMode:'discover' })}
+        <TouchableOpacity
+            className="bg-white rounded-xl shadow-sm mb-4 w-[48%]"
+            onPress={() => navigation.navigate('ViewRecipe', { recipe, viewMode: 'discover' })}
         >
             <View className="w-full h-32 rounded-t-xl bg-gray-200 justify-center items-center">
-                {/* Spinner centered */}
                 {loading && (
                     <View style={{
                         position: 'absolute',
@@ -78,7 +64,7 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
                     onLoadEnd={() => setLoading(false)}
                 />
             </View>
-            
+
             <View className="p-3">
                 <Text className="font-semibold text-gray-800 mb-1" numberOfLines={2}>
                     {recipe.title}
@@ -92,7 +78,6 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
     );
 };
 
-
 export default function SearchScreen() {
     const [tab, setTab] = useState<'createdRecipe' | 'apiRecipe' | 'all'>('createdRecipe');
     const [searchQuery, setSearchQuery] = useState('');
@@ -100,10 +85,8 @@ export default function SearchScreen() {
     const [discoverRecipes, setDiscoverRecipes] = useState<Recipe[]>([]);
     const [displayedRecipes, setDisplayedRecipes] = useState<Recipe[]>([]);
     const [refreshing, setRefreshing] = useState(false);
-    const navigation = useNavigation<NavigationProp>();  
+    const navigation = useNavigation<NavigationProp>();
     const [loading, setLoading] = useState<boolean>(false);
-    
-    // ADD THIS: Create ref for ScrollView
     const scrollViewRef = React.useRef<ScrollView>(null);
 
     // Fetch user's created recipes
@@ -112,12 +95,12 @@ export default function SearchScreen() {
             setLoading(true);
             console.log('Fetching user recipes...');
             const results = await searchRecipes(searchQuery);
-            
+
             const transformedRecipes = results.map((recipe: any) => ({
                 ...recipe,
                 source: 'created' as const
             }));
-            
+
             setMyRecipes(transformedRecipes as Recipe[]);
         } catch (error) {
             console.error('Error fetching user recipes:', error);
@@ -132,7 +115,7 @@ export default function SearchScreen() {
         try {
             setLoading(true);
             console.log('Fetching discover recipes from API...');
-            
+
             let results;
             if (searchQuery.trim().length > 0 && !forceRandom) {
                 console.log('Searching API for:', searchQuery);
@@ -145,9 +128,9 @@ export default function SearchScreen() {
                 console.log('Fetching random recipes');
                 results = await fetchRecipesByCategory('All', 20);
             }
-            
+
             const recipesData = results.recipes || results.results || [];
-            
+
             const transformedRecipes = recipesData.map((recipe: any) => ({
                 id: recipe.id?.toString() || '',
                 title: recipe.title || 'Untitled Recipe',
@@ -156,13 +139,184 @@ export default function SearchScreen() {
                 difficulty: '',
                 source: 'api' as const
             }));
-            
+
             setDiscoverRecipes(transformedRecipes);
         } catch (error) {
             console.error('Error fetching discover recipes:', error);
             Alert.alert('Error', 'Failed to fetch discover recipes');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Search recipes by detected ingredients from Roboflow
+    const searchRecipesByDetectedIngredients = async (ingredients: string[]) => {
+        try {
+            setLoading(true);
+            console.log('🔍 Searching recipes with ingredients:', ingredients);
+
+            // Format ingredients for Spoonacular API
+            const ingredientQuery = formatIngredientsForSearch(ingredients);
+
+            // Use Spoonacular's "Find by Ingredients" endpoint
+            const response = await fetch(
+                `https://api.spoonacular.com/recipes/findByIngredients?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&ingredients=${ingredientQuery}&number=20&ranking=2&ignorePantry=false`
+            );
+
+            if (!response.ok) {
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Recipes found:', data.length);
+
+            if (data.length === 0) {
+                Alert.alert(
+                    'No Recipes Found',
+                    'We couldn\'t find recipes with these ingredients. Try:\n\n• Taking another photo\n• Adding more ingredients\n• Searching manually',
+                    [{ text: 'OK' }]
+                );
+                setDiscoverRecipes([]);
+                return;
+            }
+
+            // Transform the response to match our Recipe interface
+            const transformedRecipes: Recipe[] = data.map((recipe: any) => ({
+                id: recipe.id?.toString() || '',
+                title: recipe.title || 'Untitled Recipe',
+                image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+                totalTime: '',
+                difficulty: '',
+                source: 'api' as const,
+            }));
+
+            console.log(`✅ Showing ${transformedRecipes.length} recipes`);
+            setDiscoverRecipes(transformedRecipes);
+
+            // Success feedback
+            Alert.alert(
+                '✅ Recipes Found!',
+                `Found ${transformedRecipes.length} recipes using your ingredients!`,
+                [{ text: 'Great!' }]
+            );
+        } catch (error) {
+            console.error('❌ Error searching recipes by ingredients:', error);
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Camera function to take photo and detect ingredients
+    const takePhoto = async () => {
+        try {
+            console.log('📷 Opening camera...');
+
+            // Request camera permission
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert(
+                    'Permission Required',
+                    'Camera permission is required to take photos of ingredients!',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+
+            // Launch camera
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                quality: 0.8,
+                base64: false,
+            });
+
+            // Check if user canceled
+            if (result.canceled || !result.assets || result.assets.length === 0) {
+                console.log('📷 User canceled camera');
+                return;
+            }
+
+            const imageUri = result.assets[0].uri;
+            console.log('✅ Photo captured:', imageUri);
+
+            // Show loading state
+            setLoading(true);
+
+            try {
+                // Detect ingredients using Roboflow
+                console.log('🔍 Detecting ingredients...');
+                const detectedIngredients = await detectIngredientsFromImage(imageUri);
+
+                // Hide loading
+                setLoading(false);
+
+                // Check if any ingredients were found
+                if (detectedIngredients.length === 0) {
+                    Alert.alert(
+                        'No Ingredients Found',
+                        'We couldn\'t detect any ingredients in the image. Please try again with:\n\n• Better lighting\n• Clear view of ingredients\n• Less cluttered background',
+                        [{ text: 'OK' }]
+                    );
+                    return;
+                }
+
+                // Show detected ingredients to user with confirmation
+                Alert.alert(
+                    '🎉 Ingredients Detected!',
+                    `Found: ${detectedIngredients.join(', ')}\n\nWould you like to search for recipes with these ingredients?`,
+                    [
+                        {
+                            text: 'Cancel',
+                            style: 'cancel',
+                            onPress: () => {
+                                console.log('User canceled recipe search');
+                            },
+                        },
+                        {
+                            text: 'Search Recipes',
+                            onPress: async () => {
+                                try {
+                                    setLoading(true);
+
+                                    // Switch to API recipe tab
+                                    setTab('apiRecipe');
+
+                                    // Set search query for display
+                                    setSearchQuery(detectedIngredients.join(', '));
+
+                                    // Search recipes by ingredients using Spoonacular
+                                    await searchRecipesByDetectedIngredients(detectedIngredients);
+                                } catch (error) {
+                                    console.error('❌ Error searching recipes:', error);
+                                    Alert.alert(
+                                        'Search Failed',
+                                        'Failed to search recipes. Please try again.',
+                                        [{ text: 'OK' }]
+                                    );
+                                } finally {
+                                    setLoading(false);
+                                }
+                            },
+                        },
+                    ]
+                );
+            } catch (detectionError: any) {
+                console.error('❌ Detection error:', detectionError);
+                setLoading(false);
+
+                Alert.alert(
+                    'Detection Failed',
+                    detectionError.message || 'Failed to analyze the image. Please check your internet connection and try again.',
+                    [{ text: 'OK' }]
+                );
+            }
+        } catch (error) {
+            console.error('❌ Camera error:', error);
+            setLoading(false);
+            Alert.alert('Camera Error', 'Failed to open camera. Please try again.', [
+                { text: 'OK' },
+            ]);
         }
     };
 
@@ -175,8 +329,7 @@ export default function SearchScreen() {
         } else if (tab === 'all') {
             setDisplayedRecipes([...myRecipes, ...discoverRecipes]);
         }
-        
-        // RESET SCROLL POSITION when tab changes
+
         scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     }, [tab, myRecipes, discoverRecipes]);
 
@@ -195,11 +348,11 @@ export default function SearchScreen() {
                 Promise.all([fetchCreatedRecipes(), fetchDiscoverRecipes(false)]);
             }
         }, 1000);
-        
+
         return () => clearTimeout(timeout);
     }, [searchQuery]);
 
-    // CONSOLIDATED: Handle initial load when screen mounts or tab changes
+    // Handle initial load when screen mounts or tab changes
     useFocusEffect(
         React.useCallback(() => {
             if (tab === 'createdRecipe') {
@@ -233,7 +386,7 @@ export default function SearchScreen() {
             fetchDiscoverRecipes(true).finally(() => setRefreshing(false));
         } else {
             Promise.all([
-                fetchCreatedRecipes(), 
+                fetchCreatedRecipes(),
                 fetchDiscoverRecipes(true)
             ]).finally(() => {
                 setRefreshing(false);
@@ -266,11 +419,11 @@ export default function SearchScreen() {
                         <TextInput
                             className="flex-1 ml-2 py-2"
                             placeholder={
-                                tab === 'createdRecipe' 
-                                    ? "Search created recipes..." 
-                                    : tab === 'apiRecipe' 
-                                    ? "Search discover recipes..." 
-                                    : "Search all recipes..."
+                                tab === 'createdRecipe'
+                                    ? "Search created recipes..."
+                                    : tab === 'apiRecipe'
+                                        ? "Search discover recipes..."
+                                        : "Search all recipes..."
                             }
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -307,7 +460,7 @@ export default function SearchScreen() {
                             Created Recipes
                         </Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity
                         className={`flex-1 py-2.5 rounded-xl mx-2 ${tab === 'apiRecipe' ? 'bg-[#FF9966]' : 'bg-gray-100'}`}
                         onPress={() => {
@@ -319,7 +472,7 @@ export default function SearchScreen() {
                             Discover
                         </Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity
                         className={`flex-1 py-2.5 rounded-xl ${tab === 'all' ? 'bg-[#FF9966]' : 'bg-gray-100'}`}
                         onPress={() => {
@@ -339,16 +492,16 @@ export default function SearchScreen() {
                 <View className='flex-1 bg-gray-50 justify-center items-center'>
                     <ActivityIndicator size='large' color="#FF9966" />
                     <Text className="text-gray-500 mt-3">
-                        {searchQuery 
-                            ? `Searching for "${searchQuery}"...` 
-                            : tab === 'apiRecipe' 
-                            ? 'Discovering recipes...' 
-                            : 'Loading recipes...'}
+                        {searchQuery
+                            ? `Searching for "${searchQuery}"...`
+                            : tab === 'apiRecipe'
+                                ? 'Discovering recipes...'
+                                : 'Loading recipes...'}
                     </Text>
                 </View>
             ) : (
                 <ScrollView
-                    ref={scrollViewRef} // ADD REF HERE
+                    ref={scrollViewRef}
                     className="flex-1 bg-gray-50 px-4 pt-4"
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -367,13 +520,13 @@ export default function SearchScreen() {
                                 {searchQuery ? 'No recipes found' : 'No recipes available'}
                             </Text>
                             <Text className="text-gray-400 text-sm mt-1">
-                                {searchQuery 
-                                    ? `No results for "${searchQuery}"` 
-                                    : tab === 'createdRecipe' 
-                                    ? 'Create your first recipe!' 
-                                    : tab === 'apiRecipe' 
-                                    ? 'Pull to refresh for new recipes' 
-                                    : 'Start by creating or discovering recipes'}
+                                {searchQuery
+                                    ? `No results for "${searchQuery}"`
+                                    : tab === 'createdRecipe'
+                                        ? 'Create your first recipe!'
+                                        : tab === 'apiRecipe'
+                                            ? 'Pull to refresh for new recipes'
+                                            : 'Start by creating or discovering recipes'}
                             </Text>
                         </View>
                     )}

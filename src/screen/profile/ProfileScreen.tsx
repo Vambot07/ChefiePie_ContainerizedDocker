@@ -1,11 +1,11 @@
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Linking, Modal, ActivityIndicator } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Linking, Modal, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Ionicons, Feather, MaterialIcons, MaterialCommunityIcons, Fontisto } from '@expo/vector-icons';
 import Header from '~/components/Header';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '~/context/AuthContext';
-import { getSavedRecipes, getRecipeByUser, getUserProfileById  } from '~/controller/recipe';
+import { getSavedRecipes, getRecipeByUser, getUserProfileById } from '~/controller/recipe';
 import colors from '~/utils/color';
 
 type RootStackParamList = {
@@ -32,50 +32,48 @@ interface Recipe {
 }
 
 interface UserProfile {
-  uid: string;
-  username: string;
-  email: string;
-  profileImage: string | null;
-  bio: string | null;
-  instagram: string | null;
-  youtube: string | null;
-  tiktok: string | null;
-  dietaryRestrictions?: string[];
-  cookingGoal?: string;
-  ingredientsToAvoid?: string[];
-  servingSize?: number;
+    uid: string;
+    username: string;
+    email: string;
+    profileImage: string | null;
+    bio: string | null;
+    instagram: string | null;
+    youtube: string | null;
+    tiktok: string | null;
+    dietaryRestrictions?: string[];
+    cookingGoal?: string;
+    ingredientsToAvoid?: string[];
+    servingSize?: number;
 }
 
 
 export default function ProfileScreen() {
     const [tab, setTab] = useState<'myrecipe' | 'savedrecipe'>('myrecipe');
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
-    const [imageLoading, setImageLoading] = useState(true); 
-    const [modalImageLoading, setModalImageLoading] = useState(true); 
+    const [imageLoading, setImageLoading] = useState(true);
+    const [modalImageLoading, setModalImageLoading] = useState(true);
     const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
     const [createdRecipes, setCreatedRecipes] = useState<Recipe[]>([]);
     const [loadingUserRecipe, setLoadingUserRecipe] = useState<boolean>(true);
     const [loadingSavedRecipe, setLoadingSavedRecipe] = useState<boolean>(true);
     const [userDetails, setUserDetails] = useState<UserProfile | null>(null);
-    const [displayedRecipes, setDisplayedRecipes] = useState<Recipe[]>([]);
-    const [loadingFetchData, setLoadingFetchData] = useState<boolean>(true); // ✅ Changed to TRUE
+    const [loadingFetchData, setLoadingFetchData] = useState<boolean>(true);
+    const [refreshing, setRefreshing] = useState<boolean>(false); // ✅ Add refresh state
     const scrollViewRef = React.useRef<ScrollView>(null);
-    
+
     const navigation = useNavigation<NavigationProp>();
     const { user } = useAuth();
     const route = useRoute();
 
-    const { userId, viewMode } = (route.params as any) || { userId: null};
+    const { userId, viewMode } = (route.params as any) || { userId: null };
     const currentUserId = user?.uid;
 
     const username = userDetails?.username || user?.username;
     const profileImage = userDetails?.profileImage || user?.profileImage;
     const bio = userDetails?.bio || user?.bio;
-    const instagram = userDetails?.instagram || user?.instagram;
-    const youtube = userDetails?.youtube || user?.youtube;
-    const tiktok = userDetails?.tiktok || user?.tiktok;
-
-    
+    const instagram = userDetails?.instagram || '';
+    const youtube = userDetails?.youtube || '';
+    const tiktok = userDetails?.tiktok || '';
 
     const handleSetting = () => {
         navigation.navigate('Setting');
@@ -85,7 +83,6 @@ export default function ProfileScreen() {
     const openSocialMedia = (url: string, platform: string) => {
         let fullUrl = url;
 
-        // Format URL properly
         if (!url.startsWith('http')) {
             if (platform === 'instagram') {
                 fullUrl = `https://instagram.com/${url.replace('@', '')}`;
@@ -132,53 +129,93 @@ export default function ProfileScreen() {
         });
     }
 
-    useEffect(() => {
-        if(tab === 'myrecipe') {
-            setDisplayedRecipes(createdRecipes);
-        } else if (tab == 'savedrecipe') {
-            setDisplayedRecipes(savedRecipes);
+    // ✅ EXTRACT FETCH LOGIC TO REUSABLE FUNCTION
+    const fetchAllData = async (isRefreshing = false) => {
+        try {
+            // Only show main loading on initial load, not on refresh
+            if (!isRefreshing) {
+                setLoadingFetchData(true);
+            }
+            setLoadingSavedRecipe(true);
+            setLoadingUserRecipe(true);
+
+            console.log(isRefreshing ? "🔄 Refreshing data..." : "⏳ Fetching initial data...");
+
+            // ✅ STEP 1: Fetch user profile FIRST
+            const userDetail = await getUserProfileById(userId);
+            setUserDetails(userDetail);
+            console.log("✅ User profile loaded!");
+
+            // Profile is now visible!
+            if (!isRefreshing) {
+                setLoadingFetchData(false);
+            }
+
+            // ✅ STEP 2: Fetch recipes in PARALLEL
+            console.log("⏳ Fetching recipes in parallel...");
+            const [savedResults, createdResults] = await Promise.all([
+                getSavedRecipes(userId),
+                getRecipeByUser(userId)
+            ]);
+
+            setSavedRecipes(savedResults as Recipe[]);
+            setCreatedRecipes(createdResults as Recipe[]);
+            console.log("✅ All recipes loaded!");
+
+        } catch (error) {
+            console.error('❌ Error fetching data:', error);
+            if (!isRefreshing) {
+                setLoadingFetchData(false);
+            }
+            Alert.alert('Error', 'Failed to load data. Please try again.');
+        } finally {
+            setLoadingSavedRecipe(false);
+            setLoadingUserRecipe(false);
         }
+    };
 
-        scrollViewRef.current?.scrollTo({y:0, animated: false });
-    },[tab, savedRecipes, createdRecipes])
-
-    // ✅ FETCH DATA WITH INITIAL LOADING
+    // ✅ Initial fetch on mount
     useEffect(() => {
         console.log("Current User ID: " + currentUserId);
         console.log("Profile User ID: " + userId);
-        console.log("viewMode ", viewMode)
-        
-        const fetchAllData = async () => {
-            try {
-                setLoadingFetchData(true); // ✅ Start loading
-                setLoadingSavedRecipe(true);
-                setLoadingUserRecipe(true);
-                
-                // Fetch saved recipes
-                const savedResults = await getSavedRecipes(userId);
-                setSavedRecipes(savedResults as Recipe[]);
-                
-                // Fetch created recipes
-                const createdResults = await getRecipeByUser(userId);
-                setCreatedRecipes(createdResults as Recipe[]);
-                
-                // Fetch user profile details
-                const userDetail = await getUserProfileById(userId);
-                setUserDetails(userDetail);
-                
-            } catch (error) {
-                console.error('Error fetching data:', error);
-            } finally {
-                setLoadingSavedRecipe(false);
-                setLoadingUserRecipe(false);
-                setLoadingFetchData(false); // ✅ Stop loading after everything loaded
-            }
-        };
-        
-        fetchAllData();
-    }, [userId, currentUserId]); 
+        console.log("viewMode ", viewMode);
 
-    // ✅ Handle opening modal - reset modal image loading
+        fetchAllData(false);
+    }, [userId, currentUserId]);
+
+    // ✅ PULL TO REFRESH HANDLER
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        console.log("🔄 User pulled to refresh!");
+        await fetchAllData(true);
+        setRefreshing(false);
+    }, [userId, currentUserId]);
+
+    // ✅ Refetch user data when screen gains focus
+    useFocusEffect(
+        useCallback(() => {
+            if (!userId || userId === currentUserId) {
+                fetchAllData(true);
+                const refetchUserData = async () => {
+                    try {
+                        const userDetail = await getUserProfileById(userId || currentUserId);
+                        setUserDetails(userDetail);
+                    } catch (error) {
+                        console.error('Error refetching user data:', error);
+                    }
+                };
+
+                refetchUserData();
+            }
+        }, [userId, currentUserId])
+    );
+
+    // ✅ Scroll to top when tab changes
+    useEffect(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, [tab]);
+
+    // ✅ Handle opening modal
     const handleOpenImageViewer = () => {
         if (profileImage) {
             setModalImageLoading(true);
@@ -186,236 +223,219 @@ export default function ProfileScreen() {
         }
     };
 
+    // ✅ Get current recipes based on tab
+    const displayedRecipes = tab === 'myrecipe' ? createdRecipes : savedRecipes;
+    const isLoading = tab === 'myrecipe' ? loadingUserRecipe : loadingSavedRecipe;
+
     return (
         <View className="flex-1 bg-[#F8F8F8]">
             {loadingFetchData ? (
-                // ✅ INITIAL LOADING SCREEN
+                // ✅ INITIAL LOADING SCREEN (only shows while profile loads)
                 <View className="flex-1 justify-center items-center">
                     <ActivityIndicator size="large" color="#FFB47B" />
                     <Text className="text-gray-500 mt-4 text-base">Loading profile...</Text>
                 </View>
             ) : (
-                // ✅ MAIN CONTENT
                 <>
                     {/* Top Bar */}
                     <Header
                         title="Profile"
                         showBackButton={true}
                         onBack={() => navigation.goBack()}
-                        rightIcon={(!userId || userId === currentUserId && viewMode !== 'profile') ? "settings" : undefined }
+                        rightIcon={(!userId || userId === currentUserId && viewMode === 'profile') ? "settings" : undefined}
                         onRightAction={handleSetting}
                     />
 
-                    {/* Profile Card */}
-                    <View className="bg-white mx-4 mt-4 rounded-2xl p-4 shadow-sm">
-                        {/* Profile Row */}
-                        <View className="flex-row">
-                            {/* ✅ Profile Image with Loading */}
-                            <TouchableOpacity
-                                onPress={handleOpenImageViewer}
-                                activeOpacity={0.8}
-                            >
-                                <View
-                                    className="w-36 h-36 rounded-full items-center justify-center"
-                                    style={{ 
-                                        backgroundColor: colors.white, 
-                                        borderWidth: 2, 
-                                        borderColor: colors.lightBrown 
-                                    }}
-                                >
-                                    {profileImage ? (
-                                        <>
-                                            {/* ✅ Loading Indicator */}
-                                            {imageLoading && (
-                                                <View 
-                                                    style={{
-                                                        position: 'absolute',
-                                                        zIndex: 1,
-                                                    }}
-                                                >
-                                                    <ActivityIndicator size="large" color={colors.lightBrown} />
-                                                </View>
-                                            )}
-                                            
-                                            {/* ✅ Profile Image */}
-                                            <Image 
-                                                source={{ uri: profileImage }} 
-                                                className="w-36 h-36 rounded-full"
-                                                style={{ resizeMode: 'cover' }}
-                                                onLoadStart={() => setImageLoading(true)}
-                                                onLoadEnd={() => setImageLoading(false)}
-                                                onError={() => setImageLoading(false)}
-                                            />
-                                        </>
-                                    ) : (
-                                        <Fontisto name="male" size={40} color={colors.lightBrown} />
-                                    )}
-                                </View>
-                            </TouchableOpacity>
-
-                            {/* User Info + Edit Button + Social Icons */}
-                            <View className="flex-1 ml-4">
-                                <Text className="font-bold text-lg text-gray-800">{username || 'User Name'}</Text>
-                                <Text className="text-sm text-gray-500 mb-3">{bio || ''}</Text>
-
-                                <View className='pt-12'>
-                                    {/* ✅ Flex row with dynamic social icons from left to right */}
-                                    {(!userId || userId === currentUserId && viewMode !== 'discover') && (
-                                        <View className='flex-row flex-wrap items-center' style={{ gap: 4 }}>
-                                        {/* Edit Profile Button - Always first */}
-                                        <TouchableOpacity 
-                                            className="bg-[#FFB47B] py-2 px-3 rounded-full" 
-                                            onPress={() => navigation.navigate('EditProfile')}
+                    {/* ✅ Main Content with Sticky Tabs and Pull-to-Refresh */}
+                    <View className="flex-1">
+                        <ScrollView
+                            ref={scrollViewRef}
+                            showsVerticalScrollIndicator={false}
+                            stickyHeaderIndices={[1]}
+                            refreshControl={
+                                <RefreshControl
+                                    refreshing={refreshing}
+                                    onRefresh={onRefresh}
+                                    colors={['#FFB47B']} // Android
+                                    tintColor="#FFB47B" // iOS
+                                    title="Pull to refresh" // iOS
+                                    titleColor="#666" // iOS
+                                />
+                            }
+                        >
+                            {/* Profile Header Section - This will scroll away */}
+                            <View>
+                                {/* Profile Card */}
+                                <View className="bg-white mx-4 mt-4 rounded-2xl p-4 shadow-sm">
+                                    <View className="flex-row">
+                                        {/* Profile Image */}
+                                        <TouchableOpacity
+                                            onPress={handleOpenImageViewer}
+                                            activeOpacity={0.8}
                                         >
-                                            <Text className="text-white font-semibold text-sm">Edit Profile</Text>
+                                            <View
+                                                className="w-36 h-36 rounded-full items-center justify-center"
+                                                style={{
+                                                    backgroundColor: colors.white,
+                                                    borderWidth: 2,
+                                                    borderColor: colors.lightBrown
+                                                }}
+                                            >
+                                                {profileImage ? (
+                                                    <>
+                                                        {imageLoading && (
+                                                            <View style={{ position: 'absolute', zIndex: 1 }}>
+                                                                <ActivityIndicator size="large" color={colors.lightBrown} />
+                                                            </View>
+                                                        )}
+                                                        <Image
+                                                            source={{ uri: profileImage }}
+                                                            className="w-36 h-36 rounded-full"
+                                                            style={{ resizeMode: 'cover' }}
+                                                            onLoadStart={() => setImageLoading(true)}
+                                                            onLoadEnd={() => setImageLoading(false)}
+                                                            onError={() => setImageLoading(false)}
+                                                        />
+                                                    </>
+                                                ) : (
+                                                    <Fontisto name="male" size={40} color={colors.lightBrown} />
+                                                )}
+                                            </View>
                                         </TouchableOpacity>
 
-                                        {/* ✅ Social Media Icons - Render dynamically */}
-                                        {socialMediaIcons.map((social, index) => (
-                                            <TouchableOpacity 
-                                                key={index}
-                                                onPress={() => openSocialMedia(social.url, social.platform)}
-                                                activeOpacity={0.7}
-                                            >
-                                                <View
-                                                    className="w-9 h-9 rounded-full items-center justify-center"
-                                                    style={{ backgroundColor: colors.lightPeach }}
-                                                >
-                                                    {social.icon}
+                                        {/* User Info */}
+                                        <View className="flex-1 ml-4">
+                                            <Text className="font-bold text-lg text-gray-800">{username || 'User Name'}</Text>
+                                            <Text className="text-sm text-gray-500 mb-3">{bio || ''}</Text>
+
+                                            <View className='pt-8'>
+                                                {/* Social Media Icons */}
+                                                <View className='flex-row flex-wrap items-center pb-4' style={{ gap: 6 }}>
+                                                    {socialMediaIcons.map((social, index) => (
+                                                        <TouchableOpacity
+                                                            key={index}
+                                                            onPress={() => openSocialMedia(social.url, social.platform)}
+                                                            activeOpacity={0.7}
+                                                        >
+                                                            <View
+                                                                className="w-9 h-9 rounded-full items-center justify-center"
+                                                                style={{ backgroundColor: colors.lightPeach }}
+                                                            >
+                                                                {social.icon}
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                    ))}
                                                 </View>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                    )}
-                                </View>
-                            </View>
-                        </View>
-                    </View>
 
-                    {/* Food Preferences Card - Only show for current user */}
-                    {(!userId || userId === currentUserId && viewMode !== 'profile') && (
-                        <View className="bg-white mx-4 mt-4 rounded-2xl shadow-sm">
-                            <TouchableOpacity
-                                className="flex-row items-center justify-between px-6 py-8 active:opacity-70"
-                                onPress={() => navigation.navigate('FoodPreference')}
-                            >
-                                {/* Left content */}
-                                <View className="flex-1">
-                                    <View className='flex-row'>
-                                        <MaterialCommunityIcons name="food-variant" size={20} color="#FFB47B" />
-                                        <Text className="font-semibold text-base text-gray-800 pl-2">
-                                            My Food Preferences
-                                        </Text>
-                                    </View>
-
-                                    <Text className="text-sm text-gray-500 mt-1">
-                                        Diet preferences, allergies, and meal plan settings.
-                                    </Text>
-                                </View>
-
-                                {/* Right arrow */}
-                                <MaterialIcons name="arrow-forward-ios" size={18} color={colors.darkBrown} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {/* Tabs */}
-                    <View className="flex-row justify-around mt-6 mb-2 mx-4">
-                        <TouchableOpacity
-                            className={`flex-1 py-2 rounded-xl ${tab === 'myrecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
-                            onPress={() => setTab('myrecipe')}
-                        >
-                            <Text className={`text-center font-semibold ${tab === 'myrecipe' ? 'text-white' : 'text-gray-700'}`}>
-                                User Recipe
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            className={`flex-1 py-2 rounded-xl mx-2 ${tab === 'savedrecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
-                            onPress={() => setTab('savedrecipe')}
-                        >
-                            <Text className={`text-center font-semibold ${tab === 'savedrecipe' ? 'text-white' : 'text-gray-700'}`}>
-                                Saved Recipe
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Recipe Cards */}
-                    <ScrollView className="flex-1 px-4" 
-                    showsVerticalScrollIndicator={false}
-                    ref={scrollViewRef}>
-                        {tab === 'myrecipe' && (
-                            <>
-                            {loadingUserRecipe ? (
-                                <View className="flex-1 items-center justify-center py-20">
-                                    <ActivityIndicator size="large" color="#FFB47B" />
-                                    <Text className="text-gray-400 mt-4">Loading created recipes...</Text>
-                                </View>
-
-                            ): createdRecipes.length === 0 ? (
-                                // ✅ Kalau kosong, tunjuk UI ini
-                                <View className="flex-1 items-center justify-center py-20">
-                                    <MaterialIcons name="create-new-folder" size={64} color="#ccc" />
-                                    <Text className="text-gray-400 mt-4">No recipe has created by user</Text>
-                                </View>
-                            ):(
-                                createdRecipes.map((item) => (
-                            <TouchableOpacity key={item.id} className="bg-white rounded-2xl mb-4 overflow-hidden shadow-sm" 
-                            onPress={() => navigation.navigate('ViewRecipe',{ recipe: item, viewMode, profileUserId: userId })}>
-                                <Image source={{ uri: item.image }} className="w-full h-36" style={{ resizeMode: 'cover' }} />
-                                <View className="p-4">
-                                    <Text className="font-bold text-base text-gray-800 mb-1">{item.title}</Text>
-                                    <View className="flex-row items-center justify-between">
-                                        <Text className="text-xs text-gray-500">By {item.username}</Text>
-                                        <View className="flex-row items-center space-x-2">
-                                            <Ionicons name="time-outline" size={16} color="#FFB47B" />
-                                            <Text className="text-xs text-gray-500">{item.totalTime} Mins</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                                ))
-                            )}
-                            </>
-                        )} 
-
-                    {tab === 'savedrecipe' && (
-                        <>
-                            {loadingSavedRecipe ? (
-                                <View className="flex-1 items-center justify-center py-20">
-                                    <ActivityIndicator size="large" color="#FFB47B" />
-                                    <Text className="text-gray-400 mt-4">Loading saved recipes...</Text>
-                                </View>
-
-                            ): savedRecipes.length === 0 ? (
-                                // ✅ Kalau kosong, tunjuk UI ini
-                                <View className="flex-1 items-center justify-center py-20">
-                                    <Ionicons name="bookmark-outline" size={64} color="#ccc" />
-                                    <Text className="text-gray-400 mt-4">No saved recipes yet</Text>
-                                </View>
-                            ) : (
-                                // ✅ Kalau ada data, map semua item
-                                savedRecipes.map((item) => (
-                                    <TouchableOpacity key={item.id} className="bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
-                                    onPress={() => navigation.navigate('ViewRecipe',{recipe: item, viewMode, profileUserId: userId })}>
-                                        <Image source={{ uri: item.image }} className="w-full h-36" style={{ resizeMode: 'cover' }} />
-                                        <View className="p-4">
-                                            <Text className="font-bold text-base text-gray-800 mb-1">{item.title}</Text>
-                                            <View className="flex-row items-center justify-between">
-                                                <Text className="text-xs text-gray-500">By {item.username || 'Unknown'}</Text>
-                                                <View className="flex-row items-center space-x-2">
-                                                    <Ionicons name="time-outline" size={16} color="#FFB47B" />
-                                                    <Text className="text-xs text-gray-500">{item.totalTime} Mins</Text>
-                                                </View>
+                                                {/* Edit Profile Button */}
+                                                {(!userId || userId === currentUserId && viewMode === 'profile') && (
+                                                    <TouchableOpacity
+                                                        className="bg-[#FFB47B] py-2 px-3 rounded-full self-start"
+                                                        onPress={() => navigation.navigate('EditProfile')}
+                                                    >
+                                                        <Text className="text-white font-semibold text-sm">Edit Profile</Text>
+                                                    </TouchableOpacity>
+                                                )}
                                             </View>
                                         </View>
-                                    </TouchableOpacity>
-                                ))
-                            )}
-                        </>
-                    )}
-                    </ScrollView>
+                                    </View>
+                                </View>
 
-                    {/* ✅ Image Viewer Modal with Loading */}
+                                {/* Food Preferences Card */}
+                                {(!userId || userId === currentUserId && viewMode === 'profile') && (
+                                    <View className="bg-white mx-4 mt-4 rounded-2xl shadow-sm">
+                                        <TouchableOpacity
+                                            className="flex-row items-center justify-between px-6 py-8 active:opacity-70"
+                                            onPress={() => navigation.navigate('FoodPreference')}
+                                        >
+                                            <View className="flex-1">
+                                                <View className='flex-row'>
+                                                    <MaterialCommunityIcons name="food-variant" size={20} color="#FFB47B" />
+                                                    <Text className="font-semibold text-base text-gray-800 pl-2">
+                                                        My Food Preferences
+                                                    </Text>
+                                                </View>
+                                                <Text className="text-sm text-gray-500 mt-1">
+                                                    Diet preferences, allergies, and meal plan settings.
+                                                </Text>
+                                            </View>
+                                            <MaterialIcons name="arrow-forward-ios" size={18} color={colors.darkBrown} />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* ✅ Sticky Tabs Section */}
+                            <View className="bg-[#F8F8F8] pt-6 pb-2">
+                                <View className="flex-row justify-around mx-4">
+                                    <TouchableOpacity
+                                        className={`flex-1 py-2 rounded-xl ${tab === 'myrecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
+                                        onPress={() => setTab('myrecipe')}
+                                    >
+                                        <Text className={`text-center font-semibold ${tab === 'myrecipe' ? 'text-white' : 'text-gray-700'}`}>
+                                            User Recipe
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        className={`flex-1 py-2 rounded-xl mx-2 ${tab === 'savedrecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
+                                        onPress={() => setTab('savedrecipe')}
+                                    >
+                                        <Text className={`text-center font-semibold ${tab === 'savedrecipe' ? 'text-white' : 'text-gray-700'}`}>
+                                            Saved Recipe
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* ✅ Recipe Cards Section - This scrolls under sticky tabs */}
+                            <View className="px-4" style={{ minHeight: 600 }}>
+                                {isLoading ? (
+                                    <View className="items-center justify-center py-20">
+                                        <ActivityIndicator size="large" color="#FFB47B" />
+                                        <Text className="text-gray-400 mt-4">
+                                            {tab === 'myrecipe' ? 'Loading created recipes...' : 'Loading saved recipes...'}
+                                        </Text>
+                                    </View>
+                                ) : displayedRecipes.length === 0 ? (
+                                    <View className="items-center justify-center py-20">
+                                        {tab === 'myrecipe' ? (
+                                            <>
+                                                <MaterialIcons name="create-new-folder" size={64} color="#ccc" />
+                                                <Text className="text-gray-400 mt-4">No recipe has been created by user</Text>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Ionicons name="bookmark-outline" size={64} color="#ccc" />
+                                                <Text className="text-gray-400 mt-4">No saved recipes yet</Text>
+                                            </>
+                                        )}
+                                    </View>
+                                ) : (
+                                    displayedRecipes.map((item) => (
+                                        <TouchableOpacity
+                                            key={item.id}
+                                            className="bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
+                                            onPress={() => navigation.navigate('ViewRecipe', { recipe: item, viewMode, profileUserId: userId })}
+                                        >
+                                            <Image source={{ uri: item.image }} className="w-full h-36" style={{ resizeMode: 'cover' }} />
+                                            <View className="p-4">
+                                                <Text className="font-bold text-base text-gray-800 mb-1">{item.title}</Text>
+                                                <View className="flex-row items-center justify-between">
+                                                    <Text className="text-xs text-gray-500">By {item.username || 'Unknown'}</Text>
+                                                    <View className="flex-row items-center space-x-2">
+                                                        <Ionicons name="time-outline" size={16} color="#FFB47B" />
+                                                        <Text className="text-xs text-gray-500">{item.totalTime} Mins</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))
+                                )}
+                            </View>
+                        </ScrollView>
+                    </View>
+
+                    {/* Image Viewer Modal */}
                     <Modal
                         visible={imageViewerVisible}
                         transparent={true}
@@ -423,7 +443,6 @@ export default function ProfileScreen() {
                         onRequestClose={() => setImageViewerVisible(false)}
                     >
                         <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.95)' }}>
-                            {/* Close Button */}
                             <TouchableOpacity
                                 onPress={() => setImageViewerVisible(false)}
                                 style={{
@@ -447,16 +466,13 @@ export default function ProfileScreen() {
                                 </View>
                             </TouchableOpacity>
 
-                            {/* Image Container */}
                             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                                {/* ✅ Loading Indicator for Modal */}
                                 {modalImageLoading && (
                                     <View style={{ position: 'absolute', zIndex: 1 }}>
                                         <ActivityIndicator size="large" color="#FFB47B" />
                                     </View>
                                 )}
-                                
-                                {/* ✅ Fullscreen Image */}
+
                                 {profileImage && (
                                     <Image
                                         source={{ uri: profileImage }}
@@ -472,7 +488,6 @@ export default function ProfileScreen() {
                                 )}
                             </View>
 
-                            {/* Username at bottom */}
                             <View style={{ position: 'absolute', bottom: 180, alignSelf: 'center' }}>
                                 <Text style={{ color: 'white', fontSize: 18, fontWeight: '600' }}>
                                     {username || 'User Name'}

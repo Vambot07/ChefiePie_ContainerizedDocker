@@ -17,6 +17,13 @@
           "microphonePermission": "Allow Chefie Pie to access your microphone for voice input.",
           "speechRecognitionPermission": "Allow Chefie Pie to use speech recognition."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Chefie Pie to access your photos to select ingredient images.",
+          "cameraPermission": "Allow Chefie Pie to access your camera to take photos of ingredients for recipe suggestions."
+        }
       ]
     ],
     "orientation": "portrait",
@@ -35,6 +42,8 @@
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow Chefie Pie to use speech recognition.",
         "NSMicrophoneUsageDescription": "Allow Chefie Pie to access your microphone for voice input.",
+        "NSPhotoLibraryUsageDescription": "Allow Chefie Pie to access your photos to select ingredient images.",
+        "NSCameraUsageDescription": "Allow Chefie Pie to access your camera to take photos of ingredients for recipe suggestions.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.anonymous.chefiePie"
@@ -46,7 +55,10 @@
       },
       "package": "com.anonymous.chefiePie",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "extra": {
