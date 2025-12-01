@@ -1,29 +1,30 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, Alert, ActivityIndicator, Pressable, TextInput } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, Alert, ActivityIndicator, Pressable, TextInput, Modal } from 'react-native';
 import { Ionicons, Feather, Fontisto } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NavigationProps } from '~/navigation/AppStack';
 import { useAuth } from '~/context/AuthContext';
-import { 
-    fetchRecipesByCategory, 
-    fetchRecipesByIngredients, 
-    fetchRecipeById 
+import {
+    fetchRecipesByCategory,
+    fetchRecipesByIngredients,
+    fetchRecipeById
 } from '~/api/spoonacular';
 import { saveApiRecipe, unsaveRecipe } from '~/controller/recipe';
 import colors from '~/utils/color';
+import SpoonacularChatbot from '~/components/SpooncularChatBot'; // ✅ Import chatbot component
 
 const categories = ['All', 'Asian', 'Italian', 'Indian', 'Chinese', 'Mexican'];
 const baseIngredients = ['Chicken', 'Tomato', 'Curry', 'Salad', 'Chilli', 'Onion'];
 
 // --- FEATURED RECIPE CARD ---
-const FeaturedRecipeCard = ({ 
-    recipe, 
+const FeaturedRecipeCard = ({
+    recipe,
     onPress,
     onSave,
     isSaved = false,
-}: { 
-    recipe: any; 
+}: {
+    recipe: any;
     onPress: () => void;
     onSave?: () => void;
     isSaved?: boolean;
@@ -52,8 +53,8 @@ const FeaturedRecipeCard = ({
                             <Text className="text-gray-800 font-semibold text-sm">{recipe.time || 'N/A'}</Text>
                         </View>
                         <TouchableOpacity className="bg-white p-2 rounded-lg ml-2"
-                        style={{backgroundColor: isSaved ? "#FF9966" : "white"}} onPress={onSave}>
-                           <Feather name="bookmark" size={14} color={isSaved ? "white" : "#FF9966"} />
+                            style={{ backgroundColor: isSaved ? "#FF9966" : "white" }} onPress={onSave}>
+                            <Feather name="bookmark" size={14} color={isSaved ? "white" : "#FF9966"} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -65,8 +66,8 @@ const FeaturedRecipeCard = ({
 // --- LOADING MODAL COMPONENT ---
 const LoadingModal = ({ visible, message }: { visible: boolean; message?: string }) => (
     visible ? (
-        <View 
-            style={{ 
+        <View
+            style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
@@ -105,8 +106,9 @@ export const HomeScreen = () => {
     const [savedRecipes, setSavedRecipes] = useState<Record<string, boolean>>({});
     const [showLoadingModal, setShowLoadingModal] = useState<boolean>(false);
     const [loadingMessage, setLoadingMessage] = useState<string>("Loading...");
-    const [newIngredient, setNewIngredient] = useState(''); // ✅ NEW
-    const [modalSelectedIngredients, setModalSelectedIngredients] = useState<string[]>([]); // ✅ NEW
+    const [newIngredient, setNewIngredient] = useState('');
+    const [modalSelectedIngredients, setModalSelectedIngredients] = useState<string[]>([]);
+    const [showChatbot, setShowChatbot] = useState<boolean>(false); // ✅ NEW: Chatbot modal state
 
     const navigation = useNavigation<NavigationProps>();
     const { user } = useAuth();
@@ -129,10 +131,10 @@ export const HomeScreen = () => {
         setIngredients(shuffled);
         setSelectedIngredients([shuffled[0]]);
         setTempSelectedIngredients([shuffled[0]]);
-        
+
         // Auto search by first ingredient
         loadRecipesByIngredients([shuffled[0]]);
-        
+
     }, []);
 
     // --- LOAD RECIPES WHEN CATEGORY CHANGES ---
@@ -142,7 +144,7 @@ export const HomeScreen = () => {
 
     // --- CHECK IF THERE ARE CHANGES ---
     useEffect(() => {
-        const isDifferent = 
+        const isDifferent =
             tempSelectedIngredients.length !== selectedIngredients.length ||
             !tempSelectedIngredients.every(ing => selectedIngredients.includes(ing));
         setHasChanges(isDifferent);
@@ -207,7 +209,7 @@ export const HomeScreen = () => {
     // --- HANDLE INGREDIENT SELECTION (TEMPORARY) ---
     const toggleIngredient = (ingredient: string) => {
         const isAlreadySelected = tempSelectedIngredients.includes(ingredient);
-        
+
         if (isAlreadySelected) {
             const updated = tempSelectedIngredients.filter(i => i !== ingredient);
             setTempSelectedIngredients(updated);
@@ -216,7 +218,7 @@ export const HomeScreen = () => {
         }
     };
 
-    // ✅ NEW: Toggle ingredient in modal
+    // ✅ Toggle ingredient in modal
     const toggleModalIngredient = (ingredient: string) => {
         if (modalSelectedIngredients.includes(ingredient)) {
             setModalSelectedIngredients(prev => prev.filter(i => i !== ingredient));
@@ -225,35 +227,35 @@ export const HomeScreen = () => {
         }
     };
 
-    // ✅ NEW: Add new ingredient
+    // ✅ Add new ingredient
     const handleAddIngredient = () => {
         const trimmed = newIngredient.trim();
-        
+
         if (!trimmed) {
             Alert.alert('Error', 'Please enter an ingredient name');
             return;
         }
-        
+
         // Check if already exists (case insensitive)
         const exists = ingredients.some(ing => ing.toLowerCase() === trimmed.toLowerCase());
         if (exists) {
             Alert.alert('Error', 'This ingredient already exists');
             return;
         }
-        
+
         // Add to ingredients list
         setIngredients(prev => [...prev, trimmed]);
-        
+
         // Automatically select the new ingredient
         setModalSelectedIngredients(prev => [...prev, trimmed]);
-        
+
         // Clear input
         setNewIngredient('');
-        
+
         Alert.alert('Success', `"${trimmed}" added and selected!`);
     };
 
-    // ✅ NEW: Remove ingredient
+    // ✅ Remove ingredient
     const handleRemoveIngredient = (ingredient: string) => {
         Alert.alert(
             'Remove Ingredient',
@@ -275,13 +277,13 @@ export const HomeScreen = () => {
         );
     };
 
-    // ✅ NEW: Open modal with current selections
+    // ✅ Open modal with current selections
     const handleShowAddIngredientsModal = () => {
         setModalSelectedIngredients([...tempSelectedIngredients]); // Copy current selections
         setShowAddIngredients(true);
     };
 
-    // ✅ NEW: Search with selected ingredients from modal
+    // ✅ Search with selected ingredients from modal
     const handleSearchFromModal = () => {
         if (modalSelectedIngredients.length === 0) {
             Alert.alert('Error', 'Please select at least one ingredient');
@@ -291,13 +293,13 @@ export const HomeScreen = () => {
         // Update all selection states
         setSelectedIngredients(modalSelectedIngredients);
         setTempSelectedIngredients(modalSelectedIngredients);
-        
+
         // Close modal
         setShowAddIngredients(false);
-        
+
         // Search recipes
         loadRecipesByIngredients(modalSelectedIngredients);
-        
+
         console.log('🔍 Searching with ingredients:', modalSelectedIngredients);
     };
 
@@ -324,17 +326,17 @@ export const HomeScreen = () => {
     // --- HANDLE RECIPE CARD PRESS WITH FULL DETAILS FETCH ---
     const handleRecipePress = async (recipe: any) => {
         console.log('Fetching full details for recipe:', recipe.id);
-        
+
         setLoadingMessage("Loading recipe details...");
         setShowLoadingModal(true);
-        
+
         try {
             const fullRecipe = await fetchRecipeById(recipe.id);
-            
+
             if (!fullRecipe) {
                 throw new Error('Failed to fetch recipe details');
             }
-            
+
             const completeRecipe = {
                 id: fullRecipe.id?.toString() || recipe.id,
                 title: fullRecipe.title || recipe.title,
@@ -344,16 +346,16 @@ export const HomeScreen = () => {
                 source: 'api' as const,
                 servings: fullRecipe.servings || 4,
                 ingredients: fullRecipe.extendedIngredients?.map((ing: any) => ing.original) || [],
-                instructions: fullRecipe.instructions || 
-                             fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) => 
-                                `${idx + 1}. ${step.step}`
-                             ).join('\n\n') || 'No instructions available',
+                instructions: fullRecipe.instructions ||
+                    fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) =>
+                        `${idx + 1}. ${step.step}`
+                    ).join('\n\n') || 'No instructions available',
                 summary: fullRecipe.summary || '',
                 cuisines: fullRecipe.cuisines || [],
                 dishTypes: fullRecipe.dishTypes || [],
                 diets: fullRecipe.diets || [],
             };
-            
+
             console.log('✅ Complete recipe ready:', completeRecipe.title);
             navigation.navigate('ViewRecipe', { recipe: completeRecipe, viewMode: 'discover' });
         } catch (error) {
@@ -368,7 +370,7 @@ export const HomeScreen = () => {
     const handleSaveRecipe = async (recipe: any) => {
         setLoadingMessage("Saving recipe...");
         setShowLoadingModal(true);
-        
+
         try {
             await saveApiRecipe(recipe);
             setSavedRecipes(prev => ({ ...prev, [recipe.id]: true }));
@@ -385,7 +387,7 @@ export const HomeScreen = () => {
     const handleUnsaveRecipe = async (recipeId: string) => {
         setLoadingMessage("Removing recipe...");
         setShowLoadingModal(true);
-        
+
         try {
             await unsaveRecipe(recipeId);
             setSavedRecipes(prev => ({ ...prev, [recipeId]: false }));
@@ -409,7 +411,7 @@ export const HomeScreen = () => {
                     <ScrollView className="px-2 pt-4" showsVerticalScrollIndicator={false}>
                         {/* HEADER */}
                         <View className="flex-row justify-between px-4">
-                            <TouchableOpacity onPress={() => navigation.navigate('Profile', {userId: userId, viewMode:'discover'} )}>
+                            <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId: userId, viewMode: 'profile' })}>
                                 <View
                                     className="w-16 h-16 rounded-full items-center justify-center border-line"
                                     style={{ backgroundColor: colors.white, borderWidth: 2, borderColor: colors.lightBrown }}
@@ -503,7 +505,7 @@ export const HomeScreen = () => {
                                                 showsHorizontalScrollIndicator={false}
                                                 contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
                                                 renderItem={({ item }) => (
-                                                    <FeaturedRecipeCard 
+                                                    <FeaturedRecipeCard
                                                         recipe={item}
                                                         onPress={() => handleRecipePress(item)}
                                                         onSave={() => {
@@ -521,10 +523,10 @@ export const HomeScreen = () => {
                                     </>
                                 )}
 
-                                {/* CONFIRMATION MODAL (existing) */}
+                                {/* CONFIRMATION MODAL */}
                                 {showModal && (
-                                    <View 
-                                        style={{ 
+                                    <View
+                                        style={{
                                             position: 'absolute',
                                             top: 0,
                                             left: 0,
@@ -539,18 +541,18 @@ export const HomeScreen = () => {
                                     >
                                         <View className="bg-white rounded-3xl p-6 w-full max-w-sm">
                                             <Text className="text-xl font-bold text-gray-800 mb-4 text-center">
-                                                {tempSelectedIngredients.length === 0 
+                                                {tempSelectedIngredients.length === 0
                                                     ? 'Clear all ingredients?'
                                                     : `Search with ${tempSelectedIngredients.length} ingredient${tempSelectedIngredients.length > 1 ? 's' : ''}?`
                                                 }
                                             </Text>
                                             <Text className="text-gray-600 mb-6 text-center">
-                                                {tempSelectedIngredients.length === 0 
+                                                {tempSelectedIngredients.length === 0
                                                     ? 'No ingredients selected'
                                                     : tempSelectedIngredients.join(', ')
                                                 }
                                             </Text>
-                                            
+
                                             <TouchableOpacity
                                                 className="bg-orange-400 rounded-full py-3 mb-3"
                                                 onPress={handleShowRecipes}
@@ -639,7 +641,7 @@ export const HomeScreen = () => {
                                                     <Feather name="search" size={28} color="white" />
                                                 </TouchableOpacity>
                                             ) : (
-                                               <FeaturedRecipeCard 
+                                                <FeaturedRecipeCard
                                                     recipe={item}
                                                     onPress={() => handleRecipePress(item)}
                                                     onSave={() => {
@@ -657,41 +659,54 @@ export const HomeScreen = () => {
                                 )}
                             </View>
                         </View>
-
-                         <TouchableOpacity className='py-6 rounded-xl' style={{backgroundColor: '#F97316'}} onPress={()=> navigation.navigate('CreateRecipe')}>
-                            <Text>Bring me to test Speech recognition</Text>
-                        </TouchableOpacity>
                     </ScrollView>
                 )}
-                
+
                 {/* LOADING MODAL */}
                 <LoadingModal visible={showLoadingModal} message={loadingMessage} />
+
+                {/* ✅ FLOATING CHATBOT BUTTON */}
+                <TouchableOpacity
+                    className="absolute bottom-6 right-6 w-16 h-16 rounded-full items-center justify-center shadow-lg"
+                    style={{
+                        backgroundColor: '#FF9966',
+                        elevation: 8, // Android shadow
+                        shadowColor: '#000', // iOS shadow
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                    }}
+                    onPress={() => setShowChatbot(true)}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="chatbubbles" size={28} color="white" />
+                </TouchableOpacity>
             </View>
 
             {/* ✅ ADD INGREDIENTS MODAL */}
             {showAddIngredients && (
-                <View style={{ 
-                    position: 'absolute', 
-                    top: 0, 
-                    left: 0, 
-                    right: 0, 
-                    bottom: 0, 
-                    backgroundColor: 'rgba(0,0,0,0.5)', 
-                    justifyContent: 'center', 
+                <View style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    justifyContent: 'center',
                     alignItems: 'center',
                     zIndex: 1000
                 }}>
-                    <Pressable 
-                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
+                    <Pressable
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
                         onPress={() => setShowAddIngredients(false)}
                     />
 
-                    <View style={{ 
-                        width: '90%', 
-                        maxHeight: '80%', 
-                        backgroundColor: 'white', 
-                        borderRadius: 20, 
-                        overflow: 'hidden' 
+                    <View style={{
+                        width: '90%',
+                        maxHeight: '80%',
+                        backgroundColor: 'white',
+                        borderRadius: 20,
+                        overflow: 'hidden'
                     }}>
                         {/* Header */}
                         <View className="bg-orange-500 px-5 py-4 flex-row justify-between items-center">
@@ -733,33 +748,31 @@ export const HomeScreen = () => {
                                     {ingredients.map((ingredient, idx) => {
                                         const isSelected = modalSelectedIngredients.includes(ingredient);
                                         return (
-                                            <View 
+                                            <View
                                                 key={idx}
-                                                className={`rounded-full px-3 py-2 mr-2 mb-2 flex-row items-center ${
-                                                    isSelected ? 'bg-orange-500' : 'bg-gray-100'
-                                                }`}
+                                                className={`rounded-full px-3 py-2 mr-2 mb-2 flex-row items-center ${isSelected ? 'bg-orange-500' : 'bg-gray-100'
+                                                    }`}
                                             >
                                                 <TouchableOpacity
                                                     onPress={() => toggleModalIngredient(ingredient)}
                                                     className="flex-row items-center"
                                                 >
-                                                    <Text className={`text-sm font-medium ${
-                                                        isSelected ? 'text-white' : 'text-gray-600'
-                                                    }`}>
+                                                    <Text className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-gray-600'
+                                                        }`}>
                                                         {ingredient}
                                                     </Text>
                                                 </TouchableOpacity>
-                                                
+
                                                 {/* Remove button (only for non-base ingredients) */}
                                                 {!baseIngredients.includes(ingredient) && (
                                                     <TouchableOpacity
                                                         className="ml-2"
                                                         onPress={() => handleRemoveIngredient(ingredient)}
                                                     >
-                                                        <Ionicons 
-                                                            name="close-circle" 
-                                                            size={16} 
-                                                            color={isSelected ? "white" : "#F97316"} 
+                                                        <Ionicons
+                                                            name="close-circle"
+                                                            size={16}
+                                                            color={isSelected ? "white" : "#F97316"}
                                                         />
                                                     </TouchableOpacity>
                                                 )}
@@ -783,8 +796,8 @@ export const HomeScreen = () => {
                         <View className="px-5 py-4 border-t border-gray-200">
                             <TouchableOpacity
                                 className="py-3 rounded-xl"
-                                style={{ 
-                                    backgroundColor: modalSelectedIngredients.length > 0 ? '#F97316' : '#D1D5DB' 
+                                style={{
+                                    backgroundColor: modalSelectedIngredients.length > 0 ? '#F97316' : '#D1D5DB'
                                 }}
                                 onPress={handleSearchFromModal}
                                 disabled={modalSelectedIngredients.length === 0}
@@ -798,6 +811,31 @@ export const HomeScreen = () => {
                 </View>
             )}
 
+            {/* ✅ CHATBOT MODAL */}
+            <Modal
+                visible={showChatbot}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowChatbot(false)}
+            >
+                <View className="flex-1 bg-white">
+                    <SpoonacularChatbot />
+                    {/* Close button */}
+                    <TouchableOpacity
+                        className="absolute top-12 right-4 w-10 h-10 rounded-full bg-gray-200 items-center justify-center z-50"
+                        onPress={() => setShowChatbot(false)}
+                        style={{
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 3.84,
+                            elevation: 5,
+                        }}
+                    >
+                        <Ionicons name="close" size={24} color="#666" />
+                    </TouchableOpacity>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };

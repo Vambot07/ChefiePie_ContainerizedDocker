@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, Linking, Modal, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, Linking, Modal, Alert, ActivityIndicator, Pressable } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { deleteRecipe, saveRecipe, unsaveRecipe, isRecipeSaved, saveApiRecipe } from '../../../controller/recipe';
@@ -23,18 +23,19 @@ const ViewRecipeScreen = () => {
     const [savedStatusLoading, setSavedStatusLoading] = useState(true);
     const [ownerRecipeId, setOwnerRecipeId] = useState<string | null>(null);
     const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
-    
+    const [isSummaryFullModal, setIsSummaryFullModal] = useState<boolean>(false);
+
     // API Recipe state
     const [apiRecipeDetails, setApiRecipeDetails] = useState<any>(null);
     const [loadingApiDetails, setLoadingApiDetails] = useState(false);
 
     // ✅ Get recipe and viewMode from params
-    const { 
-        recipe, 
+    const {
+        recipe,
         viewMode = 'discover',
         profileUserId
-    } = (route.params as any) || { 
-        recipe: {}, 
+    } = (route.params as any) || {
+        recipe: {},
         viewMode: 'discover',
         profileUserId: ''
     };
@@ -46,11 +47,11 @@ const ViewRecipeScreen = () => {
     const currentUserId = auth.currentUser?.uid;
     const isOwner = recipe?.userId === currentUserId;
 
-    
+
     const shouldShowSaveButton = () => {
         // Always show for discover mode (Home/Search/Saved pages)
         if (viewMode === 'discover') return true;
-        
+
         // For profile mode - only show if viewing own recipe
         if (viewMode === 'profile') {
             // If profileUserId exists and is NOT current user - hide
@@ -60,38 +61,78 @@ const ViewRecipeScreen = () => {
             // Own profile - show
             return true;
         }
-        
+
         return true; // Default: show
     };
 
 
     const canSaveRecipe = shouldShowSaveButton();
 
-   
-     const shouldShowManageButton = () => {
+
+    const shouldShowManageButton = () => {
         // Never show for API recipes
         if (isApiRecipe) return false;
-        
+
         // Never show if not the owner
         if (!isOwner) return false;
-        
+
         // If viewing from someone else's profile - hidez
         if (profileUserId && profileUserId !== currentUserId) {
             return false;
         }
-        
+
         // If in profile mode and viewing someone else's recipe - hide
         if (viewMode === 'profile' && recipe?.userId !== currentUserId) {
             return false;
         }
-        
+
         // All checks passed - show manage button
         return true;
     };
     const canManageRecipe = shouldShowManageButton();
 
+    // Helper function for Difficulty Badge styling ⭐️
+    const getDifficultyStyles = (difficulty: string | undefined) => {
+        switch (difficulty?.toLowerCase()) {
+            case 'easy':
+                return {
+                    bgColor: 'bg-green-50',
+                    borderColor: 'border-green-200',
+                    textColor: 'text-green-600',
+                    iconName: 'leaf-outline',
+                    iconColor: '#10B981', // Emerald 500
+                };
+            case 'medium':
+                return {
+                    bgColor: 'bg-yellow-50',
+                    borderColor: 'border-yellow-200',
+                    textColor: 'text-yellow-700',
+                    iconName: 'star-half-outline',
+                    iconColor: '#F59E0B', // Amber 500
+                };
+            case 'hard':
+                return {
+                    bgColor: 'bg-red-50',
+                    borderColor: 'border-red-200',
+                    textColor: 'text-red-600',
+                    iconName: 'flame-outline',
+                    iconColor: '#EF4444', // Red 500
+                };
+            default:
+                // Fallback for N/A or unknown
+                return {
+                    bgColor: 'bg-gray-100',
+                    borderColor: 'border-gray-300',
+                    textColor: 'text-gray-500',
+                    iconName: 'help-circle-outline',
+                    iconColor: '#9CA3AF', // Gray 400
+                };
+        }
+    };
+
     // Fetch full API recipe details
     useEffect(() => {
+        console.log(recipe);
         const fetchApiRecipeDetails = async () => {
             if (!isApiRecipe || !recipe?.id) return;
             console.log(recipe);
@@ -102,7 +143,7 @@ const ViewRecipeScreen = () => {
                 const response = await fetch(
                     `https://api.spoonacular.com/recipes/${recipe.id}/information?apiKey=${SPOONACULAR_API_KEY}`
                 );
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to fetch recipe details');
                 }
@@ -125,7 +166,7 @@ const ViewRecipeScreen = () => {
         useCallback(() => {
             const checkSavedStatus = async () => {
                 setSavedStatusLoading(true);
-                
+
                 if (!auth.currentUser || !recipe?.id) {
                     setIsSaved(false);
                     setSavedStatusLoading(false);
@@ -142,7 +183,7 @@ const ViewRecipeScreen = () => {
                     setSavedStatusLoading(false);
                 }
             };
-            
+
             checkSavedStatus();
         }, [recipe?.id])
     );
@@ -159,7 +200,7 @@ const ViewRecipeScreen = () => {
     }, []);
 
     const getOwnerId = () => {
-        if (!isApiRecipe){
+        if (!isApiRecipe) {
             return recipe.userId;
         }
         return null;
@@ -169,46 +210,48 @@ const ViewRecipeScreen = () => {
     const youtubeLink = recipe?.youtube;
 
     // Prepare data based on recipe type
-    let image, title, time, ingredients, serves, items, profileImage, steps, intro, sourceUrl;
+    let image, title, time, ingredients, items, profileImage, steps, intro, sourceUrl, difficulty, serving;
 
     if (isApiRecipe && apiRecipeDetails) {
         // Use API recipe details
         image = apiRecipeDetails.image || recipe.image;
         title = apiRecipeDetails.title || recipe.title;
         time = apiRecipeDetails.readyInMinutes ? `${apiRecipeDetails.readyInMinutes}` : 'N/A';
-        serves = apiRecipeDetails.servings || 'N/A';
+        serving = apiRecipeDetails.servings || 'N/A'; // Corrected to use 'serving'
         sourceUrl = apiRecipeDetails.sourceUrl || null;
-        
+        difficulty = 'N/A (API Recipe)';
+
         // Transform API ingredients to our format
         ingredients = apiRecipeDetails.extendedIngredients?.map((ing: any) => ({
             name: ing.name || ing.original,
             amount: ing.amount?.toString() || '',
             unit: ing.unit || ''
         })) || [];
-        
+
         items = ingredients.length;
-        
+
         // Transform API instructions to our format
         steps = apiRecipeDetails.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) => ({
             title: `Step ${idx + 1}`,
             details: step.step,
             time: ''
         })) || [];
-        
+
         intro = apiRecipeDetails.summary?.replace(/<[^>]*>/g, '') || '';
-        
+
     } else {
         // Use user-created recipe data
         image = recipe?.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
         title = recipe?.title || 'Recipe';
         time = recipe?.totalTime || recipe?.time || 'N/A';
         ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
-        serves = recipe?.serves;
         items = recipe?.items;
         profileImage = recipe?.profileImage || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
         steps = recipe?.steps || [];
         intro = recipe?.intro;
         sourceUrl = recipe?.sourceUrl || null;
+        difficulty = recipe?.difficulty || 'N/A';
+        serving = recipe?.serving || 'N/A'; // Corrected to use 'serving'
     }
 
     const handleOptionLink = () => {
@@ -411,7 +454,7 @@ const ViewRecipeScreen = () => {
                 {/* Recipe Image */}
                 <View className="relative items-center">
                     <Image source={{ uri: image }} className="w-11/12 h-44 rounded-2xl" />
-                    
+
                     {/* YouTube overlay - ONLY for user recipes */}
                     {!isApiRecipe && youtubeLink && (
                         <>
@@ -428,7 +471,7 @@ const ViewRecipeScreen = () => {
                             </TouchableOpacity>
                         </>
                     )}
-                    
+
                     {/* Time badge */}
                     <View className="absolute bottom-3 right-5 bg-black/60 px-2 py-1 rounded-full flex-row items-center">
                         <Ionicons name="time-outline" size={14} color="#fff" />
@@ -461,8 +504,8 @@ const ViewRecipeScreen = () => {
                             if (ownerRecipeId) {
                                 console.log(ownerRecipeId);
                                 navigation.navigate('Profile', {
-                                    userId: ownerRecipeId, 
-                                    viewMode: 'profile'
+                                    userId: ownerRecipeId,
+                                    viewMode: 'discover'
                                 });
                             } else {
                                 console.warn('No owner ID found');
@@ -470,12 +513,12 @@ const ViewRecipeScreen = () => {
                         }}>
                             <Image source={{ uri: profileImage }} className="w-10 h-10 rounded-full" />
                         </TouchableOpacity>
-                        
+
                         <View className="ml-3 flex-1">
                             <Text className="text-xs text-gray-400">By</Text>
                             <Text className="font-semibold text-gray-800">{recipe?.username || 'Unknown'}</Text>
                         </View>
-                        
+
                         {/* ✅ Only show Save button if canSaveRecipe */}
                         {canSaveRecipe && (
                             <TouchableOpacity
@@ -497,9 +540,8 @@ const ViewRecipeScreen = () => {
                         {/* ✅ Only show Save button if canSaveRecipe */}
                         {canSaveRecipe && (
                             <TouchableOpacity
-                                className={`py-3 rounded-full flex-row items-center justify-center ${
-                                    isSaved ? 'bg-green-500' : 'bg-orange-400'
-                                }`}
+                                className={`py-3 rounded-full flex-row items-center justify-center ${isSaved ? 'bg-green-500' : 'bg-orange-400'
+                                    }`}
                                 onPress={toggleSave}
                                 disabled={savedStatusLoading || !!loadingAction}
                             >
@@ -507,10 +549,10 @@ const ViewRecipeScreen = () => {
                                     <ActivityIndicator size="small" color="white" />
                                 ) : (
                                     <>
-                                        <Feather 
-                                            name={isSaved ? "check" : "bookmark"} 
-                                            size={20} 
-                                            color="white" 
+                                        <Feather
+                                            name={isSaved ? "check" : "bookmark"}
+                                            size={20}
+                                            color="white"
                                         />
                                         <Text className="text-white font-bold ml-2">
                                             {isSaved ? 'Saved' : 'Save Recipe'}
@@ -519,6 +561,43 @@ const ViewRecipeScreen = () => {
                                 )}
                             </TouchableOpacity>
                         )}
+                    </View>
+                )}
+
+                {/* ⭐️ Difficulty and Serving Badges - IMPROVED ⭐️ */}
+                {/* Ensures both are displayed side-by-side for user recipes */}
+                {(!isApiRecipe && (difficulty || serving)) && (
+                    <View className="px-5 mt-4">
+                        {/* Outer container to hold badges side-by-side */}
+                        <View className="flex-row gap-3">
+
+                            {/* 1. Difficulty Badge */}
+                            {difficulty && difficulty !== 'N/A' && (
+                                (() => {
+                                    const styles = getDifficultyStyles(difficulty);
+                                    return (
+                                        <View
+                                            className={`${styles.bgColor} ${styles.borderColor} border p-3 rounded-xl flex-row items-center flex-shrink-0`}
+                                        >
+                                            <Ionicons name={styles.iconName as any} size={20} color={styles.iconColor} />
+                                            <Text className={`text-lg font-bold ${styles.textColor} ml-2 capitalize`}>
+                                                {difficulty}
+                                            </Text>
+                                        </View>
+                                    );
+                                })()
+                            )}
+
+                            {/* 2. Serving Badge */}
+                            {serving && serving !== 'N/A' && (
+                                <View className="bg-blue-50 border border-blue-200 p-3 rounded-xl flex-row items-center flex-shrink-0">
+                                    <Ionicons name="people-outline" size={20} color="#3B82F6" />
+                                    <Text className="text-lg font-bold text-blue-600 ml-2">
+                                        {serving} {Number(serving) > 1 ? 'Servings' : 'Serving'}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
                 )}
 
@@ -544,10 +623,10 @@ const ViewRecipeScreen = () => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Serving & Items */}
-                        {(serves || items) && (
+                        {/* Serving & Items (Removed 'serves' variable here for consistency) */}
+                        {(serving || items) && (
                             <View className="flex-row justify-between px-5 mt-4 mb-2">
-                                {serves && <Text className="text-xs text-gray-400">{serves} serve{serves > 1 ? 's' : ''}</Text>}
+                                {serving && serving !== 'N/A' && <Text className="text-xs text-gray-400">{serving} serve{Number(serving) > 1 ? 's' : ''}</Text>}
                                 {items && <Text className="text-xs text-gray-400">{items} item{items > 1 ? 's' : ''}</Text>}
                             </View>
                         )}
@@ -618,6 +697,13 @@ const ViewRecipeScreen = () => {
                     </View>
                 )}
             </ScrollView>
+
+            {isSummaryFullModal && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+                    <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+
+                </View>
+            )}
         </View>
     );
 };
