@@ -47,6 +47,7 @@ export type RootStackParamList = {
     EditProfile: undefined;
     FoodPreference: undefined;
     CreateRecipe: undefined;
+    GeminiTest: undefined;
 
 };
 

@@ -135,9 +135,6 @@ const ViewRecipeScreen = () => {
         console.log(recipe);
         const fetchApiRecipeDetails = async () => {
             if (!isApiRecipe || !recipe?.id) return;
-            console.log(recipe);
-            console.log("Sini sal utniuk", !isApiRecipe);
-            console.log(!recipe?.id)
             try {
                 setLoadingApiDetails(true);
                 const response = await fetch(
@@ -191,12 +188,6 @@ const ViewRecipeScreen = () => {
     useEffect(() => {
         const ownerId = getOwnerId();
         setOwnerRecipeId(ownerId);
-        console.log("Owner Recipe ID:", ownerId);
-        console.log("View Mode:", viewMode);
-        console.log("Current User ID:", currentUserId);
-        console.log("Can Save Recipe:", canSaveRecipe);
-        console.log("Current profile: ", profileUserId);
-        console.log("Can Manage Recipe:", canManageRecipe);
     }, []);
 
     const getOwnerId = () => {
@@ -365,29 +356,21 @@ const ViewRecipeScreen = () => {
         );
     }
 
+    const handleShowModalVisible = () => {
+        setModalVisible(true);
+    }
+
     return (
         <View className="flex-1 bg-[#FFF6F0]">
             <Header
                 title={title}
                 showBackButton={true}
                 onBack={() => navigation.goBack()}
-                rightIcon={undefined}
-                onRightAction={undefined}
+                rightIcon={canManageRecipe ? ("menu-sharp") : undefined}
+                onRightAction={handleShowModalVisible}
                 backgroundColor="#FFF6F0"
                 textColor="#222"
             />
-
-            {/* ✅ Show Manage button ONLY if canManageRecipe */}
-            {canManageRecipe && (
-                <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }}>
-                    <TouchableOpacity
-                        className="bg-orange-400 p-2 rounded-full"
-                        onPress={() => setModalVisible(true)}
-                    >
-                        <MaterialCommunityIcons name="playlist-edit" size={24} color="white" />
-                    </TouchableOpacity>
-                </View>
-            )}
 
             {/* Loading Overlay */}
             {loadingAction && (
@@ -407,7 +390,7 @@ const ViewRecipeScreen = () => {
                 </View>
             )}
 
-            {/* ✅ Modal - ONLY if canManageRecipe */}
+            {/* Modal - ONLY if canManageRecipe */}
             {canManageRecipe && (
                 <Modal
                     animationType="slide"
@@ -519,7 +502,7 @@ const ViewRecipeScreen = () => {
                             <Text className="font-semibold text-gray-800">{recipe?.username || 'Unknown'}</Text>
                         </View>
 
-                        {/* ✅ Only show Save button if canSaveRecipe */}
+                        {/* Only show Save button if canSaveRecipe */}
                         {canSaveRecipe && (
                             <TouchableOpacity
                                 className={`px-4 py-2 rounded-full ${isSaved ? 'bg-green-500' : 'bg-[#FFB47B]'}`}
@@ -537,7 +520,7 @@ const ViewRecipeScreen = () => {
                 {/* Simple action for API recipes */}
                 {isApiRecipe && (
                     <View className="px-5 mt-4">
-                        {/* ✅ Only show Save button if canSaveRecipe */}
+                        {/* Only show Save button if canSaveRecipe */}
                         {canSaveRecipe && (
                             <TouchableOpacity
                                 className={`py-3 rounded-full flex-row items-center justify-center ${isSaved ? 'bg-green-500' : 'bg-orange-400'
@@ -564,7 +547,6 @@ const ViewRecipeScreen = () => {
                     </View>
                 )}
 
-                {/* ⭐️ Difficulty and Serving Badges - IMPROVED ⭐️ */}
                 {/* Ensures both are displayed side-by-side for user recipes */}
                 {(!isApiRecipe && (difficulty || serving)) && (
                     <View className="px-5 mt-4">
@@ -586,16 +568,6 @@ const ViewRecipeScreen = () => {
                                         </View>
                                     );
                                 })()
-                            )}
-
-                            {/* 2. Serving Badge */}
-                            {serving && serving !== 'N/A' && (
-                                <View className="bg-blue-50 border border-blue-200 p-3 rounded-xl flex-row items-center flex-shrink-0">
-                                    <Ionicons name="people-outline" size={20} color="#3B82F6" />
-                                    <Text className="text-lg font-bold text-blue-600 ml-2">
-                                        {serving} {Number(serving) > 1 ? 'Servings' : 'Serving'}
-                                    </Text>
-                                </View>
                             )}
                         </View>
                     </View>

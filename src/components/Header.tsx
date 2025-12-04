@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import colors from '../utils/color';
@@ -24,7 +24,7 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
     return (
         <SafeAreaView style={{ backgroundColor }}>
-            <View style={{ backgroundColor }} className="px-4 pt-2">
+            <View style={{ backgroundColor }} className="px-4 py-4">
                 <View className="flex-row items-center justify-between">
                     {/* Left side - Back button or spacer */}
                     <View className="w-8">

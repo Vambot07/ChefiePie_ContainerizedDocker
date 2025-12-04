@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileToFirebase } from '~/utils/uploadImage';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { KeyboardAvoidingView, Platform } from 'react-native';
-import EditModal from '~/components/EditModal';
+import EditModal from '~/components/Modal/EditModal';
 
 const SignUpScreen = () => {
     const navigation = useNavigation<any>();

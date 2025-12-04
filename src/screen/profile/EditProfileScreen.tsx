@@ -18,7 +18,7 @@ import colors from '~/utils/color';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileToFirebase } from '~/utils/uploadImage';
 import Header from '~/components/Header';
-import EditModal from '~/components/EditModal';
+import EditModal from '~/components/Modal/EditModal';
 
 const EditProfileScreen = () => {
     const navigation = useNavigation();
@@ -33,11 +33,11 @@ const EditProfileScreen = () => {
     const [instagram, setInstagram] = useState<string>(user?.instagram || '');
     const [youtube, setYoutube] = useState<string>(user?.youtube || '');
     const [tiktok, setTiktok] = useState<string>(user?.tiktok || '');
-    
+
     // Image states
     const [selectedImage, setSelectedImage] = useState<string | null>(profileImage || null);
     const [uploading, setUploading] = useState(false);
-    
+
     // Modal states
     const [showEditInstagram, setShowEditInstagram] = useState(false);
     const [showEditYoutube, setShowEditYoutube] = useState(false);
@@ -50,10 +50,10 @@ const EditProfileScreen = () => {
     const pickImage = async () => {
         try {
             console.log('📸 Opening image picker...');
-            
+
             // Request permission
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            
+
             if (permissionResult.granted === false) {
                 Alert.alert('Permission Required', 'You need to allow access to your photos to change your profile picture.');
                 return;
@@ -121,7 +121,7 @@ const EditProfileScreen = () => {
 
             if (user?.userId) {
                 const result = await updateUserInFirestore(user.userId, { instagram: trimmedInstagram });
-                
+
                 if (!result.success) {
                     throw new Error('Failed to update');
                 }
@@ -152,7 +152,7 @@ const EditProfileScreen = () => {
 
             if (user?.userId) {
                 const result = await updateUserInFirestore(user.userId, { youtube: trimmedYoutube });
-                
+
                 if (!result.success) {
                     throw new Error('Failed to update');
                 }
@@ -183,7 +183,7 @@ const EditProfileScreen = () => {
 
             if (user?.userId) {
                 const result = await updateUserInFirestore(user.userId, { tiktok: trimmedTiktok });
-                
+
                 if (!result.success) {
                     throw new Error('Failed to update');
                 }
@@ -203,7 +203,7 @@ const EditProfileScreen = () => {
     // ✅ Get display text for social media
     const getSocialDisplayText = (link: string | undefined, platform: string): string => {
         if (!link) return `Add your ${platform}`;
-        
+
         if (link.includes('instagram.com')) {
             const match = link.match(/instagram\.com\/([a-zA-Z0-9._]+)/);
             return match ? `@${match[1]}` : link;
@@ -214,7 +214,7 @@ const EditProfileScreen = () => {
             const match = link.match(/tiktok\.com\/@([a-zA-Z0-9._]+)/);
             return match ? `@${match[1]}` : link;
         }
-        
+
         return link.startsWith('@') ? link : `@${link}`;
     };
 
@@ -239,12 +239,12 @@ const EditProfileScreen = () => {
             if (selectedImage && selectedImage !== profileImage) {
                 console.log('📤 New image selected, uploading...');
                 console.log('🖼️ Image URI:', selectedImage);
-                
+
                 try {
                     // ✅ Create unique filename
                     const fileName = `profile_${user.userId}_${Date.now()}.jpg`;
                     console.log('📁 Filename:', fileName);
-                    
+
                     // ✅ Upload using your function
                     imageUrl = await uploadProfileToFirebase(selectedImage, fileName);
                     console.log('✅ Upload successful! URL:', imageUrl);
@@ -295,25 +295,25 @@ const EditProfileScreen = () => {
                                 <View className="relative">
                                     <View
                                         className="w-32 h-32 rounded-full items-center justify-center"
-                                        style={{ 
-                                            backgroundColor: colors.white, 
-                                            borderWidth: 2, 
-                                            borderColor: colors.lightBrown 
+                                        style={{
+                                            backgroundColor: colors.white,
+                                            borderWidth: 2,
+                                            borderColor: colors.lightBrown
                                         }}
                                     >
                                         {selectedImage ? (
-                                            <Image 
-                                                source={{ uri: selectedImage }} 
-                                                className='rounded-full w-32 h-32' 
+                                            <Image
+                                                source={{ uri: selectedImage }}
+                                                className='rounded-full w-32 h-32'
                                                 style={{ resizeMode: 'cover' }}
                                             />
                                         ) : (
                                             <Fontisto name="male" size={40} color={colors.lightBrown} />
                                         )}
-                                        
+
                                         {/* ✅ Loading overlay while uploading */}
                                         {uploading && (
-                                            <View 
+                                            <View
                                                 className="absolute inset-0 rounded-full items-center justify-center"
                                                 style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
                                             >
@@ -321,7 +321,7 @@ const EditProfileScreen = () => {
                                             </View>
                                         )}
                                     </View>
-                                    
+
                                     {/* Edit Icon */}
                                     <View
                                         className="absolute bottom-0 right-0 bg-gray-400 w-8 h-8 rounded-full items-center justify-center"
@@ -383,8 +383,8 @@ const EditProfileScreen = () => {
                             </Text>
 
                             {/* Instagram */}
-                            <TouchableOpacity 
-                                className="bg-white rounded-xl p-4 border border-gray-200 mb-3" 
+                            <TouchableOpacity
+                                className="bg-white rounded-xl p-4 border border-gray-200 mb-3"
                                 onPress={() => {
                                     setInstagram(user?.instagram || '');
                                     setShowEditInstagram(true);
@@ -412,7 +412,7 @@ const EditProfileScreen = () => {
                             </TouchableOpacity>
 
                             {/* YouTube */}
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 className="bg-white rounded-xl p-4 border border-gray-200 mb-3"
                                 onPress={() => {
                                     setYoutube(user?.youtube || '');
@@ -441,7 +441,7 @@ const EditProfileScreen = () => {
                             </TouchableOpacity>
 
                             {/* TikTok */}
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 className="bg-white rounded-xl p-4 border border-gray-200"
                                 onPress={() => {
                                     setTiktok(user?.tiktok || '');
@@ -591,7 +591,7 @@ const EditProfileScreen = () => {
                 </TouchableOpacity>
             </View>
         </View>
-    ); 
+    );
 };
 
 export default EditProfileScreen;

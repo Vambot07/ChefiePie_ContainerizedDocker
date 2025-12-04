@@ -4,13 +4,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import Header from '../../components/Header';
-import RecipeSearchModal from '../../components/RecipeSearchModal';
+import RecipeSearchModal from '../../components/Modal/RecipeSearchModal';
 import { fetchRandomRecipes } from '~/api/spoonacular';
 import { useAuth } from '~/context/AuthContext';
-import { 
-    saveMealPlan, 
+import {
+    saveMealPlan,
     loadMealPlanWithDetails,
-    deleteRecipeFromDay, 
+    deleteRecipeFromDay,
     addRecipeToDay,
 } from '~/controller/planner';
 import { getSavedRecipes } from '~/controller/recipe';
@@ -206,7 +206,7 @@ export default function PlannerScreen() {
                 }
             };
             reloadAndOpen();
-            
+
             navigation.setParams({ shouldReloadAndOpenModal: undefined });
         }
     }, [route.params, selectedDayIndex]);
@@ -300,7 +300,7 @@ export default function PlannerScreen() {
             const newRecipesByDay: { [key: number]: Recipe[] } = {};
 
             for (const index of selectedDays) {
-                const results = await fetchRandomRecipes(1); 
+                const results = await fetchRandomRecipes(1);
                 newRecipesByDay[index] = results.map((item: any) => ({
                     id: item.id.toString(),
                     title: item.title,
@@ -313,7 +313,7 @@ export default function PlannerScreen() {
 
             setRecipesByDay(newRecipesByDay);
             setPlannedWeeks(prev => ({ ...prev, [weekOffset]: true }));
-            
+
             if (userId) {
                 await saveMealPlan(userId, weekOffset, newRecipesByDay);
             }
@@ -330,7 +330,7 @@ export default function PlannerScreen() {
 
         setSelectedDayIndex(dayIndex);
         setSelectedDay(day);
-        
+
         setTimeout(() => {
             buttonRef.measure((x, y, width, height, pageX, pageY) => {
                 setModalPosition({ top: pageY });
@@ -356,14 +356,14 @@ export default function PlannerScreen() {
                             const updated = { ...prev };
                             if (updated[dayIndex]) {
                                 updated[dayIndex] = updated[dayIndex].filter(recipe => recipe.id !== recipeId);
-                                
+
                                 if (updated[dayIndex].length === 0) {
                                     delete updated[dayIndex];
                                 }
                             }
                             return updated;
                         });
-                        
+
                         if (userId) {
                             await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
                         }
@@ -375,15 +375,15 @@ export default function PlannerScreen() {
 
     const handleOpenSavedRecipesModal = async () => {
         console.log('🟢 Opening saved recipes modal, current dayIndex:', selectedDayIndex);
-        
+
         setLoadingMenuAction(true);
         setSelectedSavedRecipes([]);
-        
+
         try {
             const freshSavedRecipes = await getSavedRecipes();
             setSavedRecipesToShow(freshSavedRecipes);
             console.log('🔄 Refreshed saved recipes:', freshSavedRecipes.length);
-            
+
             closeModal();
             setShowSavedRecipesModal(true);
         } catch (error) {
@@ -413,7 +413,7 @@ export default function PlannerScreen() {
         if (selectedDayIndex !== null) {
             const existingRecipes = recipesByDay[selectedDayIndex] || [];
             const alreadyInPlan = existingRecipes.some(recipe => recipe.id === recipeId);
-            
+
             if (alreadyInPlan) {
                 Alert.alert(
                     'Recipe Already Added',
@@ -446,7 +446,7 @@ export default function PlannerScreen() {
 
         setLoadingSavedRecipes(true);
         try {
-            const recipesToAdd = savedRecipesToShow.filter(recipe => 
+            const recipesToAdd = savedRecipesToShow.filter(recipe =>
                 selectedSavedRecipes.includes(recipe.id)
             );
 
@@ -469,7 +469,7 @@ export default function PlannerScreen() {
             setSelectedSavedRecipes([]);
             setSelectedDayIndex(null);
             setSelectedDay(null);
-            
+
             console.log('✅ Added saved recipes to day:', selectedDayIndex);
         } catch (error) {
             console.error('❌ Error adding saved recipes:', error);
@@ -557,8 +557,8 @@ export default function PlannerScreen() {
                         {!plannedWeeks[weekOffset] && (
                             <>
                                 <Text className="text-center text-gray-500 mb-4 mt-2">
-                                    {selectedDays.length === 0 
-                                        ? 'Select days to plan your meals' 
+                                    {selectedDays.length === 0
+                                        ? 'Select days to plan your meals'
                                         : `${selectedDays.length} day${selectedDays.length > 1 ? 's' : ''} selected`}
                                 </Text>
 
@@ -570,7 +570,7 @@ export default function PlannerScreen() {
                                             <View key={index} className="items-center">
                                                 <TouchableOpacity
                                                     onPress={() => toggleDay(index)}
-                                                    style={{ 
+                                                    style={{
                                                         backgroundColor: isSelected ? '#F9A826' : '#E5E7EB',
                                                         borderWidth: isSelected ? 2 : 0,
                                                         borderColor: isSelected ? '#D97706' : 'transparent'
@@ -585,8 +585,8 @@ export default function PlannerScreen() {
                                     })}
                                 </View>
 
-                                <TouchableOpacity 
-                                    style={{ backgroundColor: selectedDays.length > 0 ? '#F9A826' : '#D1D5DB', opacity: selectedDays.length > 0 ? 1 : 0.6 }} 
+                                <TouchableOpacity
+                                    style={{ backgroundColor: selectedDays.length > 0 ? '#F9A826' : '#D1D5DB', opacity: selectedDays.length > 0 ? 1 : 0.6 }}
                                     className="w-full py-4 rounded-xl"
                                     onPress={handleStartPlan}
                                     disabled={selectedDays.length === 0}
@@ -637,9 +637,9 @@ export default function PlannerScreen() {
                                             data={recipesByDay[index] || []}
                                             keyExtractor={(item) => item.id}
                                             renderItem={({ item }) => (
-                                                <RecipeCard 
-                                                    recipe={item} 
-                                                    navigation={navigation} 
+                                                <RecipeCard
+                                                    recipe={item}
+                                                    navigation={navigation}
                                                     onDelete={(recipeId) => handleDeleteRecipe(index, recipeId)}
                                                 />
                                             )}
@@ -659,7 +659,7 @@ export default function PlannerScreen() {
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
                     <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeModal} />
                     <View style={{ width: 260, backgroundColor: 'white', borderRadius: 16, paddingVertical: 8, shadowColor: '#000', shadowOpacity: 0.3, shadowOffset: { width: 0, height: 3 }, shadowRadius: 6, elevation: 8 }}>
-                        
+
                         {loadingMenuAction ? (
                             <View className="py-8 items-center justify-center">
                                 <ActivityIndicator size="large" color="#F97316" />
@@ -667,8 +667,8 @@ export default function PlannerScreen() {
                             </View>
                         ) : (
                             <>
-                                <TouchableOpacity 
-                                    className="flex-row items-center px-4 py-3 border-b border-gray-100 active:bg-gray-50" 
+                                <TouchableOpacity
+                                    className="flex-row items-center px-4 py-3 border-b border-gray-100 active:bg-gray-50"
                                     onPress={handleOpenSavedRecipesModal}
                                     disabled={loadingMenuAction}
                                 >
@@ -678,8 +678,8 @@ export default function PlannerScreen() {
                                     <Text className="text-gray-800 font-medium flex-1">Add Saved Recipe</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity 
-                                    className="flex-row items-center px-4 py-3 border-b border-gray-100 active:bg-gray-50" 
+                                <TouchableOpacity
+                                    className="flex-row items-center px-4 py-3 border-b border-gray-100 active:bg-gray-50"
                                     onPress={handleOpenSearchRecipesModal}
                                     disabled={loadingMenuAction}
                                 >
@@ -689,9 +689,9 @@ export default function PlannerScreen() {
                                     <Text className="text-gray-800 font-medium flex-1">Search New Recipe</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity 
-                                    className="flex-row items-center px-4 py-3 active:bg-gray-50" 
-                                    onPress={() => { closeModal(); navigation.navigate('AddRecipe', {viewMode: 'planner', selectedDayIndex: selectedDayIndex, weekOffset: weekOffset}); }}
+                                <TouchableOpacity
+                                    className="flex-row items-center px-4 py-3 active:bg-gray-50"
+                                    onPress={() => { closeModal(); navigation.navigate('AddRecipe', { viewMode: 'planner', selectedDayIndex: selectedDayIndex, weekOffset: weekOffset }); }}
                                     disabled={loadingMenuAction}
                                 >
                                     <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mr-3">
@@ -708,7 +708,7 @@ export default function PlannerScreen() {
             {showSavedRecipesModal && (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
                     <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeSavedRecipesModal} />
-                    
+
                     <View style={{ width: '85%', maxHeight: '70%', backgroundColor: 'white', borderRadius: 20, overflow: 'hidden' }}>
                         <View className="bg-orange-500 px-5 py-4 flex-row justify-between items-center">
                             <Text className="text-white font-bold text-lg">Saved Recipes</Text>
@@ -717,7 +717,7 @@ export default function PlannerScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView 
+                        <ScrollView
                             className="px-5 py-4"
                             showsVerticalScrollIndicator={false}
                         >
@@ -737,7 +737,7 @@ export default function PlannerScreen() {
                                     const isSelected = selectedSavedRecipes.includes(recipe.id);
                                     const existingRecipes = selectedDayIndex !== null ? (recipesByDay[selectedDayIndex] || []) : [];
                                     const alreadyInPlan = existingRecipes.some(r => r.id === recipe.id);
-                                    
+
                                     return (
                                         <TouchableOpacity
                                             key={recipe.id}
@@ -771,18 +771,17 @@ export default function PlannerScreen() {
                                                     )}
                                                 </View>
                                             </View>
-                                            
+
                                             {alreadyInPlan ? (
                                                 <View className="w-6 h-6 rounded-full bg-green-500 items-center justify-center">
                                                     <Ionicons name="checkmark" size={16} color="white" />
                                                 </View>
                                             ) : (
                                                 <View
-                                                    className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-                                                        isSelected
+                                                    className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected
                                                             ? 'border-orange-500 bg-orange-500'
                                                             : 'border-gray-300'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {isSelected && (
                                                         <Ionicons name="checkmark" size={16} color="white" />

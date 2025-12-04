@@ -16,11 +16,11 @@ import { useNavigation } from '@react-navigation/native';
 import colors from '~/utils/color';
 import { useAuth } from '~/context/AuthContext';
 import Header from '~/components/Header';
-import EditModal from '~/components/EditModal';
+import EditModal from '~/components/Modal/EditModal';
 import Item from '~/components/Item';
 
 // ✅ EXTRACT COMPONENT KELUAR - Put BEFORE FoodPreferenceScreen
-const IngredientsToAvoidContent = React.memo(({ 
+const IngredientsToAvoidContent = React.memo(({
     customIngredient,
     onCustomIngredientChange,
     ingredientsToAvoid,
@@ -35,7 +35,7 @@ const IngredientsToAvoidContent = React.memo(({
     onAddCustomIngredient: () => void;
     ingredientOptions: string[];
 }) => (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={100}
     >
@@ -51,7 +51,7 @@ const IngredientsToAvoidContent = React.memo(({
                         onChangeText={onCustomIngredientChange}
                         style={{ color: colors.darkBrown }}
                         returnKeyType="done"
-                        onSubmitEditing={onAddCustomIngredient}  
+                        onSubmitEditing={onAddCustomIngredient}
                         blurOnSubmit={true}
                     />
                     <TouchableOpacity
@@ -65,7 +65,7 @@ const IngredientsToAvoidContent = React.memo(({
             </View>
 
             {/* Scrollable List */}
-            <ScrollView 
+            <ScrollView
                 style={{ maxHeight: 300 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
@@ -78,11 +78,10 @@ const IngredientsToAvoidContent = React.memo(({
                     >
                         <Text className="text-gray-800 text-base">{option}</Text>
                         <View
-                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-                                ingredientsToAvoid.includes(option)
+                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${ingredientsToAvoid.includes(option)
                                     ? 'border-orange-400 bg-orange-400'
                                     : 'border-gray-400'
-                            }`}
+                                }`}
                         >
                             {ingredientsToAvoid.includes(option) && (
                                 <Ionicons name="checkmark" size={16} color="white" />
@@ -90,7 +89,7 @@ const IngredientsToAvoidContent = React.memo(({
                         </View>
                     </TouchableOpacity>
                 ))}
-                
+
                 {ingredientsToAvoid
                     .filter(item => !ingredientOptions.includes(item))
                     .map((option) => (
@@ -183,15 +182,15 @@ const FoodPreferenceScreen = () => {
         }
     };
 
-    const handleDietaryRestrictionsSave = () => {     
+    const handleDietaryRestrictionsSave = () => {
         setShowDietaryModal(false);
     }
 
-    const handleCookingGoalSave = () => {     
+    const handleCookingGoalSave = () => {
         setShowCookingGoalModal(false);
     }
 
-    const handleIngredientsToAvoidSave = () => {     
+    const handleIngredientsToAvoidSave = () => {
         setShowIngredientsModal(false);
     }
 
@@ -228,22 +227,22 @@ const FoodPreferenceScreen = () => {
 
     const handleAddCustomIngredient = () => {
         const trimmedIngredient = customIngredient.trim();
-        
+
         if (trimmedIngredient === '') {
             Alert.alert('Error', 'Please enter an ingredient name');
             return;
         }
-        
+
         const allIngredients = [...ingredientOptions, ...ingredientsToAvoid];
         const ingredientExists = allIngredients.some(
             item => item.toLowerCase() === trimmedIngredient.toLowerCase()
         );
-        
+
         if (ingredientExists) {
             Alert.alert('Error', 'This ingredient already exists');
             return;
         }
-        
+
         setIngredientsToAvoid(prev => [...prev, trimmedIngredient]);
         setCustomIngredient('');
         Keyboard.dismiss();
@@ -251,7 +250,7 @@ const FoodPreferenceScreen = () => {
     };
 
     const DietaryRestrictionsContent = () => (
-        <ScrollView 
+        <ScrollView
             style={{ maxHeight: 400 }}
             showsVerticalScrollIndicator={false}
         >
@@ -263,11 +262,10 @@ const FoodPreferenceScreen = () => {
                 >
                     <Text className="text-gray-800 text-base">{option}</Text>
                     <View
-                        className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-                            dietaryRestrictions.includes(option)
+                        className={`w-6 h-6 rounded-full border-2 items-center justify-center ${dietaryRestrictions.includes(option)
                                 ? 'border-orange-400 bg-orange-400'
                                 : 'border-gray-400'
-                        }`}
+                            }`}
                     >
                         {dietaryRestrictions.includes(option) && (
                             <Ionicons name="checkmark" size={16} color="white" />
@@ -279,7 +277,7 @@ const FoodPreferenceScreen = () => {
     );
 
     const CookingGoalContent = () => (
-        <ScrollView 
+        <ScrollView
             style={{ maxHeight: 400 }}
             showsVerticalScrollIndicator={false}
         >
@@ -291,11 +289,10 @@ const FoodPreferenceScreen = () => {
                 >
                     <Text className="text-gray-800 text-base">{option}</Text>
                     <View
-                        className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-                            cookingGoal === option
+                        className={`w-6 h-6 rounded-full border-2 items-center justify-center ${cookingGoal === option
                                 ? 'border-orange-400 bg-orange-400'
                                 : 'border-gray-400'
-                        }`}
+                            }`}
                     >
                         {cookingGoal === option && (
                             <Ionicons name="checkmark" size={16} color="white" />
@@ -406,7 +403,7 @@ const FoodPreferenceScreen = () => {
                 onClose={() => setShowCookingGoalModal(false)}
                 title="Cooking Goal"
                 onSave={handleCookingGoalSave}
-            >   
+            >
                 <CookingGoalContent />
             </EditModal>
 
@@ -416,7 +413,7 @@ const FoodPreferenceScreen = () => {
                 title="Ingredients to Avoid"
                 onSave={handleIngredientsToAvoidSave}
             >
-                <IngredientsToAvoidContent 
+                <IngredientsToAvoidContent
                     customIngredient={customIngredient}
                     onCustomIngredientChange={setCustomIngredient}
                     ingredientsToAvoid={ingredientsToAvoid}
