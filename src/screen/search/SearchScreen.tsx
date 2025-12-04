@@ -6,9 +6,11 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchRecipes } from '~/controller/recipe';
-import { fetchRecipesByCategory } from '~/api/spoonacular';
+import { fetchRandomRecipes, fetchRecipesByCategory, fetchRecipesByIngredients } from '~/api/spoonacular';
 import { detectIngredientsFromImage, formatIngredientsForSearch } from '~/api/roboflow';
 import Header from '../../components/Header';
+import GeminiTestModal from '~/components/GeminiTestModal';
+import RecipeComparisonModal from '~/components/Modal/RecipeComparisonModal';
 
 // Navigation types
 type RootStackParamList = {
@@ -17,6 +19,7 @@ type RootStackParamList = {
         recipe: Recipe,
         viewMode: string
     };
+    GeminiTest: undefined;
 };
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -28,6 +31,9 @@ interface Recipe {
     difficulty?: string;
     serving?: string;
     source?: 'created' | 'api';
+    matchPercentage?: number;
+    missingIngredients?: string[];
+    ingredients?: any[]; // Add this for created recipes
 }
 
 interface RecipeCardProps {
@@ -47,10 +53,7 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
                 {loading && (
                     <View style={{
                         position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
+                        top: 0, left: 0, right: 0, bottom: 0,
                         justifyContent: 'center',
                         alignItems: 'center',
                     }}>
@@ -63,6 +66,14 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
                     onLoadStart={() => setLoading(true)}
                     onLoadEnd={() => setLoading(false)}
                 />
+
+                {recipe.matchPercentage && (
+                    <View className="absolute top-2 right-2 bg-green-500 px-2 py-1 rounded-full">
+                        <Text className="text-white text-xs font-bold">
+                            {Math.round(recipe.matchPercentage)}% Match
+                        </Text>
+                    </View>
+                )}
             </View>
 
             <View className="p-3">
@@ -87,9 +98,11 @@ export default function SearchScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const navigation = useNavigation<NavigationProp>();
     const [loading, setLoading] = useState<boolean>(false);
+    const [showGeminiModal, setShowGeminiModal] = useState(false);
+    const [showComparisonModal, setShowComparisonModal] = useState(false);
+    const [comparisonData, setComparisonData] = useState<any>(null);
     const scrollViewRef = React.useRef<ScrollView>(null);
 
-    // Fetch user's created recipes
     const fetchCreatedRecipes = async () => {
         try {
             setLoading(true);
@@ -110,7 +123,6 @@ export default function SearchScreen() {
         }
     };
 
-    // Fetch recipes from Spoonacular API
     const fetchDiscoverRecipes = async (forceRandom = false) => {
         try {
             setLoading(true);
@@ -122,11 +134,12 @@ export default function SearchScreen() {
                 const response = await fetch(
                     `https://api.spoonacular.com/recipes/complexSearch?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&query=${searchQuery}&number=20&addRecipeInformation=true`
                 );
-                const data = await response.json();
+                const data = await response.json(); ``
                 results = { results: data.results || [] };
             } else {
                 console.log('Fetching random recipes');
-                results = await fetchRecipesByCategory('All', 20);
+                const randomRecipes = await fetchRandomRecipes(20);
+                results = { recipes: randomRecipes };
             }
 
             const recipesData = results.recipes || results.results || [];
@@ -149,178 +162,361 @@ export default function SearchScreen() {
         }
     };
 
-    // Search recipes by detected ingredients from Roboflow
-    const searchRecipesByDetectedIngredients = async (ingredients: string[]) => {
+    // const searchRecipesByDetectedIngredients = async (ingredients: string[]) => {
+    //     try {
+    //         setLoading(true);
+    //         console.log('🔍 Searching recipes with ingredients:', ingredients);
+
+    //         const ingredientQuery = formatIngredientsForSearch(ingredients);
+
+    //         const response = await fetch(
+    //             `https://api.spoonacular.com/recipes/findByIngredients?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&ingredients=${ingredientQuery}&number=20&ranking=2&ignorePantry=false`
+    //         );
+
+    //         if (!response.ok) {
+    //             throw new Error(`API request failed with status ${response.status}`);
+    //         }
+
+    //         const data = await response.json();
+    //         console.log('✅ Recipes found:', data.length);
+
+    //         if (data.length === 0) {
+    //             Alert.alert(
+    //                 'No Recipes Found',
+    //                 'We couldn\'t find recipes with these ingredients.',
+    //                 [{ text: 'OK' }]
+    //             );
+    //             setDiscoverRecipes([]);
+    //             return;
+    //         }
+
+    //         const transformedRecipes: Recipe[] = data.map((recipe: any) => ({
+    //             id: recipe.id?.toString() || '',
+    //             title: recipe.title || 'Untitled Recipe',
+    //             image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+    //             totalTime: '',
+    //             difficulty: '',
+    //             source: 'api' as const,
+    //         }));
+
+    //         console.log(`✅ Showing ${transformedRecipes.length} recipes`);
+    //         setDiscoverRecipes(transformedRecipes);
+
+    //         Alert.alert(
+    //             '✅ Recipes Found!',
+    //             `Found ${transformedRecipes.length} recipes using your ingredients!`,
+    //             [{ text: 'Great!' }]
+    //         );
+    //     } catch (error) {
+    //         console.error('❌ Error searching recipes by ingredients:', error);
+    //         throw error;
+    //     } finally {
+    //         setLoading(false);
+    //     }
+    // };
+
+    // const takePhoto = async () => {
+    //     try {
+    //         console.log('📷 Opening camera...');
+
+    //         const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    //         if (status !== 'granted') {
+    //             Alert.alert(
+    //                 'Permission Required',
+    //                 'Camera permission is required!',
+    //                 [{ text: 'OK' }]
+    //             );
+    //             return;
+    //         }
+
+    //         const result = await ImagePicker.launchCameraAsync({
+    //             mediaTypes: ['images'],
+    //             allowsEditing: true,
+    //             quality: 0.8,
+    //             base64: false,
+    //         });
+
+    //         if (result.canceled || !result.assets || result.assets.length === 0) {
+    //             console.log('📷 User canceled camera');
+    //             return;
+    //         }
+
+    //         const imageUri = result.assets[0].uri;
+    //         console.log('✅ Photo captured:', imageUri);
+
+    //         setLoading(true);
+
+    //         try {
+    //             console.log('🔍 Detecting ingredients...');
+    //             const detectedIngredients = await detectIngredientsFromImage(imageUri);
+
+    //             setLoading(false);
+
+    //             if (detectedIngredients.length === 0) {
+    //                 Alert.alert(
+    //                     'No Ingredients Found',
+    //                     'Please try again with better lighting.',
+    //                     [{ text: 'OK' }]
+    //                 );
+    //                 return;
+    //             }
+
+    //             Alert.alert(
+    //                 '🎉 Ingredients Detected!',
+    //                 `Found: ${detectedIngredients.join(', ')}\n\nSearch for recipes?`,
+    //                 [
+    //                     {
+    //                         text: 'Cancel',
+    //                         style: 'cancel',
+    //                     },
+    //                     {
+    //                         text: 'Search',
+    //                         onPress: async () => {
+    //                             try {
+    //                                 setLoading(true);
+    //                                 setTab('apiRecipe');
+    //                                 setSearchQuery(detectedIngredients.join(', '));
+    //                                 await searchRecipesByDetectedIngredients(detectedIngredients);
+    //                             } catch (error) {
+    //                                 console.error('❌ Error:', error);
+    //                                 Alert.alert('Search Failed', 'Please try again.', [{ text: 'OK' }]);
+    //                             } finally {
+    //                                 setLoading(false);
+    //                             }
+    //                         },
+    //                     },
+    //                 ]
+    //             );
+    //         } catch (detectionError: any) {
+    //             console.error('❌ Detection error:', detectionError);
+    //             setLoading(false);
+    //             Alert.alert('Detection Failed', 'Please try again.', [{ text: 'OK' }]);
+    //         }
+    //     } catch (error) {
+    //         console.error('❌ Camera error:', error);
+    //         setLoading(false);
+    //         Alert.alert('Camera Error', 'Failed to open camera.', [{ text: 'OK' }]);
+    //     }
+    // };
+
+    const calculateIngredientMatch = (
+        detectedIngredients: string[],
+        recipeIngredients: string[]
+    ): number => {
+        if (recipeIngredients.length === 0) return 0;
+
+        const normalizedDetected = detectedIngredients.map(i => i.toLowerCase().trim());
+        const normalizedRecipe = recipeIngredients.map(i => i.toLowerCase().trim());
+
+        let matchCount = 0;
+        normalizedRecipe.forEach(recipeIng => {
+            const isMatch = normalizedDetected.some(detectedIng =>
+                recipeIng.includes(detectedIng) || detectedIng.includes(recipeIng)
+            );
+            if (isMatch) matchCount++;
+        });
+
+        console.log("Match Count " + matchCount);
+        console.log("Detected Ingredents " + normalizedDetected);
+        console.log("Detected Ingredents " + normalizedDetected.length);
+        console.log("List recipe needed " + normalizedRecipe.length);
+        console.log("List recipe needed " + normalizedRecipe);
+
+        console.log("Sini percentage " + (matchCount / normalizedRecipe.length) * 100);
+
+        return (matchCount / normalizedRecipe.length) * 100;
+    };
+
+    const searchDatabaseRecipesByIngredients = async (ingredients: string[], skipLoading = false) => {
         try {
-            setLoading(true);
-            console.log('🔍 Searching recipes with ingredients:', ingredients);
+            if (!skipLoading) setLoading(true);
+            console.log('🔍 Searching database recipes...');
 
-            // Format ingredients for Spoonacular API
-            const ingredientQuery = formatIngredientsForSearch(ingredients);
+            const allRecipes = await searchRecipes('');
 
-            // Use Spoonacular's "Find by Ingredients" endpoint
-            const response = await fetch(
-                `https://api.spoonacular.com/recipes/findByIngredients?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&ingredients=${ingredientQuery}&number=20&ranking=2&ignorePantry=false`
-            );
+            const matchedRecipes = allRecipes
+                .map((recipe: any) => {
+                    const recipeIngredients = recipe.ingredients?.map((ing: any) =>
+                        ing.name || ing
+                    ) || [];
 
-            if (!response.ok) {
-                throw new Error(`API request failed with status ${response.status}`);
-            }
+                    const matchPercentage = calculateIngredientMatch(ingredients, recipeIngredients);
 
-            const data = await response.json();
-            console.log('✅ Recipes found:', data.length);
+                    // Find matched and missing ingredients
+                    const normalizedDetected = ingredients.map(i => i.toLowerCase().trim());
+                    const normalizedRecipe = recipeIngredients.map((i: string) => i.toLowerCase().trim());
 
-            if (data.length === 0) {
-                Alert.alert(
-                    'No Recipes Found',
-                    'We couldn\'t find recipes with these ingredients. Try:\n\n• Taking another photo\n• Adding more ingredients\n• Searching manually',
-                    [{ text: 'OK' }]
-                );
-                setDiscoverRecipes([]);
-                return;
-            }
+                    const matched: string[] = [];
+                    const missing: string[] = [];
 
-            // Transform the response to match our Recipe interface
-            const transformedRecipes: Recipe[] = data.map((recipe: any) => ({
-                id: recipe.id?.toString() || '',
-                title: recipe.title || 'Untitled Recipe',
-                image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
-                totalTime: '',
-                difficulty: '',
-                source: 'api' as const,
-            }));
+                    normalizedRecipe.forEach((recipeIng: string) => {
+                        const isMatch = normalizedDetected.some(detectedIng =>
+                            recipeIng.includes(detectedIng) || detectedIng.includes(recipeIng)
+                        );
+                        if (isMatch) {
+                            matched.push(recipeIng);
+                        } else {
+                            missing.push(recipeIng);
+                        }
+                    });
 
-            console.log(`✅ Showing ${transformedRecipes.length} recipes`);
-            setDiscoverRecipes(transformedRecipes);
+                    return {
+                        ...recipe,
+                        matchPercentage,
+                        source: 'created' as const,
+                        matchedIngredients: matched,
+                        missingIngredients: missing
+                    };
+                })
+                .filter((recipe: any) => recipe.matchPercentage && recipe.matchPercentage >= 50)
+                .sort((a: any, b: any) => b.matchPercentage - a.matchPercentage);
 
-            // Success feedback
-            Alert.alert(
-                '✅ Recipes Found!',
-                `Found ${transformedRecipes.length} recipes using your ingredients!`,
-                [{ text: 'Great!' }]
-            );
+            console.log(`✅ Found ${matchedRecipes.length} database recipes`);
+            return matchedRecipes;
         } catch (error) {
-            console.error('❌ Error searching recipes by ingredients:', error);
-            throw error;
+            console.error('❌ Error:', error);
+            return [];
         } finally {
-            setLoading(false);
+            if (!skipLoading) setLoading(false);
         }
     };
 
-    // Camera function to take photo and detect ingredients
-    const takePhoto = async () => {
+    const searchAPIRecipesByIngredients = async (ingredients: string[], skipLoading = false) => {
         try {
-            console.log('📷 Opening camera...');
+            if (!skipLoading) setLoading(true);
+            console.log('🔍 Searching API recipes...');
 
-            // Request camera permission
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert(
-                    'Permission Required',
-                    'Camera permission is required to take photos of ingredients!',
-                    [{ text: 'OK' }]
-                );
-                return;
+            const results = await fetchRecipesByIngredients(ingredients, 30);
+
+            if (!results || results.length === 0) {
+                console.log('No API recipes found');
+                setDiscoverRecipes([]);
+                return [];
             }
 
-            // Launch camera
-            const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ['images'],
-                allowsEditing: true,
-                quality: 0.8,
-                base64: false,
+            const transformedRecipes: Recipe[] = results.map((recipe: any) => {
+                const usedCount = recipe.usedIngredientCount || 0;
+                const missedCount = recipe.missedIngredientCount || 0;
+                const totalCount = usedCount + missedCount;
+                const matchPercentage = totalCount > 0 ? (usedCount / totalCount) * 100 : 0;
+
+                const matched = recipe.usedIngredients?.map((ing: any) => ing.name) || [];
+                const missing = recipe.missedIngredients?.map((ing: any) => ing.name) || [];
+
+                return {
+                    id: recipe.id?.toString() || '',
+                    title: recipe.title || 'Untitled Recipe',
+                    image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+                    totalTime: '',
+                    difficulty: '',
+                    source: 'api' as const,
+                    matchPercentage: matchPercentage,
+                    matchedIngredients: matched,
+                    missingIngredients: missing
+                };
             });
 
-            // Check if user canceled
-            if (result.canceled || !result.assets || result.assets.length === 0) {
-                console.log('📷 User canceled camera');
-                return;
-            }
+            const filteredRecipes = transformedRecipes.filter(r => r.matchPercentage && r.matchPercentage >= 50);
 
-            const imageUri = result.assets[0].uri;
-            console.log('✅ Photo captured:', imageUri);
+            console.log(`✅ Found ${filteredRecipes.length} API recipes`);
+            setDiscoverRecipes(filteredRecipes);
 
-            // Show loading state
-            setLoading(true);
-
-            try {
-                // Detect ingredients using Roboflow
-                console.log('🔍 Detecting ingredients...');
-                const detectedIngredients = await detectIngredientsFromImage(imageUri);
-
-                // Hide loading
-                setLoading(false);
-
-                // Check if any ingredients were found
-                if (detectedIngredients.length === 0) {
-                    Alert.alert(
-                        'No Ingredients Found',
-                        'We couldn\'t detect any ingredients in the image. Please try again with:\n\n• Better lighting\n• Clear view of ingredients\n• Less cluttered background',
-                        [{ text: 'OK' }]
-                    );
-                    return;
-                }
-
-                // Show detected ingredients to user with confirmation
-                Alert.alert(
-                    '🎉 Ingredients Detected!',
-                    `Found: ${detectedIngredients.join(', ')}\n\nWould you like to search for recipes with these ingredients?`,
-                    [
-                        {
-                            text: 'Cancel',
-                            style: 'cancel',
-                            onPress: () => {
-                                console.log('User canceled recipe search');
-                            },
-                        },
-                        {
-                            text: 'Search Recipes',
-                            onPress: async () => {
-                                try {
-                                    setLoading(true);
-
-                                    // Switch to API recipe tab
-                                    setTab('apiRecipe');
-
-                                    // Set search query for display
-                                    setSearchQuery(detectedIngredients.join(', '));
-
-                                    // Search recipes by ingredients using Spoonacular
-                                    await searchRecipesByDetectedIngredients(detectedIngredients);
-                                } catch (error) {
-                                    console.error('❌ Error searching recipes:', error);
-                                    Alert.alert(
-                                        'Search Failed',
-                                        'Failed to search recipes. Please try again.',
-                                        [{ text: 'OK' }]
-                                    );
-                                } finally {
-                                    setLoading(false);
-                                }
-                            },
-                        },
-                    ]
-                );
-            } catch (detectionError: any) {
-                console.error('❌ Detection error:', detectionError);
-                setLoading(false);
-
-                Alert.alert(
-                    'Detection Failed',
-                    detectionError.message || 'Failed to analyze the image. Please check your internet connection and try again.',
-                    [{ text: 'OK' }]
-                );
-            }
+            return filteredRecipes;
         } catch (error) {
-            console.error('❌ Camera error:', error);
-            setLoading(false);
-            Alert.alert('Camera Error', 'Failed to open camera. Please try again.', [
-                { text: 'OK' },
-            ]);
+            console.error('❌ Error:', error);
+            setDiscoverRecipes([]);
+            return [];
+        } finally {
+            if (!skipLoading) setLoading(false);
         }
     };
 
-    // Update displayed recipes based on active tab
+    const handleGeminiDetectionResults = async (ingredients: string[]) => {
+        console.log('🎯 Handling Gemini results:', ingredients);
+
+        setShowGeminiModal(false);
+        setLoading(true);
+
+        try {
+            setTab('all');
+            setSearchQuery('');
+
+            const [dbRecipes, apiRecipes] = await Promise.all([
+                searchDatabaseRecipesByIngredients(ingredients, true),
+                searchAPIRecipesByIngredients(ingredients, true)
+            ]);
+
+            console.log('📊 DB Recipes:', dbRecipes.length);
+            console.log('📊 API Recipes:', apiRecipes.length);
+
+            const totalRecipes = dbRecipes.length + apiRecipes.length;
+
+            if (totalRecipes === 0) {
+                setLoading(false);
+                Alert.alert(
+                    'No Matching Recipes',
+                    'No recipes found with 50%+ match. Try adding more ingredients.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+
+            const allRecipes = [...dbRecipes, ...apiRecipes];
+            const missingIngredientsSummary = allRecipes.map((recipe: any) => ({
+                recipeName: recipe.title,
+                matched: recipe.matchedIngredients || [],
+                missing: recipe.missingIngredients || [],
+                matchPercentage: recipe.matchPercentage || 0,
+                image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+                source: recipe.source,
+                recipeData: recipe // Full recipe data for navigation
+            }));
+
+            // ✅ ADD THIS DEBUG LOG
+            console.log('🎨 Missing Ingredients Summary:', JSON.stringify(missingIngredientsSummary, null, 2));
+
+            setComparisonData({
+                detectedIngredients: ingredients,
+                createdRecipesCount: dbRecipes.length,
+                apiRecipesCount: apiRecipes.length,
+                missingIngredientsSummary
+            });
+
+            setLoading(false);
+            console.log('✅ About to show comparison modal');
+
+            setTimeout(() => {
+                setShowComparisonModal(true);
+            }, 100);
+
+        } catch (error) {
+            console.error('❌ Error:', error);
+            setLoading(false);
+            Alert.alert('Error', 'Failed to search recipes.');
+        }
+    };
+
+    // Also update the useEffect to add logging
+    useEffect(() => {
+        console.log('🔄 Display useEffect triggered');
+        console.log('Current tab:', tab);
+        console.log('myRecipes length:', myRecipes.length);
+        console.log('discoverRecipes length:', discoverRecipes.length);
+
+        if (tab === 'createdRecipe') {
+            setDisplayedRecipes(myRecipes);
+            console.log('Set displayedRecipes to myRecipes:', myRecipes.length);
+        } else if (tab === 'apiRecipe') {
+            setDisplayedRecipes(discoverRecipes);
+            console.log('Set displayedRecipes to discoverRecipes:', discoverRecipes.length);
+        } else if (tab === 'all') {
+            const combined = [...myRecipes, ...discoverRecipes];
+            setDisplayedRecipes(combined);
+            console.log('Set displayedRecipes to combined:', combined.length);
+        }
+
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [tab, myRecipes, discoverRecipes]);
     useEffect(() => {
         if (tab === 'createdRecipe') {
             setDisplayedRecipes(myRecipes);
@@ -333,7 +529,6 @@ export default function SearchScreen() {
         scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     }, [tab, myRecipes, discoverRecipes]);
 
-    // Search effect - with debounce
     useEffect(() => {
         if (searchQuery.trim().length === 0) {
             return;
@@ -352,7 +547,6 @@ export default function SearchScreen() {
         return () => clearTimeout(timeout);
     }, [searchQuery]);
 
-    // Handle initial load when screen mounts or tab changes
     useFocusEffect(
         React.useCallback(() => {
             if (tab === 'createdRecipe') {
@@ -411,7 +605,6 @@ export default function SearchScreen() {
                 onBack={() => navigation.goBack()}
             />
 
-            {/* Search Bar */}
             <View className="bg-white border-b border-gray-100 pb-2">
                 <View className="flex-row items-center px-4 pt-2">
                     <View className="flex-row items-center bg-gray-100 rounded-xl px-3 py-2 flex-1 mr-3">
@@ -433,9 +626,11 @@ export default function SearchScreen() {
                                 <Ionicons name="close" size={18} color="#FF9966" />
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity onPress={takePhoto}>
-                                <Entypo name="camera" size={18} color="#FF9966" />
-                            </TouchableOpacity>
+                            <View className='flex-row gap-4'>
+                                <TouchableOpacity onPress={() => setShowGeminiModal(true)}>
+                                    <Entypo name="camera" size={18} color="#FF9966" />
+                                </TouchableOpacity>
+                            </View>
                         )}
                     </View>
 
@@ -447,7 +642,6 @@ export default function SearchScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* TABS */}
                 <View className="flex-row justify-around mt-3 mx-4 px-2">
                     <TouchableOpacity
                         className={`flex-1 py-2.5 rounded-xl ${tab === 'createdRecipe' ? 'bg-[#FF9966]' : 'bg-gray-100'}`}
@@ -487,7 +681,6 @@ export default function SearchScreen() {
                 </View>
             </View>
 
-            {/* Recipe Grid */}
             {loading ? (
                 <View className='flex-1 bg-gray-50 justify-center items-center'>
                     <ActivityIndicator size='large' color="#FF9966" />
@@ -507,6 +700,7 @@ export default function SearchScreen() {
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }
                 >
+
                     {displayedRecipes.length > 0 ? (
                         <View className="flex-row flex-wrap justify-between pb-4">
                             {displayedRecipes.map((recipe) => (
@@ -531,6 +725,43 @@ export default function SearchScreen() {
                         </View>
                     )}
                 </ScrollView>
+            )}
+
+            <GeminiTestModal
+                visible={showGeminiModal}
+                onClose={() => setShowGeminiModal(false)}
+                onIngredientsDetected={handleGeminiDetectionResults}
+            />
+
+            {comparisonData && (
+                <RecipeComparisonModal
+                    visible={showComparisonModal}
+                    onClose={() => {
+                        setShowComparisonModal(false);
+                        // Clear comparison data when modal closes
+                        setComparisonData(null);
+                    }}
+                    onProceed={() => {
+                        // User clicked "View All Recipes" - show recipes in main screen
+                        if (comparisonData?.missingIngredientsSummary) {
+                            const allRecipes = comparisonData.missingIngredientsSummary
+                                .map((item: any) => item.recipeData)
+                                .filter((recipe: any): recipe is Recipe => recipe !== undefined);
+                            setDisplayedRecipes(allRecipes);
+                            setTab('all');
+                        }
+                        setShowComparisonModal(false);
+                    }}
+                    onRecipeClick={(recipe) => {
+                        setShowComparisonModal(false);
+                        setComparisonData(null);
+                        navigation.navigate('ViewRecipe', { recipe, viewMode: 'discover' });
+                    }}
+                    detectedIngredients={comparisonData.detectedIngredients}
+                    createdRecipesCount={comparisonData.createdRecipesCount}
+                    apiRecipesCount={comparisonData.apiRecipesCount}
+                    missingIngredientsSummary={comparisonData.missingIngredientsSummary}
+                />
             )}
         </View>
     )

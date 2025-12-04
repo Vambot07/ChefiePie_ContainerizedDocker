@@ -17,16 +17,16 @@ import colors from '~/utils/color';
 import Header from '~/components/Header';
 import { updateDoc, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../../firebaseConfig';
-import { 
-    updatePassword, 
-    reauthenticateWithCredential, 
-    EmailAuthProvider, 
+import {
+    updatePassword,
+    reauthenticateWithCredential,
+    EmailAuthProvider,
     fetchSignInMethodsForEmail,
     updateEmail,
     verifyBeforeUpdateEmail
 } from 'firebase/auth';
 import Item from '~/components/Item';
-import EditModal from '~/components/EditModal';
+import EditModal from '~/components/Modal/EditModal';
 import CryptoJS from "crypto-js";
 
 const SettingScreen = () => {
@@ -54,7 +54,7 @@ const SettingScreen = () => {
 
     type UserUpdate = {
         username?: string;
-        email?: string; 
+        email?: string;
         bio?: string;
         instagram?: string;
         youtube?: string;
@@ -76,92 +76,92 @@ const SettingScreen = () => {
         }
     };
 
-        const handleUpdateEmail = async () => {
-    const trimmedEmail = email.replace(/\s+/g, '').trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const handleUpdateEmail = async () => {
+        const trimmedEmail = email.replace(/\s+/g, '').trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    try {
-        // 1️⃣ Check sama ada current email
-        if (trimmedEmail === user?.email) {
-            Alert.alert('No Change', 'This is already your current email address.');
-            return;
-        }
+        try {
+            // 1️⃣ Check sama ada current email
+            if (trimmedEmail === user?.email) {
+                Alert.alert('No Change', 'This is already your current email address.');
+                return;
+            }
 
-        // 2️⃣ Basic format validation
-        if (!emailRegex.test(trimmedEmail)) {
-            Alert.alert('Error', 'Please enter a valid email address');
-            return;
-        }
+            // 2️⃣ Basic format validation
+            if (!emailRegex.test(trimmedEmail)) {
+                Alert.alert('Error', 'Please enter a valid email address');
+                return;
+            }
 
-        // 2️⃣a. Check valid domain
-        const validDomains = ['.com', '.my', '.edu', '.org', '.net', '.gov', '.co.uk', '.com.my', '.edu.my'];
-        const hasValidDomain = validDomains.some(domain => trimmedEmail.toLowerCase().endsWith(domain));
-        
-        if (!hasValidDomain) {
-            Alert.alert('Error', 'Please enter a valid email domain (e.g., .com, .my, .edu.my)');
-            return;
-        }
+            // 2️⃣a. Check valid domain
+            const validDomains = ['.com', '.my', '.edu', '.org', '.net', '.gov', '.co.uk', '.com.my', '.edu.my'];
+            const hasValidDomain = validDomains.some(domain => trimmedEmail.toLowerCase().endsWith(domain));
 
-        setLoading(true);
+            if (!hasValidDomain) {
+                Alert.alert('Error', 'Please enter a valid email domain (e.g., .com, .my, .edu.my)');
+                return;
+            }
 
-        // 3️⃣ Check kalau email dah wujud
-        const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+            setLoading(true);
 
-        if (methods.length > 0) {
-            Alert.alert('Error', 'This email address is already in use by another account.');
-            setLoading(false);
-            return;
-        }
+            // 3️⃣ Check kalau email dah wujud
+            const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
 
-        // 4️⃣ Get Firebase user
-        const firebaseUser = auth.currentUser;
-        if (!firebaseUser) {
-            Alert.alert('Error', 'No authenticated user found.');
-            setLoading(false);
-            return;
-        }
+            if (methods.length > 0) {
+                Alert.alert('Error', 'This email address is already in use by another account.');
+                setLoading(false);
+                return;
+            }
 
-        // 5️⃣ ✅ HANTAR VERIFICATION EMAIL (user kena verify dulu)
-        await verifyBeforeUpdateEmail(firebaseUser, trimmedEmail);
+            // 4️⃣ Get Firebase user
+            const firebaseUser = auth.currentUser;
+            if (!firebaseUser) {
+                Alert.alert('Error', 'No authenticated user found.');
+                setLoading(false);
+                return;
+            }
 
-        // 6️⃣ Alert user untuk check email
-        Alert.alert(
-            'Verification Email Sent',
-            `We've sent a verification link to ${trimmedEmail}.\n\nPlease check your inbox and click the link to verify your new email address.\n\nAfter verification, sign in again with your new email.`,
-            [
-                {
-                    text: 'OK',
-                    onPress: () => {
-                        setShowEditEmailModal(false);
-                        setEmail(user?.email || ''); 
-                        logout();
-                        Alert.alert('You succesfully logout!');
+            // 5️⃣ ✅ HANTAR VERIFICATION EMAIL (user kena verify dulu)
+            await verifyBeforeUpdateEmail(firebaseUser, trimmedEmail);
+
+            // 6️⃣ Alert user untuk check email
+            Alert.alert(
+                'Verification Email Sent',
+                `We've sent a verification link to ${trimmedEmail}.\n\nPlease check your inbox and click the link to verify your new email address.\n\nAfter verification, sign in again with your new email.`,
+                [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setShowEditEmailModal(false);
+                            setEmail(user?.email || '');
+                            logout();
+                            Alert.alert('You succesfully logout!');
+                        }
                     }
-                }
-            ]
-        );
+                ]
+            );
 
-    } catch (error: any) {
-        console.error("❌ Error updating email:", error);
-        console.error("❌ Error code:", error.code);
-        
-        let errorMessage = 'Failed to send verification email. Please try again.';
-        
-        if (error.code === 'auth/email-already-in-use') {
-            errorMessage = 'This email address is already in use by another account.';
-        } else if (error.code === 'auth/requires-recent-login') {
-            errorMessage = 'For security reasons, please sign out and sign in again before changing your email.';
-        } else if (error.code === 'auth/invalid-email') {
-            errorMessage = 'Invalid email address format.';
-        } else if (error.code === 'auth/too-many-requests') {
-            errorMessage = 'Too many requests. Please try again later.';
+        } catch (error: any) {
+            console.error("❌ Error updating email:", error);
+            console.error("❌ Error code:", error.code);
+
+            let errorMessage = 'Failed to send verification email. Please try again.';
+
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = 'This email address is already in use by another account.';
+            } else if (error.code === 'auth/requires-recent-login') {
+                errorMessage = 'For security reasons, please sign out and sign in again before changing your email.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address format.';
+            } else if (error.code === 'auth/too-many-requests') {
+                errorMessage = 'Too many requests. Please try again later.';
+            }
+
+            Alert.alert('Error', errorMessage);
+        } finally {
+            setLoading(false);
         }
-        
-        Alert.alert('Error', errorMessage);
-    } finally {
-        setLoading(false);
-    }
-};
+    };
 
     const handleLogout = async () => {
         try {
@@ -169,7 +169,7 @@ const SettingScreen = () => {
             console.log("user ID: ", userId);
 
             await logout();
-            
+
         } catch (error) {
             console.error("Error signing out: ", error);
             Alert.alert("Logout Error", "Could not log out. Please try again.");
@@ -230,12 +230,12 @@ const SettingScreen = () => {
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
-            
+
             // ✅ Reset show password states
             setShowCurrentPassword(false);
             setShowNewPassword(false);
             setShowConfirmPassword(false);
-            
+
         } catch (error: any) {
             let errorMessage = 'Failed to change password. Please try again.';
 
@@ -288,7 +288,7 @@ const SettingScreen = () => {
                             onPress={() => setShowChangePasswordModal(true)}
                             icon="lock-closed-outline"
                         />
-                    </View>  
+                    </View>
 
                     {/* App Settings Section */}
                     <Text className="text-lg font-bold text-gray-800 mb-4">App Settings</Text>
@@ -376,130 +376,130 @@ const SettingScreen = () => {
 
             {/* Change Password Modal */}
             <EditModal
-    visible={showChangePasswordModal}
-    onClose={() => {
-        setShowChangePasswordModal(false);
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setShowCurrentPassword(false);
-        setShowNewPassword(false);
-        setShowConfirmPassword(false);
-    }}
-    title="Change Password"
-    onSave={handleChangePassword}
-    loading={loading}
->
-    <View className="space-y-4">
-        {/* ✅ Current Password */}
-        <View>
-            <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
-                Current Password
-            </Text>
-            <View style={{ position: 'relative' }}>
-                <TextInput
-                    value={currentPassword}
-                    onChangeText={setCurrentPassword}
-                    className="bg-white px-4 py-3 rounded-xl border border-gray-200"
-                    placeholder="Enter current password"
-                    placeholderTextColor={colors.lightBrown}
-                    style={{ 
-                        color: colors.darkBrown,
-                        paddingRight: 48
-                    }}
-                    secureTextEntry={!showCurrentPassword}
-                />
-                <TouchableOpacity
-                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                    style={{ 
-                        position: 'absolute',
-                        right: 12,
-                        top: 4,
-                        padding: 4
-                    }}
-                >
-                    <Ionicons
-                        name={showCurrentPassword ? "eye-off-outline" : "eye-outline"}
-                        size={22}
-                        color={colors.lightBrown}
-                    />
-                </TouchableOpacity>
-            </View>
-        </View>
+                visible={showChangePasswordModal}
+                onClose={() => {
+                    setShowChangePasswordModal(false);
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setShowCurrentPassword(false);
+                    setShowNewPassword(false);
+                    setShowConfirmPassword(false);
+                }}
+                title="Change Password"
+                onSave={handleChangePassword}
+                loading={loading}
+            >
+                <View className="space-y-4">
+                    {/* ✅ Current Password */}
+                    <View>
+                        <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
+                            Current Password
+                        </Text>
+                        <View style={{ position: 'relative' }}>
+                            <TextInput
+                                value={currentPassword}
+                                onChangeText={setCurrentPassword}
+                                className="bg-white px-4 py-3 rounded-xl border border-gray-200"
+                                placeholder="Enter current password"
+                                placeholderTextColor={colors.lightBrown}
+                                style={{
+                                    color: colors.darkBrown,
+                                    paddingRight: 48
+                                }}
+                                secureTextEntry={!showCurrentPassword}
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                                style={{
+                                    position: 'absolute',
+                                    right: 12,
+                                    top: 4,
+                                    padding: 4
+                                }}
+                            >
+                                <Ionicons
+                                    name={showCurrentPassword ? "eye-off-outline" : "eye-outline"}
+                                    size={22}
+                                    color={colors.lightBrown}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
-        {/* ✅ New Password */}
-        <View>
-            <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
-                New Password
-            </Text>
-            <View style={{ position: 'relative' }}>
-                <TextInput
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    className="bg-white px-4 py-3 rounded-xl border border-gray-200"
-                    placeholder="Enter new password"
-                    placeholderTextColor={colors.lightBrown}
-                    style={{ 
-                        color: colors.darkBrown,
-                        paddingRight: 48
-                    }}
-                    secureTextEntry={!showNewPassword}
-                />
-                <TouchableOpacity
-                    onPress={() => setShowNewPassword(!showNewPassword)}
-                    style={{ 
-                        position: 'absolute',
-                        right: 12,
-                        top: 4,
-                        padding: 4
-                    }}
-                >
-                    <Ionicons
-                        name={showNewPassword ? "eye-off-outline" : "eye-outline"}
-                        size={22}
-                        color={colors.lightBrown}
-                    />
-                </TouchableOpacity>
-            </View>
-        </View>
+                    {/* ✅ New Password */}
+                    <View>
+                        <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
+                            New Password
+                        </Text>
+                        <View style={{ position: 'relative' }}>
+                            <TextInput
+                                value={newPassword}
+                                onChangeText={setNewPassword}
+                                className="bg-white px-4 py-3 rounded-xl border border-gray-200"
+                                placeholder="Enter new password"
+                                placeholderTextColor={colors.lightBrown}
+                                style={{
+                                    color: colors.darkBrown,
+                                    paddingRight: 48
+                                }}
+                                secureTextEntry={!showNewPassword}
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowNewPassword(!showNewPassword)}
+                                style={{
+                                    position: 'absolute',
+                                    right: 12,
+                                    top: 4,
+                                    padding: 4
+                                }}
+                            >
+                                <Ionicons
+                                    name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                                    size={22}
+                                    color={colors.lightBrown}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
-        {/* ✅ Confirm New Password */}
-        <View>
-            <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
-                Confirm New Password
-            </Text>
-            <View style={{ position: 'relative' }}>
-                <TextInput
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    className="bg-white px-4 py-3 rounded-xl border border-gray-200"
-                    placeholder="Confirm new password"
-                    placeholderTextColor={colors.lightBrown}
-                    style={{ 
-                        color: colors.darkBrown,
-                        paddingRight: 48
-                    }}
-                    secureTextEntry={!showConfirmPassword}
-                />
-                <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    style={{ 
-                        position: 'absolute',
-                        right: 12,
-                        top: 4,
-                        padding: 4
-                    }}
-                >
-                    <Ionicons
-                        name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
-                        size={22}
-                        color={colors.lightBrown}
-                    />
-                </TouchableOpacity>
-            </View>
-        </View>
-    </View>
-</EditModal>
+                    {/* ✅ Confirm New Password */}
+                    <View>
+                        <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
+                            Confirm New Password
+                        </Text>
+                        <View style={{ position: 'relative' }}>
+                            <TextInput
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                className="bg-white px-4 py-3 rounded-xl border border-gray-200"
+                                placeholder="Confirm new password"
+                                placeholderTextColor={colors.lightBrown}
+                                style={{
+                                    color: colors.darkBrown,
+                                    paddingRight: 48
+                                }}
+                                secureTextEntry={!showConfirmPassword}
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                                style={{
+                                    position: 'absolute',
+                                    right: 12,
+                                    top: 4,
+                                    padding: 4
+                                }}
+                            >
+                                <Ionicons
+                                    name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                                    size={22}
+                                    color={colors.lightBrown}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </EditModal>
         </View>
     );
 };
