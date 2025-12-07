@@ -16,13 +16,13 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '~/context/AuthContext';
 import colors from '~/utils/color';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadProfileToFirebase } from '~/utils/uploadImage';
-import Header from '~/components/Header';
-import EditModal from '~/components/Modal/EditModal';
+import { uploadProfileToFirebase, updateProfileImage } from '~/utils/uploadImage';
+import Header from '~/components/partials/Header';
+import EditModal from '~/components/modal/EditModal';
 
 const EditProfileScreen = () => {
     const navigation = useNavigation();
-    const { user, updateUserInFirestore } = useAuth(); // ✅ Get from context
+    const { user, updateUserInFirestore } = useAuth();
 
     const profileImage = user?.profileImage;
     const username = user?.username;
@@ -46,7 +46,7 @@ const EditProfileScreen = () => {
 
     const maxBioLength = 255;
 
-    // ✅ Pick Image from Gallery
+    // Pick Image from Gallery
     const pickImage = async () => {
         try {
             console.log('📸 Opening image picker...');
@@ -81,7 +81,7 @@ const EditProfileScreen = () => {
         }
     };
 
-    // ✅ Validate Social Media Links
+    // Validate Social Media Links
     const isValidSocialLink = (link: string, platform: 'instagram' | 'youtube' | 'tiktok'): boolean => {
         if (!link) return true;
 
@@ -107,7 +107,7 @@ const EditProfileScreen = () => {
         }
     };
 
-    // ✅ Handle Instagram Update
+    // Handle Instagram Update
     const handleUpdateInstagram = async () => {
         const trimmedInstagram = instagram.trim();
 
@@ -138,7 +138,7 @@ const EditProfileScreen = () => {
         }
     };
 
-    // ✅ Handle YouTube Update
+    // Handle YouTube Update
     const handleUpdateYoutube = async () => {
         const trimmedYoutube = youtube.trim();
 
@@ -169,7 +169,7 @@ const EditProfileScreen = () => {
         }
     };
 
-    // ✅ Handle TikTok Update
+    // Handle TikTok Update
     const handleUpdateTiktok = async () => {
         const trimmedTiktok = tiktok.trim();
 
@@ -200,7 +200,7 @@ const EditProfileScreen = () => {
         }
     };
 
-    // ✅ Get display text for social media
+    // Get display text for social media
     const getSocialDisplayText = (link: string | undefined, platform: string): string => {
         if (!link) return `Add your ${platform}`;
 
@@ -218,7 +218,7 @@ const EditProfileScreen = () => {
         return link.startsWith('@') ? link : `@${link}`;
     };
 
-    // ✅ Handle Save Profile (with image upload)
+    // Handle Save Profile (with image upload)
     const handleSave = async () => {
         try {
             if (!newUsername.trim()) {
@@ -235,19 +235,19 @@ const EditProfileScreen = () => {
 
             let imageUrl = profileImage || '';
 
-            // ✅ Upload new image if selected and different from current
+            // Upload new image if selected and different from current
             if (selectedImage && selectedImage !== profileImage) {
                 console.log('📤 New image selected, uploading...');
-                console.log('🖼️ Image URI:', selectedImage);
 
                 try {
-                    // ✅ Create unique filename
-                    const fileName = `profile_${user.userId}_${Date.now()}.jpg`;
-                    console.log('📁 Filename:', fileName);
+                    // Use the new updateProfileImage function
+                    imageUrl = await updateProfileImage(
+                        selectedImage,
+                        user.userId,
+                        profileImage || undefined  // Pass old image URL
+                    );
 
-                    // ✅ Upload using your function
-                    imageUrl = await uploadProfileToFirebase(selectedImage, fileName);
-                    console.log('✅ Upload successful! URL:', imageUrl);
+                    console.log('✅ Profile image updated! URL:', imageUrl);
                 } catch (uploadError) {
                     console.error('❌ Upload failed:', uploadError);
                     Alert.alert('Upload Error', 'Failed to upload profile picture. Please try again.');
@@ -256,7 +256,7 @@ const EditProfileScreen = () => {
                 }
             }
 
-            // ✅ Use context function - single call updates both Firestore AND local state
+            // Use context function - single call updates both Firestore AND local state
             const result = await updateUserInFirestore(user.userId, {
                 username: newUsername.trim(),
                 bio: bio.trim(),
@@ -311,7 +311,7 @@ const EditProfileScreen = () => {
                                             <Fontisto name="male" size={40} color={colors.lightBrown} />
                                         )}
 
-                                        {/* ✅ Loading overlay while uploading */}
+                                        {/* Loading overlay while uploading */}
                                         {uploading && (
                                             <View
                                                 className="absolute inset-0 rounded-full items-center justify-center"
@@ -472,7 +472,7 @@ const EditProfileScreen = () => {
                     </View>
                 </ScrollView>
 
-                {/* ✅ Instagram Modal */}
+                {/* Instagram Modal */}
                 <EditModal
                     visible={showEditInstagram}
                     onClose={() => {
@@ -505,7 +505,7 @@ const EditProfileScreen = () => {
                     </View>
                 </EditModal>
 
-                {/* ✅ YouTube Modal */}
+                {/* YouTube Modal */}
                 <EditModal
                     visible={showEditYoutube}
                     onClose={() => {
@@ -538,7 +538,7 @@ const EditProfileScreen = () => {
                     </View>
                 </EditModal>
 
-                {/* ✅ TikTok Modal */}
+                {/* TikTok Modal */}
                 <EditModal
                     visible={showEditTiktok}
                     onClose={() => {
@@ -572,7 +572,7 @@ const EditProfileScreen = () => {
                 </EditModal>
             </KeyboardAvoidingView>
 
-            {/* ✅ Save Button */}
+            {/* Save Button */}
             <View className="px-4 py-4 bg-white border-t border-gray-100">
                 <TouchableOpacity
                     className="py-4 rounded-xl items-center"

@@ -15,11 +15,11 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import colors from '~/utils/color';
 import { useAuth } from '~/context/AuthContext';
-import Header from '~/components/Header';
-import EditModal from '~/components/Modal/EditModal';
-import Item from '~/components/Item';
+import Header from '~/components/partials/Header';
+import EditModal from '~/components/modal/EditModal';
+import Item from '~/components/partials/Item';
 
-// ✅ EXTRACT COMPONENT KELUAR - Put BEFORE FoodPreferenceScreen
+// EXTRACT COMPONENT KELUAR - Put BEFORE FoodPreferenceScreen
 const IngredientsToAvoidContent = React.memo(({
     customIngredient,
     onCustomIngredientChange,
@@ -79,8 +79,8 @@ const IngredientsToAvoidContent = React.memo(({
                         <Text className="text-gray-800 text-base">{option}</Text>
                         <View
                             className={`w-6 h-6 rounded-full border-2 items-center justify-center ${ingredientsToAvoid.includes(option)
-                                    ? 'border-orange-400 bg-orange-400'
-                                    : 'border-gray-400'
+                                ? 'border-orange-400 bg-orange-400'
+                                : 'border-gray-400'
                                 }`}
                         >
                             {ingredientsToAvoid.includes(option) && (
@@ -116,7 +116,7 @@ const FoodPreferenceScreen = () => {
     const navigation = useNavigation();
     const { user, updateUserInFirestore } = useAuth();
 
-    // ✅ Load existing data from user
+    // Load existing data from user
     const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>(user?.dietaryRestrictions || []);
     const [cookingGoal, setCookingGoal] = useState<string>(user?.cookingGoal || '');
     const [ingredientsToAvoid, setIngredientsToAvoid] = useState<string[]>(user?.ingredientsToAvoid || []);
@@ -263,8 +263,8 @@ const FoodPreferenceScreen = () => {
                     <Text className="text-gray-800 text-base">{option}</Text>
                     <View
                         className={`w-6 h-6 rounded-full border-2 items-center justify-center ${dietaryRestrictions.includes(option)
-                                ? 'border-orange-400 bg-orange-400'
-                                : 'border-gray-400'
+                            ? 'border-orange-400 bg-orange-400'
+                            : 'border-gray-400'
                             }`}
                     >
                         {dietaryRestrictions.includes(option) && (
@@ -290,8 +290,8 @@ const FoodPreferenceScreen = () => {
                     <Text className="text-gray-800 text-base">{option}</Text>
                     <View
                         className={`w-6 h-6 rounded-full border-2 items-center justify-center ${cookingGoal === option
-                                ? 'border-orange-400 bg-orange-400'
-                                : 'border-gray-400'
+                            ? 'border-orange-400 bg-orange-400'
+                            : 'border-gray-400'
                             }`}
                     >
                         {cookingGoal === option && (

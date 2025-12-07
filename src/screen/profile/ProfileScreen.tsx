@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, Image, ScrollView, Alert, Linking, Modal, ActivityIndicator, RefreshControl } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Ionicons, Feather, MaterialIcons, MaterialCommunityIcons, Fontisto } from '@expo/vector-icons';
-import Header from '~/components/Header';
+import Header from '~/components/partials/Header';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '~/context/AuthContext';
@@ -79,7 +79,7 @@ export default function ProfileScreen() {
         navigation.navigate('Setting');
     };
 
-    // ✅ Function to open social media links
+    // Function to open social media links
     const openSocialMedia = (url: string, platform: string) => {
         let fullUrl = url;
 
@@ -98,7 +98,7 @@ export default function ProfileScreen() {
         });
     };
 
-    // ✅ Build social media icons array dynamically
+    // Build social media icons array dynamically
     const socialMediaIcons: Array<{
         platform: string;
         icon: React.ReactElement;
@@ -129,7 +129,7 @@ export default function ProfileScreen() {
         });
     }
 
-    // ✅ EXTRACT FETCH LOGIC TO REUSABLE FUNCTION
+    // EXTRACT FETCH LOGIC TO REUSABLE FUNCTION
     const fetchAllData = async (isRefreshing = false) => {
         try {
             // Only show main loading on initial load, not on refresh
@@ -141,7 +141,7 @@ export default function ProfileScreen() {
 
             console.log(isRefreshing ? "🔄 Refreshing data..." : "⏳ Fetching initial data...");
 
-            // ✅ STEP 1: Fetch user profile FIRST
+            // STEP 1: Fetch user profile FIRST
             const userDetail = await getUserProfileById(userId);
             setUserDetails(userDetail);
             console.log("✅ User profile loaded!");
@@ -151,7 +151,7 @@ export default function ProfileScreen() {
                 setLoadingFetchData(false);
             }
 
-            // ✅ STEP 2: Fetch recipes in PARALLEL
+            // STEP 2: Fetch recipes in PARALLEL
             console.log("⏳ Fetching recipes in parallel...");
             const [savedResults, createdResults] = await Promise.all([
                 getSavedRecipes(userId),
@@ -174,7 +174,7 @@ export default function ProfileScreen() {
         }
     };
 
-    // ✅ Initial fetch on mount
+    // Initial fetch on mount
     useEffect(() => {
         console.log("Current User ID: " + currentUserId);
         console.log("Profile User ID: " + userId);
@@ -183,7 +183,7 @@ export default function ProfileScreen() {
         fetchAllData(false);
     }, [userId, currentUserId]);
 
-    // ✅ PULL TO REFRESH HANDLER
+    // PULL TO REFRESH HANDLER
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         console.log("🔄 User pulled to refresh!");
@@ -191,7 +191,7 @@ export default function ProfileScreen() {
         setRefreshing(false);
     }, [userId, currentUserId]);
 
-    // ✅ Refetch user data when screen gains focus
+    // Refetch user data when screen gains focus
     useFocusEffect(
         useCallback(() => {
             if (!userId || userId === currentUserId) {
@@ -210,12 +210,12 @@ export default function ProfileScreen() {
         }, [userId, currentUserId])
     );
 
-    // ✅ Scroll to top when tab changes
+    // Scroll to top when tab changes
     useEffect(() => {
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }, [tab]);
 
-    // ✅ Handle opening modal
+    // Handle opening modal
     const handleOpenImageViewer = () => {
         if (profileImage) {
             setModalImageLoading(true);
@@ -223,14 +223,14 @@ export default function ProfileScreen() {
         }
     };
 
-    // ✅ Get current recipes based on tab
+    // Get current recipes based on tab
     const displayedRecipes = tab === 'myrecipe' ? createdRecipes : savedRecipes;
     const isLoading = tab === 'myrecipe' ? loadingUserRecipe : loadingSavedRecipe;
 
     return (
         <View className="flex-1 bg-[#F8F8F8]">
             {loadingFetchData ? (
-                // ✅ INITIAL LOADING SCREEN (only shows while profile loads)
+                // INITIAL LOADING SCREEN (only shows while profile loads)
                 <View className="flex-1 justify-center items-center">
                     <ActivityIndicator size="large" color="#FFB47B" />
                     <Text className="text-gray-500 mt-4 text-base">Loading profile...</Text>
@@ -246,7 +246,7 @@ export default function ProfileScreen() {
                         onRightAction={handleSetting}
                     />
 
-                    {/* ✅ Main Content with Sticky Tabs and Pull-to-Refresh */}
+                    {/* Main Content with Sticky Tabs and Pull-to-Refresh */}
                     <View className="flex-1">
                         <ScrollView
                             ref={scrollViewRef}
@@ -365,7 +365,7 @@ export default function ProfileScreen() {
                                 )}
                             </View>
 
-                            {/* ✅ Sticky Tabs Section */}
+                            {/* Sticky Tabs Section */}
                             <View className="bg-[#F8F8F8] pt-6 pb-2">
                                 <View className="flex-row justify-around mx-4">
                                     <TouchableOpacity
@@ -387,7 +387,7 @@ export default function ProfileScreen() {
                                 </View>
                             </View>
 
-                            {/* ✅ Recipe Cards Section - This scrolls under sticky tabs */}
+                            {/* Recipe Cards Section - This scrolls under sticky tabs */}
                             <View className="px-4" style={{ minHeight: 600 }}>
                                 {isLoading ? (
                                     <View className="items-center justify-center py-20">

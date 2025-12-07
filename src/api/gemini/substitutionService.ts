@@ -77,12 +77,36 @@ export const analyzeIngredientSubstitutions = async (
                 console.log('🔄 Substitution Analysis Response:', cleanedResponse);
 
                 // Parse JSON response
-                const substitutions: SubstitutionResult[] = JSON.parse(cleanedResponse);
+                let substitutions: SubstitutionResult[] = JSON.parse(cleanedResponse);
 
                 // Validate the response
                 if (!Array.isArray(substitutions)) {
                     throw new Error('Response is not an array');
                 }
+
+                // POST-PROCESSING: Enforce critical ingredient rule
+                // If ingredient name appears in recipe name, mark as essential
+                const recipeNameLower = recipeName.toLowerCase();
+                substitutions = substitutions.map(sub => {
+                    const ingredientLower = sub.ingredient.toLowerCase();
+
+                    // Check if ingredient name appears in recipe name
+                    const isInRecipeName = recipeNameLower.includes(ingredientLower) ||
+                        ingredientLower.includes(recipeNameLower.split(' ')[0]);
+
+                    if (isInRecipeName && !sub.isEssential) {
+                        console.log(`🔴 CRITICAL: "${sub.ingredient}" found in recipe name "${recipeName}" - marking as essential`);
+                        return {
+                            ...sub,
+                            isEssential: true,
+                            impact: sub.substitutions.length === 0
+                                ? `This is a key ingredient in "${recipeName}" and cannot be substituted. The dish will lose its defining characteristic without it.`
+                                : sub.impact || ''
+                        };
+                    }
+
+                    return sub;
+                });
 
                 console.log('✅ Substitution analysis complete');
                 console.log(`🎯 Total attempts: ${attemptCount}, Working model: ${modelName}`);

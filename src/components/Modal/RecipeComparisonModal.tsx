@@ -94,6 +94,16 @@ export default function RecipeComparisonModal({
         onClose();
     };
 
+    // Helper function to format ingredients: 3 per line
+    const formatIngredients = (ingredients: string[]) => {
+        const chunked: string[] = [];
+        for (let i = 0; i < ingredients.length; i += 3) {
+            const chunk = ingredients.slice(i, i + 3);
+            chunked.push(chunk.join(', '));
+        }
+        return chunked;
+    };
+
     return (
         <Modal
             visible={visible}
@@ -160,9 +170,11 @@ export default function RecipeComparisonModal({
                             </Text>
 
                             {(showAllRecipes ? missingIngredientsSummary : missingIngredientsSummary.slice(0, 5)).map((recipe, index) => (
-                                <View
+                                <TouchableOpacity
                                     key={index}
                                     className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-3"
+                                    onPress={() => handleRecipeClick(recipe)}
+                                    activeOpacity={0.3}
                                 >
                                     {/* ✅ FIXED: Recipe Image Container */}
                                     <View style={{ position: 'relative', width: '100%', height: 160 }}>
@@ -228,9 +240,11 @@ export default function RecipeComparisonModal({
                                                     <Text className="text-sm font-semibold text-green-700 mb-1">
                                                         ✓ You have ({recipe.matched.length}):
                                                     </Text>
-                                                    <Text className="text-sm text-gray-600">
-                                                        {recipe.matched.join(', ')}
-                                                    </Text>
+                                                    {formatIngredients(recipe.matched).map((line, idx) => (
+                                                        <Text key={idx} className="text-sm text-gray-600">
+                                                            {line}
+                                                        </Text>
+                                                    ))}
                                                 </View>
                                             )}
 
@@ -240,27 +254,27 @@ export default function RecipeComparisonModal({
                                                     <Text className="text-sm font-semibold text-orange-700 mb-1">
                                                         ✗ You need ({recipe.missing.length}):
                                                     </Text>
-                                                    <Text className="text-sm text-gray-600">
-                                                        {recipe.missing.join(', ')}
-                                                    </Text>
+                                                    {formatIngredients(recipe.missing).map((line, idx) => (
+                                                        <Text key={idx} className="text-sm text-gray-600">
+                                                            {line}
+                                                        </Text>
+                                                    ))}
                                                 </View>
                                             )}
                                         </View>
-                                        <TouchableOpacity
+                                        <View
                                             style={{
                                                 position: 'absolute',
                                                 bottom: 10,
                                                 right: 5,
                                                 paddingHorizontal: 12,
                                                 paddingVertical: 4,
-                                            }}
-                                            onPress={() => handleRecipeClick(recipe)}
-                                            activeOpacity={0.3}>
-                                            <Text className="font-bold text-orange-500">Click to see</Text>
-                                        </TouchableOpacity>
+                                            }}>
+                                            <Ionicons name="information-circle-sharp" size={18} color="#FF9966" />
+                                        </View>
 
                                     </View>
-                                </View>
+                                </TouchableOpacity>
                             ))}
 
                             {missingIngredientsSummary.length > 5 && (

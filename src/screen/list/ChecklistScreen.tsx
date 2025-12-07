@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, RefreshControl, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
@@ -8,8 +8,9 @@ import {
     clearCheckedShoppingItems,
     deleteChecklistItem,
     moveItemsToFoodList,
+    addItemsToChecklist,
 } from '../../controller/checklist';
-import Header from '../../components/Header';
+import Header from '../../components/partials/Header';
 
 // Interfaces
 interface ChecklistItem {
@@ -29,6 +30,11 @@ const ChecklistScreen = () => {
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'shopping' | 'food'>('shopping');
     const navigation = useNavigation();
+
+    // Add ingredient input state
+    const [newItemName, setNewItemName] = useState('');
+    const [newItemAmount, setNewItemAmount] = useState('');
+    const [newItemUnit, setNewItemUnit] = useState('pcs');
 
     // Fetching data
     const fetchItems = useCallback(async () => {
@@ -158,6 +164,52 @@ const ChecklistScreen = () => {
         );
     };
 
+    const handleAddItem = async () => {
+        const trimmedName = newItemName.trim();
+        if (!trimmedName) {
+            Alert.alert('Error', 'Please enter an ingredient name.');
+            return;
+        }
+
+        setActionLoading('add');
+
+        // Create temporary item for optimistic UI
+        const tempItem: ChecklistItem = {
+            id: `temp-${Date.now()}`, // Temporary ID
+            name: trimmedName,
+            amount: newItemAmount || '1',
+            unit: newItemUnit,
+            checked: false,
+            status: 'shopping',
+        };
+
+        // Optimistic UI update - add immediately
+        setItems(prevItems => [...prevItems, tempItem]);
+
+        // Clear inputs immediately for better UX
+        setNewItemName('');
+        setNewItemAmount('');
+        setNewItemUnit('pcs');
+
+        try {
+            // Add to database in background
+            await addItemsToChecklist([{
+                name: trimmedName,
+                amount: newItemAmount || '1',
+                unit: newItemUnit,
+            }]);
+
+            // Success! No need to refresh - temp item works fine
+            // Real ID will be fetched on next natural refresh (focus, pull-to-refresh, etc.)
+        } catch (error) {
+            // Error - remove the temporary item
+            setItems(prevItems => prevItems.filter(i => i.id !== tempItem.id));
+            Alert.alert('Error', 'Failed to add item to shopping list.');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
     // UI Render
     if (loading) {
         return (
@@ -172,8 +224,57 @@ const ChecklistScreen = () => {
     const uncheckedShoppingItems = shoppingItems.filter(item => !item.checked);
     const checkedShoppingItems = shoppingItems.filter(item => item.checked);
 
+    // Reusable Add Input Component
+    const renderAddInput = () => (
+        <View className="bg-white rounded-2xl p-4 mb-4">
+            <Text className="text-base font-bold text-gray-800 mb-3">Add New Item</Text>
+            <View className="flex-row items-center mb-3">
+                <View className="flex-1 mr-2">
+                    <TextInput
+                        className="bg-gray-100 rounded-xl px-4 py-3"
+                        placeholder="Ingredient name"
+                        value={newItemName}
+                        onChangeText={setNewItemName}
+                        editable={!actionLoading}
+                    />
+                </View>
+                <View className="w-20 mr-2">
+                    <TextInput
+                        className="bg-gray-100 rounded-xl px-4 py-3 text-center"
+                        placeholder="Qty"
+                        value={newItemAmount}
+                        onChangeText={setNewItemAmount}
+                        keyboardType="numeric"
+                        editable={!actionLoading}
+                    />
+                </View>
+                <View className="w-20">
+                    <TextInput
+                        className="bg-gray-100 rounded-xl px-4 py-3 text-center"
+                        placeholder="Unit"
+                        value={newItemUnit}
+                        onChangeText={setNewItemUnit}
+                        editable={!actionLoading}
+                    />
+                </View>
+            </View>
+            <TouchableOpacity
+                className="bg-orange-400 rounded-xl py-3"
+                onPress={handleAddItem}
+                disabled={!!actionLoading || !newItemName.trim()}
+            >
+                {actionLoading === 'add' ? (
+                    <ActivityIndicator color="white" />
+                ) : (
+                    <Text className="text-white text-center font-bold">Add to Shopping List</Text>
+                )}
+            </TouchableOpacity>
+        </View>
+    );
+
     const renderShoppingList = () => (
         <>
+            {renderAddInput()}
             {/* My Items (To Buy) */}
             <View className="bg-white rounded-2xl p-4 mt-4">
                 <Text className="text-xl font-bold text-gray-800 mb-2">My items</Text>
@@ -277,7 +378,6 @@ const ChecklistScreen = () => {
     return (
         <View className="flex-1 bg-gray-50">
             <Header title="Your List" showBackButton={false} />
-
             {/* Tabs */}
             <View className="flex-row p-4">
                 <TouchableOpacity
@@ -309,11 +409,14 @@ const ChecklistScreen = () => {
                     shoppingItems.length > 0 ? (
                         renderShoppingList()
                     ) : (
-                        <View className="mt-20 items-center p-8">
-                            <Ionicons name="cart-outline" size={80} color="#D1D5DB" />
-                            <Text className="text-2xl font-bold text-gray-700 mt-4">Shopping List is Empty</Text>
-                            <Text className="text-gray-500 text-center mt-2">Add ingredients from a recipe to get started.</Text>
-                        </View>
+                        <>
+                            {renderAddInput()}
+                            <View className="mt-8 items-center p-8">
+                                <Ionicons name="cart-outline" size={80} color="#D1D5DB" />
+                                <Text className="text-2xl font-bold text-gray-700 mt-4">Shopping List is Empty</Text>
+                                <Text className="text-gray-500 text-center mt-2">Add ingredients manually or from a recipe to get started.</Text>
+                            </View>
+                        </>
                     )
                 ) : (
                     renderFoodList()

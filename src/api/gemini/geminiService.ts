@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { DETECTION_PROMPT_TEMPLATE } from './prompts';
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
@@ -50,11 +51,7 @@ export const detectIngredientsFromImage = async (
         console.log('✅ Image converted to base64');
 
         // 2 Prepare the prompt
-        const prompt = `Analyze this image and identify all food ingredients visible.
-                        List each ingredient on a new line.
-                        DOnt be specific (e.g., if "red bell pepper" just give "pepper").
-                        Only list raw ingredients, not prepared dishes.
-                        Do not use bullet points or numbering.`;
+        const prompt = DETECTION_PROMPT_TEMPLATE;
 
         const imagePart = {
             inlineData: {

@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Image, Ale
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import Header from '../../components/Header';
-import RecipeSearchModal from '../../components/Modal/RecipeSearchModal';
+import Header from '../../components/partials/Header';
+import RecipeSearchModal from '../../components/modal/RecipeSearchModal';
 import { fetchRandomRecipes } from '~/api/spoonacular';
 import { useAuth } from '~/context/AuthContext';
 import {
@@ -779,8 +779,8 @@ export default function PlannerScreen() {
                                             ) : (
                                                 <View
                                                     className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected
-                                                            ? 'border-orange-500 bg-orange-500'
-                                                            : 'border-gray-300'
+                                                        ? 'border-orange-500 bg-orange-500'
+                                                        : 'border-gray-300'
                                                         }`}
                                                 >
                                                     {isSelected && (

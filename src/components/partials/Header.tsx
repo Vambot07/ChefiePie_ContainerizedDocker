@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import colors from '../utils/color';
+import colors from '../../utils/color';
 
 interface HeaderProps {
     title: string;
