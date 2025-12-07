@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { getSavedRecipes } from '~/controller/recipe'
-import Header from '../../components/Header'
+import Header from '../../components/partials/Header'
 import { Ionicons } from '@expo/vector-icons'
 
 // Add navigation type

@@ -9,6 +9,19 @@ config.resolver.sourceExts.push("cjs");
 //  Disable unstable package exports for Firebase
 config.resolver.unstable_enablePackageExports = false;
 
+// Optimize caching and performance
+config.transformer.minifierConfig = {
+  keep_classnames: true,
+  keep_fnames: true,
+  mangle: {
+    keep_classnames: true,
+    keep_fnames: true,
+  },
+};
+
+// Enable caching
+config.resetCache = false;
+
 //  Add support for .svg files
 const assetExts = config.resolver.assetExts.filter(ext => ext !== "svg");
 const sourceExts = [...config.resolver.sourceExts, "svg"];

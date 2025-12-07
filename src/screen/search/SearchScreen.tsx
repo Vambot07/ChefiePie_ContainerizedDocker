@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Image, Alert, RefreshControl, ActivityIndicator } from 'react-native'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
 import { Entypo, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AntDesign from '@expo/vector-icons/AntDesign';
@@ -8,9 +8,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchRecipes } from '~/controller/recipe';
 import { fetchRandomRecipes, fetchRecipesByCategory, fetchRecipesByIngredients } from '~/api/spoonacular';
 import { detectIngredientsFromImage, formatIngredientsForSearch } from '~/api/roboflow';
-import Header from '../../components/Header';
-import GeminiTestModal from '~/components/GeminiTestModal';
-import RecipeComparisonModal from '~/components/Modal/RecipeComparisonModal';
+import Header from '../../components/partials/Header';
+import GeminiTestModal from '~/components/modal/GeminiTestModal';
+import RecipeComparisonModal from '~/components/modal/RecipeComparisonModal';
 
 // Navigation types
 type RootStackParamList = {
@@ -41,13 +41,17 @@ interface RecipeCardProps {
     navigation: NavigationProp;
 }
 
-const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
+const RecipeCard = memo(({ recipe, navigation }: RecipeCardProps) => {
     const [loading, setLoading] = useState(true);
+
+    const handlePress = useCallback(() => {
+        navigation.navigate('ViewRecipe', { recipe, viewMode: 'discover' });
+    }, [recipe, navigation]);
 
     return (
         <TouchableOpacity
             className="bg-white rounded-xl shadow-sm mb-4 w-[48%]"
-            onPress={() => navigation.navigate('ViewRecipe', { recipe, viewMode: 'discover' })}
+            onPress={handlePress}
         >
             <View className="w-full h-32 rounded-t-xl bg-gray-200 justify-center items-center">
                 {loading && (
@@ -87,7 +91,7 @@ const RecipeCard = ({ recipe, navigation }: RecipeCardProps) => {
             </View>
         </TouchableOpacity>
     );
-};
+});
 
 export default function SearchScreen() {
     const [tab, setTab] = useState<'createdRecipe' | 'apiRecipe' | 'all'>('createdRecipe');
@@ -101,7 +105,11 @@ export default function SearchScreen() {
     const [showGeminiModal, setShowGeminiModal] = useState(false);
     const [showComparisonModal, setShowComparisonModal] = useState(false);
     const [comparisonData, setComparisonData] = useState<any>(null);
-    const scrollViewRef = React.useRef<ScrollView>(null);
+    const scrollViewRef = useRef<ScrollView>(null);
+
+    // Track if initial fetch has been done
+    const hasFetchedCreated = useRef(false);
+    const hasFetchedDiscover = useRef(false);
 
     const fetchCreatedRecipes = async () => {
         try {
@@ -115,6 +123,7 @@ export default function SearchScreen() {
             }));
 
             setMyRecipes(transformedRecipes as Recipe[]);
+            hasFetchedCreated.current = true; // Mark as fetched
         } catch (error) {
             console.error('Error fetching user recipes:', error);
             Alert.alert('Error', 'Failed to fetch your recipes');
@@ -154,6 +163,7 @@ export default function SearchScreen() {
             }));
 
             setDiscoverRecipes(transformedRecipes);
+            hasFetchedDiscover.current = true; // Mark as fetched
         } catch (error) {
             console.error('Error fetching discover recipes:', error);
             Alert.alert('Error', 'Failed to fetch discover recipes');
@@ -438,7 +448,6 @@ export default function SearchScreen() {
         setLoading(true);
 
         try {
-            setTab('all');
             setSearchQuery('');
 
             const [dbRecipes, apiRecipes] = await Promise.all([
@@ -496,27 +505,7 @@ export default function SearchScreen() {
         }
     };
 
-    // Also update the useEffect to add logging
-    useEffect(() => {
-        console.log('🔄 Display useEffect triggered');
-        console.log('Current tab:', tab);
-        console.log('myRecipes length:', myRecipes.length);
-        console.log('discoverRecipes length:', discoverRecipes.length);
-
-        if (tab === 'createdRecipe') {
-            setDisplayedRecipes(myRecipes);
-            console.log('Set displayedRecipes to myRecipes:', myRecipes.length);
-        } else if (tab === 'apiRecipe') {
-            setDisplayedRecipes(discoverRecipes);
-            console.log('Set displayedRecipes to discoverRecipes:', discoverRecipes.length);
-        } else if (tab === 'all') {
-            const combined = [...myRecipes, ...discoverRecipes];
-            setDisplayedRecipes(combined);
-            console.log('Set displayedRecipes to combined:', combined.length);
-        }
-
-        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-    }, [tab, myRecipes, discoverRecipes]);
+    // Update displayed recipes when tab or recipes change
     useEffect(() => {
         if (tab === 'createdRecipe') {
             setDisplayedRecipes(myRecipes);
@@ -549,20 +538,20 @@ export default function SearchScreen() {
 
     useFocusEffect(
         React.useCallback(() => {
+            // Always refresh created recipes on focus (to show new/deleted recipes)
+            // But keep discover recipes cached for better performance
             if (tab === 'createdRecipe') {
-                if (myRecipes.length === 0 || searchQuery.trim().length > 0) {
-                    fetchCreatedRecipes();
-                }
+                fetchCreatedRecipes();
             } else if (tab === 'apiRecipe') {
-                if (discoverRecipes.length === 0) {
+                if (!hasFetchedDiscover.current) {
                     fetchDiscoverRecipes(true);
                 }
             } else if (tab === 'all') {
                 const promises = [];
-                if (myRecipes.length === 0 || searchQuery.trim().length > 0) {
-                    promises.push(fetchCreatedRecipes());
-                }
-                if (discoverRecipes.length === 0) {
+                // Always refresh created recipes
+                promises.push(fetchCreatedRecipes());
+                // Cache discover recipes
+                if (!hasFetchedDiscover.current) {
                     promises.push(fetchDiscoverRecipes(true));
                 }
                 if (promises.length > 0) {
@@ -574,11 +563,16 @@ export default function SearchScreen() {
 
     const onRefresh = () => {
         setRefreshing(true);
+        // Reset cache flags to force fresh data
         if (tab === 'createdRecipe') {
+            hasFetchedCreated.current = false;
             fetchCreatedRecipes().finally(() => setRefreshing(false));
         } else if (tab === 'apiRecipe') {
+            hasFetchedDiscover.current = false;
             fetchDiscoverRecipes(true).finally(() => setRefreshing(false));
         } else {
+            hasFetchedCreated.current = false;
+            hasFetchedDiscover.current = false;
             Promise.all([
                 fetchCreatedRecipes(),
                 fetchDiscoverRecipes(true)

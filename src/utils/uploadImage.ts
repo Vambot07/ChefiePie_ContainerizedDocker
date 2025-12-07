@@ -1,33 +1,79 @@
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import * as FileSystem from 'expo-file-system';
 import { getDocs, collection, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 
-// ✅ Convert file URI to blob using FileSystem (more reliable for iOS)
+// ✅ Convert file URI to blob using XMLHttpRequest (more reliable for React Native)
 const uriToBlob = async (uri: string): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+        console.log('🔄 Converting URI to blob...');
+        console.log('📍 URI:', uri);
+
+        const xhr = new XMLHttpRequest();
+
+        xhr.onload = function () {
+            try {
+                const blob = xhr.response as Blob;
+                console.log('✅ Blob created');
+                console.log('📦 Blob size:', blob.size, 'bytes');
+                console.log('📄 Blob type:', blob.type);
+                resolve(blob);
+            } catch (error) {
+                console.error('❌ Error creating blob:', error);
+                reject(error);
+            }
+        };
+
+        xhr.onerror = function (e) {
+            console.error('❌ XHR error:', e);
+            reject(new TypeError('Failed to convert URI to blob'));
+        };
+
+        xhr.responseType = 'blob';
+        xhr.open('GET', uri, true);
+        xhr.send(null);
+    });
+};
+
+// ✅ Delete image from Firebase Storage
+export const deleteImageFromFirebase = async (imageUrl: string): Promise<void> => {
     try {
-        console.log('🔄 Reading file with FileSystem...');
+        if (!imageUrl) {
+            console.log('⚠️ No image URL provided, skipping delete');
+            return;
+        }
 
-        // Read file as base64
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
-        });
+        console.log('🗑️ Deleting old image:', imageUrl);
 
-        console.log('✅ File read successfully');
-        console.log('📦 Base64 length:', base64.length);
+        const storage = getStorage();
 
-        // Convert base64 to blob
-        const response = await fetch(`data:image/jpeg;base64,${base64}`);
-        const blob = await response.blob();
+        // Extract the file path from the download URL
+        // URL format: https://firebasestorage.googleapis.com/v0/b/bucket/o/path%2Fto%2Ffile.jpg?alt=media&token=...
+        const decodedUrl = decodeURIComponent(imageUrl);
+        const pathMatch = decodedUrl.match(/\/o\/(.+?)\?/);
 
-        console.log('✅ Blob created');
-        console.log('📦 Blob size:', blob.size, 'bytes');
-        console.log('📄 Blob type:', blob.type);
+        if (!pathMatch || !pathMatch[1]) {
+            console.error('❌ Could not extract file path from URL');
+            return;
+        }
 
-        return blob;
-    } catch (error) {
-        console.error('❌ Error in uriToBlob:', error);
-        throw error;
+        const filePath = pathMatch[1];
+        console.log('📍 File path:', filePath);
+
+        const imageRef = ref(storage, filePath);
+        await deleteObject(imageRef);
+
+        console.log('✅ Old image deleted successfully');
+    } catch (error: any) {
+        // Don't throw - we don't want to block the upload if delete fails
+        console.error('❌ Error deleting image:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+
+        // Only log warning, don't fail the operation
+        if (error.code === 'storage/object-not-found') {
+            console.log('⚠️ Image file not found (may have been already deleted)');
+        }
     }
 };
 
@@ -51,7 +97,7 @@ export const uploadImageToFirebase = async (uri: string, fileName: string): Prom
         console.log('📍 Storage path:', storageRef.fullPath);
         console.log('📤 Uploading to Firebase...');
         console.log("blob:", blob)
-        // Use uploadBytes (simpler, sometimes more reliable)
+
         await uploadBytes(storageRef, blob);
 
         console.log('✅ Upload complete! Getting download URL...');
@@ -97,6 +143,35 @@ export const uploadProfileToFirebase = async (uri: string, fileName: string): Pr
         return downloadURL;
     } catch (error) {
         console.error('❌ Error in uploadProfileToFirebase:', error);
+        throw error;
+    }
+};
+
+// ✅ NEW: Upload profile with automatic deletion of old image
+export const updateProfileImage = async (
+    uri: string,
+    userId: string,
+    oldImageUrl?: string
+): Promise<string> => {
+    try {
+        console.log('🔄 Starting profile image update...');
+
+        // 1. Delete old image first (if exists)
+        if (oldImageUrl) {
+            console.log('🗑️ Deleting old profile picture...');
+            await deleteImageFromFirebase(oldImageUrl);
+        }
+
+        // 2. Upload new image
+        const fileName = `profile_${userId}_${Date.now()}.jpg`;
+        console.log('📁 New filename:', fileName);
+
+        const newImageUrl = await uploadProfileToFirebase(uri, fileName);
+        console.log('✅ Profile image updated successfully!');
+
+        return newImageUrl;
+    } catch (error) {
+        console.error('❌ Error updating profile image:', error);
         throw error;
     }
 };

@@ -5,7 +5,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { addRecipe } from '../../../controller/recipe';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ActivityIndicator } from 'react-native';
-import Header from '../../../components/Header';
+import Header from '../../../components/partials/Header';
 import { uploadImageToFirebase } from '~/utils/uploadImage';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';

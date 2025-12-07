@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import colors from '../utils/color';
+import colors from '~/utils/color';
 
 // 1️⃣ Nyatakan struktur props menggunakan interface (macam Header)
 interface ItemProps {

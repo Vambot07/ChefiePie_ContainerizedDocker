@@ -14,7 +14,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '~/context/AuthContext';
 import colors from '~/utils/color';
-import Header from '~/components/Header';
+import Header from '~/components/partials/Header';
 import { updateDoc, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../../firebaseConfig';
 import {
@@ -25,8 +25,8 @@ import {
     updateEmail,
     verifyBeforeUpdateEmail
 } from 'firebase/auth';
-import Item from '~/components/Item';
-import EditModal from '~/components/Modal/EditModal';
+import Item from '~/components/partials/Item';
+import EditModal from '~/components/modal/EditModal';
 import CryptoJS from "crypto-js";
 
 const SettingScreen = () => {
@@ -81,19 +81,19 @@ const SettingScreen = () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
         try {
-            // 1️⃣ Check sama ada current email
+            // 1️. Check sama ada current email
             if (trimmedEmail === user?.email) {
                 Alert.alert('No Change', 'This is already your current email address.');
                 return;
             }
 
-            // 2️⃣ Basic format validation
+            // 2️a. Basic format validation
             if (!emailRegex.test(trimmedEmail)) {
                 Alert.alert('Error', 'Please enter a valid email address');
                 return;
             }
 
-            // 2️⃣a. Check valid domain
+            // 2b. Check valid domain
             const validDomains = ['.com', '.my', '.edu', '.org', '.net', '.gov', '.co.uk', '.com.my', '.edu.my'];
             const hasValidDomain = validDomains.some(domain => trimmedEmail.toLowerCase().endsWith(domain));
 
@@ -104,7 +104,7 @@ const SettingScreen = () => {
 
             setLoading(true);
 
-            // 3️⃣ Check kalau email dah wujud
+            // 3. Check kalau email dah wujud
             const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
 
             if (methods.length > 0) {
@@ -113,7 +113,7 @@ const SettingScreen = () => {
                 return;
             }
 
-            // 4️⃣ Get Firebase user
+            // 4. Get Firebase user
             const firebaseUser = auth.currentUser;
             if (!firebaseUser) {
                 Alert.alert('Error', 'No authenticated user found.');
@@ -121,10 +121,10 @@ const SettingScreen = () => {
                 return;
             }
 
-            // 5️⃣ ✅ HANTAR VERIFICATION EMAIL (user kena verify dulu)
+            // 5. HANTAR VERIFICATION EMAIL (user kena verify dulu)
             await verifyBeforeUpdateEmail(firebaseUser, trimmedEmail);
 
-            // 6️⃣ Alert user untuk check email
+            // 6. Alert user untuk check email
             Alert.alert(
                 'Verification Email Sent',
                 `We've sent a verification link to ${trimmedEmail}.\n\nPlease check your inbox and click the link to verify your new email address.\n\nAfter verification, sign in again with your new email.`,
@@ -195,7 +195,7 @@ const SettingScreen = () => {
 
         setLoading(true);
         try {
-            // ✅ Get Firebase Auth user
+            // Get Firebase Auth user
             const firebaseUser = auth.currentUser;
 
             if (!firebaseUser || !firebaseUser.email) {
@@ -204,20 +204,20 @@ const SettingScreen = () => {
                 return;
             }
 
-            // ✅ Re-authenticate user before changing password
+            // Re-authenticate user before changing password
             const credential = EmailAuthProvider.credential(
                 firebaseUser.email,
                 currentPassword
             );
             await reauthenticateWithCredential(firebaseUser, credential);
 
-            // ✅ Update password in Firebase Auth
+            // Update password in Firebase Auth
             await updatePassword(firebaseUser, newPassword);
 
-            // ✅ Hash new password dengan SHA256
+            // Hash new password dengan SHA256
             const hashedPassword = CryptoJS.SHA256(newPassword).toString();
 
-            // ✅ Update hashed password in Firestore Database
+            // Update hashed password in Firestore Database
             if (userId) {
                 await updateDoc(doc(db, "users", userId), {
                     password: hashedPassword
@@ -231,7 +231,7 @@ const SettingScreen = () => {
             setNewPassword('');
             setConfirmPassword('');
 
-            // ✅ Reset show password states
+            // Reset show password states
             setShowCurrentPassword(false);
             setShowNewPassword(false);
             setShowConfirmPassword(false);
@@ -249,7 +249,7 @@ const SettingScreen = () => {
                 errorMessage = 'Please sign out and sign in again before changing password';
             }
 
-            console.error('Password change error:', error);
+            //console.error('Password change error:', error);
             Alert.alert('Error', errorMessage);
         } finally {
             setLoading(false);
@@ -391,7 +391,7 @@ const SettingScreen = () => {
                 loading={loading}
             >
                 <View className="space-y-4">
-                    {/* ✅ Current Password */}
+                    {/* Current Password */}
                     <View>
                         <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
                             Current Password
@@ -427,7 +427,7 @@ const SettingScreen = () => {
                         </View>
                     </View>
 
-                    {/* ✅ New Password */}
+                    {/* New Password */}
                     <View>
                         <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
                             New Password
@@ -463,7 +463,7 @@ const SettingScreen = () => {
                         </View>
                     </View>
 
-                    {/* ✅ Confirm New Password */}
+                    {/* Confirm New Password */}
                     <View>
                         <Text className="text-sm font-medium mb-2" style={{ color: colors.darkBrown }}>
                             Confirm New Password

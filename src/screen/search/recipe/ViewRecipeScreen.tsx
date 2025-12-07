@@ -4,9 +4,10 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { deleteRecipe, saveRecipe, unsaveRecipe, isRecipeSaved, saveApiRecipe } from '../../../controller/recipe';
 import { NavigationProps } from '~/navigation/AppStack';
-import Header from '../../../components/Header';
+import Header from '../../../components/partials/Header';
 import { getAuth, type Auth } from 'firebase/auth';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useAuth } from '~/context/AuthContext';
 
 const auth: Auth = getAuth();
 
@@ -16,6 +17,7 @@ const SPOONACULAR_API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY;
 const ViewRecipeScreen = () => {
     const route = useRoute();
     const navigation = useNavigation<NavigationProps>();
+    const { user } = useAuth(); // Get user data including role
 
     const [modalVisible, setModalVisible] = useState(false);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -47,6 +49,9 @@ const ViewRecipeScreen = () => {
     const currentUserId = auth.currentUser?.uid;
     const isOwner = recipe?.userId === currentUserId;
 
+    // Check if user is admin
+    const isAdmin = user?.role === 'admin';
+
 
     const shouldShowSaveButton = () => {
         // Always show for discover mode (Home/Search/Saved pages)
@@ -73,10 +78,13 @@ const ViewRecipeScreen = () => {
         // Never show for API recipes
         if (isApiRecipe) return false;
 
-        // Never show if not the owner
+        // ✅ ADMIN can manage any user-created recipe
+        if (isAdmin) return true;
+
+        // For non-admin users, only show if they own the recipe
         if (!isOwner) return false;
 
-        // If viewing from someone else's profile - hidez
+        // If viewing from someone else's profile - hide
         if (profileUserId && profileUserId !== currentUserId) {
             return false;
         }

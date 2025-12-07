@@ -12,7 +12,7 @@ import {
 } from '~/api/spoonacular';
 import { saveApiRecipe, unsaveRecipe } from '~/controller/recipe';
 import colors from '~/utils/color';
-import SpoonacularChatbot from '~/components/SpooncularChatBot'; // ✅ Import chatbot component
+import SpoonacularChatbot from '~/components/partials/SpooncularChatBot'; // ✅ Import chatbot component
 
 const categories = ['All', 'Asian', 'Italian', 'Indian', 'Chinese', 'Mexican'];
 const baseIngredients = ['Chicken', 'Tomato', 'Curry', 'Salad', 'Chilli', 'Onion'];
@@ -108,7 +108,7 @@ export const HomeScreen = () => {
     const [loadingMessage, setLoadingMessage] = useState<string>("Loading...");
     const [newIngredient, setNewIngredient] = useState('');
     const [modalSelectedIngredients, setModalSelectedIngredients] = useState<string[]>([]);
-    const [showChatbot, setShowChatbot] = useState<boolean>(false); // ✅ NEW: Chatbot modal state
+    const [showChatbot, setShowChatbot] = useState<boolean>(false);
 
     const navigation = useNavigation<NavigationProps>();
     const { user } = useAuth();
@@ -218,7 +218,7 @@ export const HomeScreen = () => {
         }
     };
 
-    // ✅ Toggle ingredient in modal
+    // Toggle ingredient in modal
     const toggleModalIngredient = (ingredient: string) => {
         if (modalSelectedIngredients.includes(ingredient)) {
             setModalSelectedIngredients(prev => prev.filter(i => i !== ingredient));
@@ -227,7 +227,7 @@ export const HomeScreen = () => {
         }
     };
 
-    // ✅ Add new ingredient
+    // Add new ingredient
     const handleAddIngredient = () => {
         const trimmed = newIngredient.trim();
 
@@ -255,7 +255,7 @@ export const HomeScreen = () => {
         Alert.alert('Success', `"${trimmed}" added and selected!`);
     };
 
-    // ✅ Remove ingredient
+    // Remove ingredient
     const handleRemoveIngredient = (ingredient: string) => {
         Alert.alert(
             'Remove Ingredient',
@@ -277,13 +277,13 @@ export const HomeScreen = () => {
         );
     };
 
-    // ✅ Open modal with current selections
+    // Open modal with current selections
     const handleShowAddIngredientsModal = () => {
         setModalSelectedIngredients([...tempSelectedIngredients]); // Copy current selections
         setShowAddIngredients(true);
     };
 
-    // ✅ Search with selected ingredients from modal
+    // Search with selected ingredients from modal
     const handleSearchFromModal = () => {
         if (modalSelectedIngredients.length === 0) {
             Alert.alert('Error', 'Please select at least one ingredient');
@@ -665,7 +665,7 @@ export const HomeScreen = () => {
                 {/* LOADING MODAL */}
                 <LoadingModal visible={showLoadingModal} message={loadingMessage} />
 
-                {/* ✅ FLOATING CHATBOT BUTTON */}
+                {/* FLOATING CHATBOT BUTTON */}
                 <TouchableOpacity
                     className="absolute bottom-6 right-6 w-16 h-16 rounded-full items-center justify-center shadow-lg"
                     style={{
@@ -683,7 +683,7 @@ export const HomeScreen = () => {
                 </TouchableOpacity>
             </View>
 
-            {/* ✅ ADD INGREDIENTS MODAL */}
+            {/* ADD INGREDIENTS MODAL */}
             {showAddIngredients && (
                 <View style={{
                     position: 'absolute',
@@ -811,7 +811,7 @@ export const HomeScreen = () => {
                 </View>
             )}
 
-            {/* ✅ CHATBOT MODAL */}
+            {/* CHATBOT MODAL */}
             <Modal
                 visible={showChatbot}
                 animationType="slide"

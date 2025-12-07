@@ -7,7 +7,7 @@ import {
     sendPasswordResetEmail,
     User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import CryptoJS from "crypto-js";
 
@@ -24,7 +24,7 @@ interface UserData {
     youtube?: string;
     tiktok?: string;
     role?: string;
-    emailVerified?: boolean; 
+    emailVerified?: boolean;
     dietaryRestrictions?: string[];
     cookingGoal?: string;
     ingredientsToAvoid?: string[];
@@ -60,7 +60,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Listen for auth state changes
     useEffect(() => {
+        let mounted = true;
+
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (!mounted) return;
+
             if (firebaseUser) {
                 // ✅ Ambil data dari Firestore
                 await updateUserData(firebaseUser);
@@ -68,10 +72,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 setUser(null);
                 setIsAuthenticated(false);
             }
-            setLoading(false);
+
+            if (mounted) {
+                setLoading(false);
+            }
         });
 
-        return () => unsubscribe();
+        return () => {
+            mounted = false;
+            unsubscribe();
+        };
     }, []);
 
     const updateUserData = async (firebaseUser: FirebaseUser) => {
@@ -88,19 +98,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 console.log("📧 Email mismatch detected!");
                 console.log("Firestore email:", firestoreEmail);
                 console.log("Auth email:", authEmail);
-                
+
                 // ✅ Update Firestore dengan email yang baru (yang dah verified)
                 try {
                     await updateDoc(docRef, {
                         email: authEmail
                     });
                     console.log("✅ Email updated in Firestore after verification!");
-                    
+
                     // Update local state dengan email baru
                     setUser({
                         ...userData,
                         email: authEmail,
-                        
+
                         userId: firebaseUser.uid,
                         emailVerified: firebaseUser.emailVerified
                     });
@@ -123,7 +133,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                     emailVerified: firebaseUser.emailVerified
                 });
             }
-            
+
             setIsAuthenticated(true);
         } else {
             // User doc tak wujud (shouldn't happen normally)
@@ -141,27 +151,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const signin = async (email: string, password: string) => {
         try {
             const response = await signInWithEmailAndPassword(auth, email, password);
-            
+
             // ✅ updateUserData akan auto-trigger oleh onAuthStateChanged
             // Tapi kita boleh panggil manual untuk instant update
             await updateUserData(response.user);
-            
+
             return { success: true, user: response.user };
         } catch (error: any) {
             let msg = error.message;
             if (msg.includes("auth/invalid-email")) {
-            msg = "Invalid email address.";
-        } else if (msg.includes("auth/wrong-password")) {
-            msg = "Incorrect password. Please try again.";
-        } else if (msg.includes("auth/user-not-found")) {
-            msg = "No account found with this email.";
-        } else if (msg.includes("auth/invalid-credential")) {
-            msg = "Invalid email or password.";
-        } else if (msg.includes("auth/too-many-requests")) {
-            msg = "Too many failed attempts. Please try again later.";
-        } else {
-            msg = "Login failed. Please check your credentials.";
-        }
+                msg = "Invalid email address.";
+            } else if (msg.includes("auth/wrong-password")) {
+                msg = "Incorrect password. Please try again.";
+            } else if (msg.includes("auth/user-not-found")) {
+                msg = "No account found with this email.";
+            } else if (msg.includes("auth/invalid-credential")) {
+                msg = "Invalid email or password.";
+            } else if (msg.includes("auth/too-many-requests")) {
+                msg = "Too many failed attempts. Please try again later.";
+            } else {
+                msg = "Login failed. Please check your credentials.";
+            }
             return { success: false, msg };
         }
     };
@@ -237,12 +247,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
             setUser((prev) => (prev ? { ...prev, ...updates } : null));
 
-           console.log("✅ Firestore: User data updated successfully!");
-           return { success: true };
+            console.log("✅ Firestore: User data updated successfully!");
+            return { success: true };
         } catch (error) {
-           console.error("❌ Firestore: Error updating user data:", error);
-           return { success: false, error };
-        }   
+            console.error("❌ Firestore: Error updating user data:", error);
+            return { success: false, error };
+        }
     }
 
     return (

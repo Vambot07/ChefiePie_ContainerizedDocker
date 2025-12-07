@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
     detectIngredientsFromImage,
     DetectedIngredient,
-} from '../api/gemini/geminiService';
+} from '../../api/gemini/geminiService';
 
 interface GeminiTestModalProps {
     visible: boolean;

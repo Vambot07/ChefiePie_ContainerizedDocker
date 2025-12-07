@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { getRecipeById, unsaveRecipe, isRecipeSaved } from '../../../controller/recipe';
 import { addItemsToChecklist } from '../../../controller/checklist';
-import Header from '../../../components/Header';
+import Header from '../../../components/partials/Header';
 import * as Speech from 'expo-speech';
 import {
     ExpoSpeechRecognitionModule,

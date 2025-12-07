@@ -120,11 +120,11 @@ export const getProfileImageById = async (userId: string): Promise<string | null
   }
 };
 
-// ✅ NEW: Get complete user profile by userId
+// NEW: Get complete user profile by userId
 export const getUserProfileById = async (
   userId: string | undefined
 ): Promise<UserProfile | null> => {
-  // ✅ Strict validation
+  // Strict validation
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     console.error('❌ Invalid userId provided to getUserProfileById:', userId);
     return null;
@@ -224,8 +224,8 @@ export const searchRecipes = async (searchQuery: string): Promise<Recipe[]> => {
       return {
         id: doc.id,
         ...data,
-        userId: data.userId || '', // ✅ Provide default value
-        title: data.title || '', // ✅ Provide default value
+        userId: data.userId || '',
+        title: data.title || '',
         source: (data.source as 'created' | 'api') || 'created',
       };
     });
@@ -316,7 +316,7 @@ export const saveRecipe = async ({
       recipeId: id.toString(),
       userId: user.uid,
       title: title || 'Untitled',
-      image: image || '',
+      image: image || 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Recipe+Image',
       source: source || 'created',
       totalTime: totalTime || null,
       sourceUrl: sourceUrl || null,
