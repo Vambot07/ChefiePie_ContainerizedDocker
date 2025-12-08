@@ -17,6 +17,7 @@ import MigrateImagesScreen from '~/screen/admin/MigrateImagesScreen';
 import SettingScreen from '~/screen/profile/SettingScreen';
 import EditProfileScreen from '~/screen/profile/EditProfileScreen';
 import FoodPreferenceScreen from '~/screen/profile/FoodPreferenceScreen';
+import RecentlyViewedScreen from '~/screen/home/recentlyViewed/RecentlyViewedScreen';
 
 export type RootStackParamList = {
     Tabs: undefined;
@@ -28,6 +29,9 @@ export type RootStackParamList = {
         viewMode?: string;              // 'planner' or 'search'
         selectedDayIndex?: number | null;  // 0-6 for days (Monday-Sunday)
         weekOffset?: number;
+        swapMode?: boolean;             // true if swapping a recipe
+        recipeToSwapId?: string | null; // ID of recipe to swap
+        shouldReloadAndOpenModal?: boolean; // Reopen modal after creating recipe
     };
     ViewRecipe: {
         recipeId?: string;
@@ -39,7 +43,11 @@ export type RootStackParamList = {
     Home: undefined;
     Search: undefined;
     Saved: undefined;
-    Planner: undefined;
+    Planner: {
+        shouldReloadAndOpenModal?: boolean;
+        swapMode?: boolean;
+        recipeToSwapId?: string | null;
+    };
     Checklist: undefined;
     ViewSavedRecipe: { recipeId: String };
     Setting: undefined;
@@ -48,6 +56,7 @@ export type RootStackParamList = {
     FoodPreference: undefined;
     CreateRecipe: undefined;
     GeminiTest: undefined;
+    RecentlyViewed: undefined;
 
 };
 
@@ -133,6 +142,7 @@ const AppStack = () => {
             <Stack.Screen name="Setting" component={SettingScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="FoodPreference" component={FoodPreferenceScreen} />
+            <Stack.Screen name="RecentlyViewed" component={RecentlyViewedScreen} />
         </Stack.Navigator>
     );
 }

@@ -9,6 +9,7 @@ interface HeaderProps {
     onBack?: () => void;
     rightIcon?: React.ComponentProps<typeof Ionicons>["name"];
     onRightAction?: () => void;
+    rightComponent?: React.ReactNode;
     backgroundColor?: string;
     textColor?: string;
 }
@@ -19,6 +20,7 @@ const Header: React.FC<HeaderProps> = ({
     onBack,
     rightIcon,
     onRightAction,
+    rightComponent,
     backgroundColor = "white",
     textColor = "#374151",
 }) => {
@@ -44,15 +46,17 @@ const Header: React.FC<HeaderProps> = ({
                     </View>
 
                     {/* Right side - Action button or spacer */}
-                    <View className="w-8">
-                        {rightIcon && (
+                    <View className="w-20 items-end">
+                        {rightComponent ? (
+                            rightComponent
+                        ) : rightIcon ? (
                             <TouchableOpacity
                                 onPress={onRightAction}
                                 className="w-8 h-8 items-center justify-center rounded-full"
                             >
                                 <Ionicons name={rightIcon} size={24} color="#FF9966" />
                             </TouchableOpacity>
-                        )}
+                        ) : null}
                     </View>
                 </View>
             </View>

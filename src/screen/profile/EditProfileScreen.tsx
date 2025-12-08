@@ -61,10 +61,12 @@ const EditProfileScreen = () => {
 
             // Launch image picker
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.7,
+                base64: false,
+                exif: false,
             });
 
             console.log('📸 Image picker result:', result);

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Image, Alert, Pressable, FlatList } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import Header from '../../components/partials/Header';
 import RecipeSearchModal from '../../components/modal/RecipeSearchModal';
@@ -31,9 +31,10 @@ interface RecipeCardProps {
     recipe: Recipe;
     navigation: NavigationProp;
     onDelete?: (recipeId: string) => void;
+    onSwap?: (recipeId: string) => void;
 }
 
-const RecipeCard = ({ recipe, navigation, onDelete }: RecipeCardProps) => {
+const RecipeCard = ({ recipe, navigation, onDelete, onSwap }: RecipeCardProps) => {
     const [loading, setLoading] = useState<boolean>(false);
 
     return (
@@ -64,15 +65,27 @@ const RecipeCard = ({ recipe, navigation, onDelete }: RecipeCardProps) => {
                     onError={() => setLoading(false)}
                 />
 
+                {onSwap && (
+                    <TouchableOpacity
+                        className="absolute top-2 left-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            onSwap(recipe.id);
+                        }}
+                    >
+                        <AntDesign name="swap" size={18} color="white" />
+                    </TouchableOpacity>
+                )}
+
                 {onDelete && (
                     <TouchableOpacity
-                        className="absolute top-2 right-2 bg-white rounded-full w-6 h-6 items-center justify-center shadow"
+                        className="absolute top-2 right-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
                         onPress={(e) => {
                             e.stopPropagation();
                             onDelete(recipe.id);
                         }}
                     >
-                        <Ionicons name="close" size={16} color="#EF4444" />
+                        <Ionicons name="close" size={18} color="white" />
                     </TouchableOpacity>
                 )}
             </View>
@@ -113,6 +126,8 @@ export default function PlannerScreen() {
     const [loadingSavedRecipes, setLoadingSavedRecipes] = useState(false);
     const [selectedSavedRecipes, setSelectedSavedRecipes] = useState<string[]>([]);
     const [loadingMenuAction, setLoadingMenuAction] = useState(false);
+    const [swapMode, setSwapMode] = useState(false);
+    const [recipeToSwapId, setRecipeToSwapId] = useState<string | null>(null);
 
     const buttonRefs = useRef<{ [key: string]: View | null }>({});
     const userId = user?.userId;
@@ -150,9 +165,60 @@ export default function PlannerScreen() {
         }
     }, [userId, weekOffset]);
 
+    // Cleanup recipes from past dates (only for current week)
+    const cleanupPastDays = useCallback(async () => {
+        if (weekOffset !== 0 || !userId) return; // Only clean current week
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset to start of day
+
+        const weekDates = getWeekDates(weekOffset);
+        const daysToClean: number[] = [];
+
+        // Find which days are in the past
+        weekDates.forEach((date, index) => {
+            if (date < today) {
+                daysToClean.push(index);
+            }
+        });
+
+        if (daysToClean.length === 0) return;
+
+        console.log('🗑️ Cleaning up past days:', daysToClean);
+
+        // Delete recipes from past days
+        for (const dayIndex of daysToClean) {
+            const recipes = recipesByDay[dayIndex];
+            if (recipes && recipes.length > 0) {
+                console.log(`   Deleting ${recipes.length} recipe(s) from day ${dayIndex}`);
+                for (const recipe of recipes) {
+                    await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipe.id);
+                }
+            }
+        }
+
+        // Update local state to remove past days
+        setRecipesByDay(prev => {
+            const updated = { ...prev };
+            daysToClean.forEach(dayIndex => {
+                delete updated[dayIndex];
+            });
+            return updated;
+        });
+
+        console.log('✅ Cleanup complete - removed recipes from past days');
+    }, [weekOffset, userId, recipesByDay]);
+
     useEffect(() => {
         loadSavedPlan();
     }, [weekOffset, userId]);
+
+    // Run cleanup after meal plan loads
+    useEffect(() => {
+        if (!loadingWeek && Object.keys(recipesByDay).length > 0) {
+            cleanupPastDays();
+        }
+    }, [recipesByDay, loadingWeek, cleanupPastDays]);
 
     useFocusEffect(
         useCallback(() => {
@@ -194,6 +260,14 @@ export default function PlannerScreen() {
         const params = route.params as any;
         if (params?.shouldReloadAndOpenModal && selectedDayIndex !== null) {
             console.log('🎯 Auto-opening saved recipes modal after recipe creation');
+
+            // Restore swap mode if it was active
+            if (params?.swapMode && params?.recipeToSwapId) {
+                console.log('🔄 Restoring swap mode with recipeId:', params.recipeToSwapId);
+                setSwapMode(true);
+                setRecipeToSwapId(params.recipeToSwapId);
+            }
+
             const reloadAndOpen = async () => {
                 try {
                     const freshRecipes = await getSavedRecipes();
@@ -207,7 +281,11 @@ export default function PlannerScreen() {
             };
             reloadAndOpen();
 
-            navigation.setParams({ shouldReloadAndOpenModal: undefined });
+            navigation.setParams({
+                shouldReloadAndOpenModal: undefined,
+                swapMode: undefined,
+                recipeToSwapId: undefined
+            });
         }
     }, [route.params, selectedDayIndex]);
 
@@ -339,6 +417,17 @@ export default function PlannerScreen() {
         }, 0);
     };
 
+
+    const handleSwapRecipe = (dayIndex: number, recipeId: string) => {
+        console.log('🔄 Swap mode activated for recipe:', recipeId, 'on day:', dayIndex);
+
+        setSwapMode(true);
+        setRecipeToSwapId(recipeId);
+        setSelectedDayIndex(dayIndex);
+        setSelectedDay(days[dayIndex]);
+        setModalVisible(true);
+    }
+
     const handleDeleteRecipe = (dayIndex: number, recipeId: string) => {
         Alert.alert(
             'Delete Recipe',
@@ -410,7 +499,8 @@ export default function PlannerScreen() {
     };
 
     const toggleSavedRecipeSelection = (recipeId: string) => {
-        if (selectedDayIndex !== null) {
+        // In swap mode, allow selecting any recipe (even if already in plan)
+        if (!swapMode && selectedDayIndex !== null) {
             const existingRecipes = recipesByDay[selectedDayIndex] || [];
             const alreadyInPlan = existingRecipes.some(recipe => recipe.id === recipeId);
 
@@ -424,13 +514,18 @@ export default function PlannerScreen() {
             }
         }
 
-        setSelectedSavedRecipes(prev => {
-            if (prev.includes(recipeId)) {
-                return prev.filter(id => id !== recipeId);
-            } else {
-                return [...prev, recipeId];
-            }
-        });
+        // In swap mode, only allow one selection at a time
+        if (swapMode) {
+            setSelectedSavedRecipes([recipeId]);
+        } else {
+            setSelectedSavedRecipes(prev => {
+                if (prev.includes(recipeId)) {
+                    return prev.filter(id => id !== recipeId);
+                } else {
+                    return [...prev, recipeId];
+                }
+            });
+        }
     };
 
     const handleAddSavedRecipes = async () => {
@@ -438,9 +533,11 @@ export default function PlannerScreen() {
         console.log('🔴 handleAddSavedRecipes - selectedDayIndex:', selectedDayIndex);
         console.log('🔴 handleAddSavedRecipes - selectedSavedRecipes:', selectedSavedRecipes.length);
         console.log('🔴 handleAddSavedRecipes - weekOffset:', weekOffset);
+        console.log('🔴 handleAddSavedRecipes - swapMode:', swapMode);
+        console.log('🔴 handleAddSavedRecipes - recipeToSwapId:', recipeToSwapId);
 
         if (selectedDayIndex === null || selectedSavedRecipes.length === 0) {
-            Alert.alert('No Recipes Selected', 'Please select at least one recipe');
+            Alert.alert('No Recipes Selected', swapMode ? 'Please select a recipe to swap' : 'Please select at least one recipe');
             return;
         }
 
@@ -450,65 +547,133 @@ export default function PlannerScreen() {
                 selectedSavedRecipes.includes(recipe.id)
             );
 
-            console.log("🟡 Recipes to add:", recipesToAdd);
+            console.log("🟡 Recipes to add/swap:", recipesToAdd);
 
-            if (userId) {
-                for (const recipe of recipesToAdd) {
-                    await addRecipeToDay(userId, weekOffset, selectedDayIndex, recipe);
+            if (swapMode && recipeToSwapId) {
+                // SWAP MODE: Replace the old recipe with the new one
+                if (userId) {
+                    // Delete old recipe
+                    await deleteRecipeFromDay(userId, weekOffset, selectedDayIndex, recipeToSwapId);
+                    // Add new recipe
+                    for (const recipe of recipesToAdd) {
+                        await addRecipeToDay(userId, weekOffset, selectedDayIndex, recipe);
+                    }
                 }
-            }
 
-            setRecipesByDay(prev => {
-                const updated = { ...prev };
-                const existingRecipes = updated[selectedDayIndex] || [];
-                updated[selectedDayIndex] = [...existingRecipes, ...recipesToAdd];
-                return updated;
-            });
+                setRecipesByDay(prev => {
+                    const updated = { ...prev };
+                    const existingRecipes = updated[selectedDayIndex] || [];
+                    // Remove old recipe and add new one
+                    updated[selectedDayIndex] = [
+                        ...existingRecipes.filter(r => r.id !== recipeToSwapId),
+                        ...recipesToAdd
+                    ];
+                    return updated;
+                });
+
+                console.log('✅ Swapped recipe on day:', selectedDayIndex);
+            } else {
+                // ADD MODE: Just add the recipes
+                if (userId) {
+                    for (const recipe of recipesToAdd) {
+                        await addRecipeToDay(userId, weekOffset, selectedDayIndex, recipe);
+                    }
+                }
+
+                setRecipesByDay(prev => {
+                    const updated = { ...prev };
+                    const existingRecipes = updated[selectedDayIndex] || [];
+                    updated[selectedDayIndex] = [...existingRecipes, ...recipesToAdd];
+                    return updated;
+                });
+
+                console.log('✅ Added saved recipes to day:', selectedDayIndex);
+            }
 
             setShowSavedRecipesModal(false);
             setSelectedSavedRecipes([]);
             setSelectedDayIndex(null);
             setSelectedDay(null);
-
-            console.log('✅ Added saved recipes to day:', selectedDayIndex);
+            setSwapMode(false);
+            setRecipeToSwapId(null);
         } catch (error) {
-            console.error('❌ Error adding saved recipes:', error);
-            Alert.alert('Error', 'Failed to add recipes. Please try again.');
+            console.error('❌ Error adding/swapping saved recipes:', error);
+            Alert.alert('Error', swapMode ? 'Failed to swap recipe. Please try again.' : 'Failed to add recipes. Please try again.');
         } finally {
             setLoadingSavedRecipes(false);
         }
     };
 
-    // ✅ Make this function return a Promise
+    // Make this function return a Promise
     const handleAddSearchRecipes = async (recipes: Recipe[]): Promise<void> => {
         if (selectedDayIndex === null) return;
 
         try {
-            if (userId) {
-                for (const recipe of recipes) {
-                    await addRecipeToDay(userId, weekOffset, selectedDayIndex, recipe);
+            if (swapMode && recipeToSwapId) {
+                // SWAP MODE: Replace the old recipe with the new one
+                if (userId) {
+                    // Delete old recipe
+                    await deleteRecipeFromDay(userId, weekOffset, selectedDayIndex, recipeToSwapId);
+                    // Add new recipe
+                    for (const recipe of recipes) {
+                        await addRecipeToDay(userId, weekOffset, selectedDayIndex, recipe);
+                    }
                 }
-            }
 
-            setRecipesByDay(prev => {
-                const updated = { ...prev };
-                const existingRecipes = updated[selectedDayIndex] || [];
-                updated[selectedDayIndex] = [...existingRecipes, ...recipes];
-                return updated;
-            });
+                setRecipesByDay(prev => {
+                    const updated = { ...prev };
+                    const existingRecipes = updated[selectedDayIndex] || [];
+                    // Remove old recipe and add new one
+                    updated[selectedDayIndex] = [
+                        ...existingRecipes.filter(r => r.id !== recipeToSwapId),
+                        ...recipes
+                    ];
+                    return updated;
+                });
+
+                console.log('✅ Swapped recipe with search result on day:', selectedDayIndex);
+            } else {
+                // ADD MODE: Just add the recipes
+                if (userId) {
+                    for (const recipe of recipes) {
+                        await addRecipeToDay(userId, weekOffset, selectedDayIndex, recipe);
+                    }
+                }
+
+                setRecipesByDay(prev => {
+                    const updated = { ...prev };
+                    const existingRecipes = updated[selectedDayIndex] || [];
+                    updated[selectedDayIndex] = [...existingRecipes, ...recipes];
+                    return updated;
+                });
+
+                console.log('✅ Added search recipes to day:', selectedDayIndex);
+            }
 
             setSelectedDayIndex(null);
             setSelectedDay(null);
-            console.log('✅ Added search recipes to day:', selectedDayIndex);
+            setSwapMode(false);
+            setRecipeToSwapId(null);
         } catch (error) {
-            console.error('❌ Error adding search recipes:', error);
-            throw error; // ✅ Re-throw error so modal can handle it
+            console.error('❌ Error adding/swapping search recipes:', error);
+            throw error; // Re-throw error so modal can handle it
         }
     };
 
+    // Close the first modal (3 options) without resetting swap mode
     const closeModal = () => {
         setModalVisible(false);
+        // Don't reset swapMode and recipeToSwapId here - they need to persist
+        // until the user completes or cancels the swap operation
+    };
+
+    // Cancel all operations and reset everything
+    const cancelAllModals = () => {
+        setModalVisible(false);
         setSelectedDay(null);
+        setSwapMode(false);
+        setRecipeToSwapId(null);
+        setSelectedDayIndex(null);
     };
 
     const closeSavedRecipesModal = () => {
@@ -516,12 +681,16 @@ export default function PlannerScreen() {
         setSelectedSavedRecipes([]);
         setSelectedDayIndex(null);
         setSelectedDay(null);
+        setSwapMode(false);
+        setRecipeToSwapId(null);
     };
 
     const closeSearchRecipesModal = () => {
         setShowSearchRecipeModal(false);
         setSelectedDayIndex(null);
         setSelectedDay(null);
+        setSwapMode(false);
+        setRecipeToSwapId(null);
     };
 
     const currentWeekDates = getWeekDates(weekOffset);
@@ -641,6 +810,7 @@ export default function PlannerScreen() {
                                                     recipe={item}
                                                     navigation={navigation}
                                                     onDelete={(recipeId) => handleDeleteRecipe(index, recipeId)}
+                                                    onSwap={(recipeId) => handleSwapRecipe(index, recipeId)}
                                                 />
                                             )}
                                             horizontal
@@ -657,8 +827,8 @@ export default function PlannerScreen() {
 
             {modalVisible && (
                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
-                    <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeModal} />
-                    <View style={{ width: 260, backgroundColor: 'white', borderRadius: 16, paddingVertical: 8, shadowColor: '#000', shadowOpacity: 0.3, shadowOffset: { width: 0, height: 3 }, shadowRadius: 6, elevation: 8 }}>
+                    <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={cancelAllModals} />
+                    <View style={{ width: 260, backgroundColor: 'white', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.3, shadowOffset: { width: 0, height: 3 }, shadowRadius: 6, elevation: 8 }}>
 
                         {loadingMenuAction ? (
                             <View className="py-8 items-center justify-center">
@@ -667,6 +837,16 @@ export default function PlannerScreen() {
                             </View>
                         ) : (
                             <>
+                                {/* Updated Header */}
+                                <View className="bg-orange-500 px-4 py-4 flex-row justify-between items-center">
+                                    <Text className="text-white font-bold text-lg">
+                                        {swapMode ? 'Swap Recipe' : 'Add Recipe'}
+                                    </Text>
+                                    <TouchableOpacity onPress={cancelAllModals}>
+                                        <Ionicons name="close" size={24} color="white" />
+                                    </TouchableOpacity>
+                                </View>
+
                                 <TouchableOpacity
                                     className="flex-row items-center px-4 py-3 border-b border-gray-100 active:bg-gray-50"
                                     onPress={handleOpenSavedRecipesModal}
@@ -675,7 +855,10 @@ export default function PlannerScreen() {
                                     <View className="w-8 h-8 bg-orange-100 rounded-full items-center justify-center mr-3">
                                         <Ionicons name="bookmark" size={16} color="#F97316" />
                                     </View>
-                                    <Text className="text-gray-800 font-medium flex-1">Add Saved Recipe</Text>
+                                    <Text className="text-gray-800 font-medium flex-1">
+                                        {swapMode ? 'Swap ' : 'Add '}
+                                        Saved Recipe
+                                    </Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -691,7 +874,16 @@ export default function PlannerScreen() {
 
                                 <TouchableOpacity
                                     className="flex-row items-center px-4 py-3 active:bg-gray-50"
-                                    onPress={() => { closeModal(); navigation.navigate('AddRecipe', { viewMode: 'planner', selectedDayIndex: selectedDayIndex, weekOffset: weekOffset }); }}
+                                    onPress={() => {
+                                        closeModal();
+                                        navigation.navigate('AddRecipe', {
+                                            viewMode: 'planner',
+                                            selectedDayIndex: selectedDayIndex,
+                                            weekOffset: weekOffset,
+                                            swapMode: swapMode,
+                                            recipeToSwapId: recipeToSwapId
+                                        });
+                                    }}
                                     disabled={loadingMenuAction}
                                 >
                                     <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mr-3">
@@ -711,7 +903,9 @@ export default function PlannerScreen() {
 
                     <View style={{ width: '85%', maxHeight: '70%', backgroundColor: 'white', borderRadius: 20, overflow: 'hidden' }}>
                         <View className="bg-orange-500 px-5 py-4 flex-row justify-between items-center">
-                            <Text className="text-white font-bold text-lg">Saved Recipes</Text>
+                            <Text className="text-white font-bold text-lg">
+                                {swapMode ? 'Swap Recipe' : 'Saved Recipes'}
+                            </Text>
                             <TouchableOpacity onPress={closeSavedRecipesModal}>
                                 <Ionicons name="close" size={24} color="white" />
                             </TouchableOpacity>
@@ -736,7 +930,8 @@ export default function PlannerScreen() {
                                 savedRecipesToShow.map((recipe) => {
                                     const isSelected = selectedSavedRecipes.includes(recipe.id);
                                     const existingRecipes = selectedDayIndex !== null ? (recipesByDay[selectedDayIndex] || []) : [];
-                                    const alreadyInPlan = existingRecipes.some(r => r.id === recipe.id);
+                                    // In swap mode, don't mark as "already in plan" since we're swapping
+                                    const alreadyInPlan = !swapMode && existingRecipes.some(r => r.id === recipe.id);
 
                                     return (
                                         <TouchableOpacity
@@ -808,7 +1003,10 @@ export default function PlannerScreen() {
                                         <ActivityIndicator size="small" color="white" />
                                     ) : (
                                         <Text className="text-white text-center font-bold">
-                                            Add {selectedSavedRecipes.length > 0 ? `(${selectedSavedRecipes.length})` : ''} Recipe{selectedSavedRecipes.length !== 1 ? 's' : ''}
+                                            {swapMode
+                                                ? 'Swap Recipe'
+                                                : `Add ${selectedSavedRecipes.length > 0 ? `(${selectedSavedRecipes.length})` : ''} Recipe${selectedSavedRecipes.length !== 1 ? 's' : ''}`
+                                            }
                                         </Text>
                                     )}
                                 </TouchableOpacity>

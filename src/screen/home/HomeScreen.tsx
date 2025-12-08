@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, Alert, ActivityIndicator, Pressable, TextInput, Modal } from 'react-native';
 import { Ionicons, Feather, Fontisto } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationProps } from '~/navigation/AppStack';
 import { useAuth } from '~/context/AuthContext';
 import {
@@ -10,9 +11,10 @@ import {
     fetchRecipesByIngredients,
     fetchRecipeById
 } from '~/api/spoonacular';
-import { saveApiRecipe, unsaveRecipe } from '~/controller/recipe';
+import { saveApiRecipe, unsaveRecipe, getSavedRecipes, getRecipeByUser } from '~/controller/recipe';
+import { loadMealPlanWithDetails } from '~/controller/planner';
 import colors from '~/utils/color';
-import SpoonacularChatbot from '~/components/partials/SpooncularChatBot'; // ✅ Import chatbot component
+import SpoonacularChatbot from '~/components/partials/SpooncularChatBot';
 
 const categories = ['All', 'Asian', 'Italian', 'Indian', 'Chinese', 'Mexican'];
 const baseIngredients = ['Chicken', 'Tomato', 'Curry', 'Salad', 'Chilli', 'Onion'];
@@ -109,6 +111,11 @@ export const HomeScreen = () => {
     const [newIngredient, setNewIngredient] = useState('');
     const [modalSelectedIngredients, setModalSelectedIngredients] = useState<string[]>([]);
     const [showChatbot, setShowChatbot] = useState<boolean>(false);
+    const [todaysMeals, setTodaysMeals] = useState<any[]>([]);
+    const [userStats, setUserStats] = useState({ savedCount: 0, createdCount: 0, plannedDays: 0 });
+    const [loadingStats, setLoadingStats] = useState<boolean>(true);
+    const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
+    const [loadingRecent, setLoadingRecent] = useState<boolean>(true);
 
     const navigation = useNavigation<NavigationProps>();
     const { user } = useAuth();
@@ -124,6 +131,67 @@ export const HomeScreen = () => {
     // Display data for categories section
     const displayedCategoryRecipes = categoryRecipes.slice(0, 10);
     const categoryFinalData = [...displayedCategoryRecipes, { id: 'see-more-categories', type: 'seeMore' }];
+
+    // --- FETCH TODAY'S MEALS AND STATS ---
+    const fetchTodaysMealsAndStats = useCallback(async () => {
+        if (!userId) return;
+
+        try {
+            setLoadingStats(true);
+
+            // Get today's day index (0 = Monday, 6 = Sunday)
+            const today = new Date();
+            const dayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1; // Convert Sunday (0) to 6
+
+            // Fetch today's meals from planner (current week = offset 0)
+            const mealPlan = await loadMealPlanWithDetails(userId, 0);
+            const todayRecipes = mealPlan?.[dayIndex] || [];
+            setTodaysMeals(todayRecipes);
+
+            // Fetch user stats
+            const [savedRecipes, createdRecipes] = await Promise.all([
+                getSavedRecipes(),
+                getRecipeByUser(userId)
+            ]);
+
+            // Count planned days this week
+            const plannedDaysCount = mealPlan
+                ? Object.keys(mealPlan).filter(key => mealPlan[Number(key)]?.length > 0).length
+                : 0;
+
+            setUserStats({
+                savedCount: savedRecipes.length,
+                createdCount: createdRecipes.length,
+                plannedDays: plannedDaysCount
+            });
+
+            console.log('📊 Stats loaded:', {
+                saved: savedRecipes.length,
+                created: createdRecipes.length,
+                plannedDays: plannedDaysCount,
+                todaysMeals: todayRecipes.length
+            });
+
+        } catch (error) {
+            console.error('❌ Error loading stats:', error);
+        } finally {
+            setLoadingStats(false);
+        }
+    }, [userId]);
+
+    // Refresh stats when screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            fetchTodaysMealsAndStats();
+        }, [fetchTodaysMealsAndStats])
+    );
+
+    // Load recently viewed recipes on focus
+    useFocusEffect(
+        useCallback(() => {
+            loadRecentlyViewed();
+        }, [userId])
+    );
 
     // --- SHUFFLE AND AUTO SELECT FIRST INGREDIENT ON MOUNT ---
     useEffect(() => {
@@ -323,6 +391,83 @@ export const HomeScreen = () => {
         setHasChanges(false);
     };
 
+    // --- RECENTLY VIEWED FUNCTIONS ---
+    const loadRecentlyViewed = async () => {
+        if (!userId) {
+            setRecentlyViewed([]);
+            setLoadingRecent(false);
+            return;
+        }
+
+        try {
+            setLoadingRecent(true);
+            const key = `recentlyViewed_${userId}`;
+            const stored = await AsyncStorage.getItem(key);
+            if (stored) {
+                const recipes = JSON.parse(stored);
+                setRecentlyViewed(recipes.slice(0, 10)); // Show max 10
+            } else {
+                setRecentlyViewed([]);
+            }
+        } catch (error) {
+            console.error('Error loading recently viewed:', error);
+            setRecentlyViewed([]);
+        } finally {
+            setLoadingRecent(false);
+        }
+    };
+
+    const saveRecentlyViewed = async (recipe: any) => {
+        if (!userId) return;
+
+        try {
+            const key = `recentlyViewed_${userId}`;
+            const stored = await AsyncStorage.getItem(key);
+            let recipes = stored ? JSON.parse(stored) : [];
+
+            // Remove if already exists (to move to front)
+            recipes = recipes.filter((r: any) => r.id !== recipe.id);
+
+            // Format time properly
+            let formattedTime = 'N/A';
+            if (recipe.totalTime) {
+                const timeValue = typeof recipe.totalTime === 'string' ? recipe.totalTime : recipe.totalTime.toString();
+                formattedTime = timeValue.includes('Mins') || timeValue.includes('mins') ? timeValue : `${timeValue} Mins`;
+            } else if (recipe.time) {
+                formattedTime = recipe.time;
+            }
+
+            // Add to front
+            recipes.unshift({
+                id: recipe.id,
+                title: recipe.title,
+                image: recipe.image,
+                time: formattedTime,
+                viewedAt: new Date().toISOString()
+            });
+
+            // Keep only last 20
+            recipes = recipes.slice(0, 20);
+
+            await AsyncStorage.setItem(key, JSON.stringify(recipes));
+            setRecentlyViewed(recipes.slice(0, 10)); // Update state
+        } catch (error) {
+            console.error('Error saving recently viewed:', error);
+        }
+    };
+
+    const clearRecentlyViewed = async () => {
+        if (!userId) return;
+        try {
+            const key = `recentlyViewed_${userId}`;
+            await AsyncStorage.removeItem(key);
+            setRecentlyViewed([]);
+            console.log('✅ Recently viewed cleared!');
+        } catch (error) {
+            console.error('Error clearing recently viewed:', error);
+        }
+    };
+
     // --- HANDLE RECIPE CARD PRESS WITH FULL DETAILS FETCH ---
     const handleRecipePress = async (recipe: any) => {
         console.log('Fetching full details for recipe:', recipe.id);
@@ -357,6 +502,10 @@ export const HomeScreen = () => {
             };
 
             console.log('✅ Complete recipe ready:', completeRecipe.title);
+
+            // Save to recently viewed
+            await saveRecentlyViewed(completeRecipe);
+
             navigation.navigate('ViewRecipe', { recipe: completeRecipe, viewMode: 'discover' });
         } catch (error) {
             console.error('❌ Error fetching recipe details:', error);
@@ -437,8 +586,123 @@ export const HomeScreen = () => {
                             <Text className="text-gray-500 mt-1">What are we cooking today?</Text>
                         </View>
 
+                        {/* QUICK STATS WIDGET */}
+                        {!loadingStats && (
+                            <View className="mx-2 mt-6 bg-white rounded-2xl p-4 shadow-sm" style={{ borderWidth: 1, borderColor: '#FFE4D6' }}>
+                                <Text className="text-lg font-bold text-gray-800 mb-3">Your Stats</Text>
+                                <View className="flex-row justify-around">
+                                    <View className="items-center">
+                                        <View className="w-16 h-16 rounded-full items-center justify-center mb-2" style={{ backgroundColor: '#FFE4D6' }}>
+                                            <Feather name="bookmark" size={24} color="#FF9966" />
+                                        </View>
+                                        <Text className="text-2xl font-bold text-gray-800">{userStats.savedCount}</Text>
+                                        <Text className="text-xs text-gray-500">Saved</Text>
+                                    </View>
+                                    <View className="items-center">
+                                        <View className="w-16 h-16 rounded-full items-center justify-center mb-2" style={{ backgroundColor: '#E8F5E9' }}>
+                                            <Feather name="edit" size={24} color="#4CAF50" />
+                                        </View>
+                                        <Text className="text-2xl font-bold text-gray-800">{userStats.createdCount}</Text>
+                                        <Text className="text-xs text-gray-500">Created</Text>
+                                    </View>
+                                    <View className="items-center">
+                                        <View className="w-16 h-16 rounded-full items-center justify-center mb-2" style={{ backgroundColor: '#E3F2FD' }}>
+                                            <Ionicons name="calendar" size={24} color="#2196F3" />
+                                        </View>
+                                        <Text className="text-2xl font-bold text-gray-800">{userStats.plannedDays}</Text>
+                                        <Text className="text-xs text-gray-500">Days Planned</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* TODAY'S MEAL WIDGET */}
+                        <View className="mx-2 mt-4 rounded-2xl overflow-hidden" style={{ backgroundColor: colors.creamWhite }}>
+                            <View className="px-4 pt-4 pb-3 flex-row justify-between items-center">
+                                <View>
+                                    <Text className="text-xl font-bold text-gray-800">Today's Plan</Text>
+                                    <Text className="text-sm text-gray-500 mt-1">
+                                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity onPress={() => navigation.navigate('Planner', {})}>
+                                    <Text className="text-orange-500 font-semibold">View All</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {loadingStats ? (
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                                >
+                                    {[1, 2, 3].map((item) => (
+                                        <View
+                                            key={item}
+                                            className="bg-white rounded-xl mr-3 overflow-hidden shadow-sm"
+                                            style={{ width: 160 }}
+                                        >
+                                            <View className="w-full h-32 bg-gray-200" />
+                                            <View className="p-3">
+                                                <View className="h-4 bg-gray-200 rounded mb-2 w-full" />
+                                                <View className="h-4 bg-gray-200 rounded mb-2 w-3/4" />
+                                                <View className="h-3 bg-gray-200 rounded w-16" />
+                                            </View>
+                                            <View className="absolute inset-0 justify-center items-center">
+                                                <ActivityIndicator size="small" color="#FF9966" />
+                                            </View>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                            ) : todaysMeals.length === 0 ? (
+                                <View className="px-4 pb-4 items-center justify-center" style={{ minHeight: 120 }}>
+                                    <Ionicons name="calendar-outline" size={40} color="#D1D5DB" />
+                                    <Text className="text-gray-500 text-center mt-3">
+                                        No meals planned for today
+                                    </Text>
+                                    <TouchableOpacity
+                                        className="mt-2 px-4 py-2 rounded-full bg-orange-500"
+                                        onPress={() => navigation.navigate('Planner', {})}
+                                    >
+                                        <Text className="text-white font-semibold text-sm">Add Meal</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                                >
+                                    {todaysMeals.map((meal) => (
+                                        <TouchableOpacity
+                                            key={meal.id}
+                                            className="bg-white rounded-xl mr-3 overflow-hidden shadow-sm"
+                                            style={{ width: 160 }}
+                                            onPress={() => handleRecipePress(meal)}
+                                        >
+                                            <Image
+                                                source={{ uri: meal.image }}
+                                                className="w-full h-32"
+                                                style={{ resizeMode: 'cover' }}
+                                            />
+                                            <View className="p-3">
+                                                <Text className="font-semibold text-gray-800" numberOfLines={2}>
+                                                    {meal.title}
+                                                </Text>
+                                                <View className="flex-row items-center mt-2">
+                                                    <Ionicons name="time-outline" size={14} color="#FF9966" />
+                                                    <Text className="text-xs text-gray-500 ml-1">
+                                                        {meal.totalTime || 'N/A'} mins
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            )}
+                        </View>
+
                         {/* SEARCH BY INGREDIENTS */}
-                        <View className="rounded-2xl justify-between mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
+                        <View className="rounded-2xl justify-between mx-2 mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
                             <View className="flex-row justify-between px-4 pt-4">
                                 <Text className="text-2xl font-semibold text-gray-800">Search By Ingredients</Text>
                                 <TouchableOpacity onPress={handleShowAddIngredientsModal}>
@@ -577,7 +841,7 @@ export const HomeScreen = () => {
                         </View>
 
                         {/* CATEGORIES */}
-                        <View className="rounded-2xl mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
+                        <View className="rounded-2xl mx-2 mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
                             <Text className="text-2xl font-semibold text-gray-800 mb-3 px-4 pt-4">Categories</Text>
                             <ScrollView
                                 horizontal
@@ -659,6 +923,67 @@ export const HomeScreen = () => {
                                 )}
                             </View>
                         </View>
+
+                        {/* RECENTLY VIEWED */}
+                        {recentlyViewed.length > 0 && (
+                            <View className="rounded-2xl mx-2 mt-2 mb-4" style={{ backgroundColor: colors.creamWhite }}>
+                                <View className="flex-row justify-between items-center px-4 pt-4 pb-3">
+                                    <View className="flex-row items-center">
+                                        <Ionicons name="time-outline" size={24} color="#FF9966" />
+                                        <Text className="text-2xl font-semibold text-gray-800 ml-2">Recently Viewed</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={() => navigation.navigate('RecentlyViewed')}>
+                                        <Text className="text-orange-500 font-semibold">See All</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {loadingRecent ? (
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                                    >
+                                        {[1, 2, 3].map((item) => (
+                                            <View
+                                                key={item}
+                                                className="bg-gray-200 rounded-2xl w-36 h-56 mr-4 overflow-hidden"
+                                            >
+                                                <View className="w-full h-32 bg-gray-300" />
+                                                <View className="p-3">
+                                                    <View className="h-4 bg-gray-300 rounded mb-2 w-full" />
+                                                    <View className="h-3 bg-gray-300 rounded w-3/4" />
+                                                </View>
+                                                <View className="absolute inset-0 justify-center items-center">
+                                                    <ActivityIndicator size="small" color="#FF9966" />
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </ScrollView>
+                                ) : (
+                                    <FlatList
+                                        data={recentlyViewed}
+                                        horizontal
+                                        keyExtractor={item => item.id?.toString()}
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                                        renderItem={({ item }) => (
+                                            <FeaturedRecipeCard
+                                                recipe={item}
+                                                onPress={() => handleRecipePress(item)}
+                                                onSave={() => {
+                                                    if (savedRecipes[item.id]) {
+                                                        handleUnsaveRecipe(item.id);
+                                                    } else {
+                                                        handleSaveRecipe(item);
+                                                    }
+                                                }}
+                                                isSaved={!!savedRecipes[item.id]}
+                                            />
+                                        )}
+                                    />
+                                )}
+                            </View>
+                        )}
                     </ScrollView>
                 )}
 
