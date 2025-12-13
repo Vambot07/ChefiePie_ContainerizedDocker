@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking, Vibration, Platform, BackHandler } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking, Vibration, Platform, BackHandler, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -35,6 +35,8 @@ const ViewSavedRecipeScreen = () => {
     const [timerActive, setTimerActive] = useState<boolean>(false);
     const [timerMinutes, setTimerMinutes] = useState<number>(0);
     const [recognizedText, setRecognizedText] = useState<string>('');
+    const [speechRate, setSpeechRate] = useState<number>(0.75); // Adjustable speech rate (0.5 = slow, 0.75 = normal, 1.0 = fast)
+    const [showIntroModal, setShowIntroModal] = useState<boolean>(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
@@ -260,7 +262,7 @@ const ViewSavedRecipeScreen = () => {
         }
     };
 
-    // ⭐ UPDATED: Enhanced speak function with echo prevention
+    // ⭐ UPDATED: Enhanced speak function with echo prevention and adjustable rate
     const speak = (text: string) => {
         console.log('🔊 Speaking:', text.substring(0, 50) + '...');
 
@@ -274,7 +276,7 @@ const ViewSavedRecipeScreen = () => {
         Speech.speak(text, {
             language: 'en-US',
             pitch: 1.0,
-            rate: 0.5,
+            rate: speechRate, // Use adjustable speech rate
 
             onStart: () => {
                 console.log('🔊 Speech started');
@@ -343,31 +345,47 @@ const ViewSavedRecipeScreen = () => {
     const handleVoiceCommand = (command: string) => {
         console.log('🎯 Voice command received:', command);
 
+        // Haptic feedback for command recognition
+        Vibration.vibrate(50);
+
         if (command.includes('next') || command.includes('continue')) {
-            goToNextStep();
+            speak('Next step');
+            setTimeout(() => goToNextStep(), 800);
         }
         else if (command.includes('previous') || command.includes('back')) {
-            goToPreviousStep();
+            speak('Going back');
+            setTimeout(() => goToPreviousStep(), 800);
         }
         else if (command.includes('repeat') || command.includes('again')) {
-            readCurrentStep();
+            speak('Repeating');
+            setTimeout(() => readCurrentStep(), 600);
         }
         else if (command.includes('pause')) {
+            Vibration.vibrate([100, 50, 100]); // Double vibration for pause
             pauseAssistant();
         }
         else if (command.includes('resume')) {
+            Vibration.vibrate([100, 50, 100]); // Double vibration for resume
             resumeAssistant();
         }
         else if (command.includes('stop') || command.includes('exit')) {
+            Vibration.vibrate([100, 50, 100, 50, 100]); // Triple vibration for stop
             stopVoiceAssistant();
         }
         else if (command.includes('wait') || command.includes('timer')) {
             const minutes = extractMinutes(command);
             if (minutes > 0) {
+                Vibration.vibrate(100);
                 startTimer(minutes);
             } else {
+                Vibration.vibrate([50, 50, 50]); // Error pattern
                 speak('Sorry, I could not understand the time. Please say, for example, wait 5 minutes');
             }
+        }
+        else {
+            // Unknown command
+            Vibration.vibrate([50, 50, 50]); // Error pattern
+            speak('Sorry, I did not understand that command. Try saying next, previous, or repeat');
         }
     };
 
@@ -705,7 +723,41 @@ const ViewSavedRecipeScreen = () => {
                             </TouchableOpacity>
                         </View>
 
-                        {recipe.intro && <Text className="text-gray-700 mb-4">{recipe.intro}</Text>}
+                        {recipe.intro && (
+                            <View className="mb-4">
+                                <Text className="text-gray-700" numberOfLines={3}>
+                                    {recipe.intro}
+                                </Text>
+                                {recipe.intro.length > 150 && (
+                                    <TouchableOpacity onPress={() => setShowIntroModal(true)} className="mt-1">
+                                        <Text className="text-orange-500 font-semibold text-sm">Read more</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+
+                        {/* Serving & Items */}
+                        {((recipe.serving && recipe.serving !== 'N/A') || (recipe.ingredients?.length > 0)) && (
+                            <View className="flex-row justify-between px-5 mt-4 mb-2">
+                                {/* Left side - Serving (always render to hold position) */}
+                                <View>
+                                    {recipe.serving && recipe.serving !== 'N/A' && (
+                                        <Text className="text-xs text-gray-500 font-bold">
+                                            {recipe.serving} serve{Number(recipe.serving) > 1 ? 's' : ''}
+                                        </Text>
+                                    )}
+                                </View>
+
+                                {/* Right side - Items (always render to hold position) */}
+                                <View>
+                                    {recipe.ingredients?.length > 0 && (
+                                        <Text className="text-xs text-gray-500 font-bold">
+                                            {recipe.ingredients.length} item{recipe.ingredients.length > 1 ? 's' : ''}
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                        )}
 
                         <View className="flex-row justify-around mb-4">
                             <TouchableOpacity
@@ -728,58 +780,84 @@ const ViewSavedRecipeScreen = () => {
 
                         {tab === 'ingredient' && (
                             <View>
-                                <View className="flex-row justify-between items-center mb-2">
+                                <View className="flex-row justify-between items-center mb-3">
                                     <Text className="text-lg font-bold text-gray-800">
                                         Ingredients ({recipe.ingredients?.length || 0})
                                     </Text>
                                     <TouchableOpacity
-                                        onPress={handleAddSelectedToChecklist}
-                                        disabled={selectedIngredients.length === 0 || !!loadingAction}
-                                        style={{
-                                            paddingHorizontal: 12,
-                                            paddingVertical: 8,
-                                            borderRadius: 16,
-                                            backgroundColor: selectedIngredients.length > 0 ? '#22C55E' : '#D1D5DB',
-                                            ...shadowStyle,
+                                        onPress={() => {
+                                            if (selectedIngredients.length === recipe.ingredients?.length) {
+                                                setSelectedIngredients([]);
+                                            } else {
+                                                setSelectedIngredients(recipe.ingredients || []);
+                                            }
                                         }}
+                                        className="flex-row items-center px-3 py-1.5 bg-orange-100 rounded-lg"
                                     >
-                                        <Text className={`font-semibold ${selectedIngredients.length > 0 ? 'text-white' : 'text-gray-400'}`}>
-                                            Add to List
+                                        <Ionicons
+                                            name={selectedIngredients.length === recipe.ingredients?.length ? "checkbox" : "square-outline"}
+                                            size={18}
+                                            color="#F97316"
+                                        />
+                                        <Text className="text-orange-600 font-semibold text-sm ml-1">
+                                            Select All
                                         </Text>
                                     </TouchableOpacity>
+                                </View>
+
+                                {/* Instructional Banner */}
+                                <View className="bg-green-50 border border-green-200 rounded-xl p-3 mb-3 flex-row items-center">
+                                    <Ionicons name="information-circle" size={20} color="#3B82F6" />
+                                    <Text className="text-green-700 text-xs ml-2 flex-1">
+                                        Tap ingredients below to select, then click "Add to List"
+                                    </Text>
                                 </View>
                                 {recipe.ingredients?.map((ing: any, idx: number) => {
                                     const isSelected = selectedIngredients.some(item => item.name === ing.name);
                                     return (
                                         <TouchableOpacity
-                                            key={idx}
                                             onPress={() => toggleIngredientSelection(ing)}
+                                            activeOpacity={0.7}
                                             style={{
                                                 flexDirection: 'row',
                                                 alignItems: 'center',
-                                                padding: 12,
-                                                marginBottom: 8,
-                                                borderRadius: 16,
+                                                padding: 14,
+                                                marginBottom: 10,
+                                                borderRadius: 12,
                                                 backgroundColor: isSelected ? '#DCFCE7' : '#fff',
-                                                borderWidth: isSelected ? 1 : 0,
-                                                borderColor: isSelected ? '#22C55E' : 'transparent',
+                                                borderWidth: 2,
+                                                borderColor: isSelected ? '#22C55E' : '#F3F4F6',
                                                 ...shadowStyle,
                                             }}
                                         >
-                                            <Text className="flex-1 font-semibold text-gray-800 capitalize">
-                                                {ing.name}
-                                            </Text>
-                                            <Text className="text-gray-500 mr-2">
-                                                {ing.amount + ' ' + ing.unit}
-                                            </Text>
-                                            <View className="w-7 h-7">
-                                                {isSelected && (
-                                                    <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
+                                            <View className="w-10 h-10 rounded-full bg-orange-100 items-center justify-center mr-3">
+                                                <Text className="text-lg">🛒</Text>
+                                            </View>
+                                            <View className="flex-1">
+                                                <Text className="font-bold text-gray-800 capitalize text-base">
+                                                    {ing.name}
+                                                </Text>
+                                                <Text className="text-gray-500 text-sm mt-0.5">
+                                                    {ing.amount} {ing.unit}
+                                                </Text>
+                                            </View>
+                                            <View className="w-8 h-8 rounded-full items-center justify-center" style={{
+                                                backgroundColor: isSelected ? '#22C55E' : '#E5E7EB'
+                                            }}>
+                                                {isSelected ? (
+                                                    <Ionicons name="checkmark" size={20} color="white" />
+                                                ) : (
+                                                    <Ionicons name="add" size={20} color="#9CA3AF" />
                                                 )}
                                             </View>
                                         </TouchableOpacity>
                                     );
                                 })}
+
+                                {/* Spacer for floating button */}
+                                {selectedIngredients.length > 0 && (
+                                    <View style={{ height: 80 }} />
+                                )}
                             </View>
                         )}
 
@@ -814,13 +892,40 @@ const ViewSavedRecipeScreen = () => {
                     </View>
                 </ScrollView>
 
+                {/* Add to Shopping List Floating Button */}
+                {tab === 'ingredient' && selectedIngredients.length > 0 && (
+                    <TouchableOpacity
+                        onPress={handleAddSelectedToChecklist}
+                        disabled={!!loadingAction}
+                        style={{
+                            position: 'absolute',
+                            bottom: 20,
+                            left: 20,
+                            right: 20,
+                            backgroundColor: '#22C55E',
+                            paddingVertical: 16,
+                            paddingHorizontal: 24,
+                            borderRadius: 16,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            ...shadowStyle,
+                        }}
+                    >
+                        <Ionicons name="cart" size={24} color="white" />
+                        <Text className="text-white font-bold text-base ml-2">
+                            Add to List ({selectedIngredients.length})
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
                 {/* Main Microphone Button */}
                 <TouchableOpacity
                     onPressIn={handlePressIn}
                     onPressOut={handlePressOut}
                     style={{
                         position: 'absolute',
-                        bottom: 100,
+                        bottom: selectedIngredients.length > 0 && tab === 'ingredient' ? 90 : 20,
                         right: 25,
                         backgroundColor: voiceMode ? '#22C55E' : '#F9A826',
                         width: 60,
@@ -892,6 +997,40 @@ const ViewSavedRecipeScreen = () => {
                             </Text>
                         </View>
 
+                        {/* Speech Rate Controls */}
+                        <View className="bg-gray-50 p-2 rounded-lg mb-2">
+                            <Text className="text-xs text-gray-600 mb-2 text-center">Speech Speed</Text>
+                            <View className="flex-row justify-around">
+                                <TouchableOpacity
+                                    onPress={() => setSpeechRate(0.5)}
+                                    className={`px-3 py-1.5 rounded-lg ${speechRate === 0.5 ? 'bg-orange-500' : 'bg-gray-200'}`}
+                                    disabled={isSpeaking}
+                                >
+                                    <Text className={`text-xs font-semibold ${speechRate === 0.5 ? 'text-white' : 'text-gray-600'}`}>
+                                        Slow
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setSpeechRate(0.75)}
+                                    className={`px-3 py-1.5 rounded-lg ${speechRate === 0.75 ? 'bg-orange-500' : 'bg-gray-200'}`}
+                                    disabled={isSpeaking}
+                                >
+                                    <Text className={`text-xs font-semibold ${speechRate === 0.75 ? 'text-white' : 'text-gray-600'}`}>
+                                        Normal
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setSpeechRate(1.0)}
+                                    className={`px-3 py-1.5 rounded-lg ${speechRate === 1.0 ? 'bg-orange-500' : 'bg-gray-200'}`}
+                                    disabled={isSpeaking}
+                                >
+                                    <Text className={`text-xs font-semibold ${speechRate === 1.0 ? 'text-white' : 'text-gray-600'}`}>
+                                        Fast
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
                         {timerActive && (
                             <View className="bg-blue-50 p-3 rounded-lg mb-2">
                                 <Text className="text-center font-semibold text-blue-700">
@@ -915,6 +1054,49 @@ const ViewSavedRecipeScreen = () => {
                         </Text>
                     </View>
                 )}
+
+                {/* Intro Modal */}
+                <Modal
+                    visible={showIntroModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowIntroModal(false)}
+                >
+                    <Pressable
+                        style={{
+                            flex: 1,
+                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            padding: 20,
+                        }}
+                        onPress={() => setShowIntroModal(false)}
+                    >
+                        <Pressable
+                            style={{
+                                backgroundColor: 'white',
+                                borderRadius: 16,
+                                padding: 24,
+                                maxHeight: '80%',
+                                width: '100%',
+                            }}
+                            onPress={(e) => e.stopPropagation()}
+                        >
+                            <View className="flex-row items-center justify-between mb-4">
+                                <Text className="text-xl font-bold text-gray-900">About this recipe</Text>
+                                <TouchableOpacity onPress={() => setShowIntroModal(false)}>
+                                    <Ionicons name="close-circle" size={28} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView showsVerticalScrollIndicator={false}>
+                                <Text className="text-gray-700 text-base leading-6">
+                                    {recipe?.intro}
+                                </Text>
+                            </ScrollView>
+                        </Pressable>
+                    </Pressable>
+                </Modal>
             </View>
         </View>
     );

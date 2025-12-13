@@ -8,7 +8,7 @@ export default function LoadingScreen() {
         <View className="flex-1 bg-white items-center justify-center">
             {/* Logo */}
             <Image
-                source={require('assets/ChefiePieLogo.png')}
+                source={require('assets/ChefiePieSplashIcon.png')}
                 style={{ width: 150, height: 150, marginBottom: 24 }}
                 resizeMode="contain"
             />

@@ -29,6 +29,7 @@ interface Recipe {
     totalTime?: string;
     difficulty?: string;
     source: string;
+    isPrivate?: boolean;
 }
 
 interface UserProfile {
@@ -48,17 +49,18 @@ interface UserProfile {
 
 
 export default function ProfileScreen() {
-    const [tab, setTab] = useState<'myrecipe' | 'savedrecipe'>('myrecipe');
+    const [tab, setTab] = useState<'myrecipe' | 'savedrecipe' | 'privaterecipe'>('myrecipe');
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
     const [imageLoading, setImageLoading] = useState(true);
     const [modalImageLoading, setModalImageLoading] = useState(true);
     const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
     const [createdRecipes, setCreatedRecipes] = useState<Recipe[]>([]);
+    const [privateRecipes, setPrivateRecipes] = useState<Recipe[]>([]);
     const [loadingUserRecipe, setLoadingUserRecipe] = useState<boolean>(true);
     const [loadingSavedRecipe, setLoadingSavedRecipe] = useState<boolean>(true);
     const [userDetails, setUserDetails] = useState<UserProfile | null>(null);
     const [loadingFetchData, setLoadingFetchData] = useState<boolean>(true);
-    const [refreshing, setRefreshing] = useState<boolean>(false); // ✅ Add refresh state
+    const [refreshing, setRefreshing] = useState<boolean>(false);
     const scrollViewRef = React.useRef<ScrollView>(null);
 
     const navigation = useNavigation<NavigationProp>();
@@ -159,8 +161,17 @@ export default function ProfileScreen() {
             ]);
 
             setSavedRecipes(savedResults as Recipe[]);
-            setCreatedRecipes(createdResults as Recipe[]);
+
+            // Separate public and private recipes
+            const allCreated = createdResults as Recipe[];
+            const publicRecipes = allCreated.filter(recipe => !recipe.isPrivate);
+            const privateRecipesFiltered = allCreated.filter(recipe => recipe.isPrivate);
+
+            setCreatedRecipes(publicRecipes);
+            setPrivateRecipes(privateRecipesFiltered);
+
             console.log("✅ All recipes loaded!");
+            console.log(`📊 Public: ${publicRecipes.length}, Private: ${privateRecipesFiltered.length}`);
 
         } catch (error) {
             console.error('❌ Error fetching data:', error);
@@ -224,8 +235,11 @@ export default function ProfileScreen() {
     };
 
     // Get current recipes based on tab
-    const displayedRecipes = tab === 'myrecipe' ? createdRecipes : savedRecipes;
-    const isLoading = tab === 'myrecipe' ? loadingUserRecipe : loadingSavedRecipe;
+    const displayedRecipes =
+        tab === 'myrecipe' ? createdRecipes :
+            tab === 'privaterecipe' ? privateRecipes :
+                savedRecipes;
+    const isLoading = tab === 'myrecipe' || tab === 'privaterecipe' ? loadingUserRecipe : loadingSavedRecipe;
 
     return (
         <View className="flex-1 bg-[#F8F8F8]">
@@ -384,6 +398,16 @@ export default function ProfileScreen() {
                                             Saved Recipe
                                         </Text>
                                     </TouchableOpacity>
+                                    {(!userId || userId === currentUserId) && (
+                                        <TouchableOpacity
+                                            className={`flex-1 py-2 rounded-xl mx-2 ${tab === 'privaterecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
+                                            onPress={() => setTab('privaterecipe')}
+                                        >
+                                            <Text className={`text-center font-semibold ${tab === 'privaterecipe' ? 'text-white' : 'text-gray-700'}`}>
+                                                Private Recipe
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             </View>
 
@@ -393,7 +417,9 @@ export default function ProfileScreen() {
                                     <View className="items-center justify-center py-20">
                                         <ActivityIndicator size="large" color="#FFB47B" />
                                         <Text className="text-gray-400 mt-4">
-                                            {tab === 'myrecipe' ? 'Loading created recipes...' : 'Loading saved recipes...'}
+                                            {tab === 'myrecipe' ? 'Loading public recipes...' :
+                                                tab === 'privaterecipe' ? 'Loading private recipes...' :
+                                                    'Loading saved recipes...'}
                                         </Text>
                                     </View>
                                 ) : displayedRecipes.length === 0 ? (
@@ -401,7 +427,13 @@ export default function ProfileScreen() {
                                         {tab === 'myrecipe' ? (
                                             <>
                                                 <MaterialIcons name="create-new-folder" size={64} color="#ccc" />
-                                                <Text className="text-gray-400 mt-4">No recipe has been created by user</Text>
+                                                <Text className="text-gray-400 mt-4">No public recipe has been created</Text>
+                                            </>
+                                        ) : tab === 'privaterecipe' ? (
+                                            <>
+                                                <Ionicons name="lock-closed-outline" size={64} color="#ccc" />
+                                                <Text className="text-gray-400 mt-4">No private recipes yet</Text>
+                                                <Text className="text-gray-300 mt-2 text-sm">Create a recipe and mark it as private</Text>
                                             </>
                                         ) : (
                                             <>
@@ -417,7 +449,15 @@ export default function ProfileScreen() {
                                             className="bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
                                             onPress={() => navigation.navigate('ViewRecipe', { recipe: item, viewMode, profileUserId: userId })}
                                         >
-                                            <Image source={{ uri: item.image }} className="w-full h-36" style={{ resizeMode: 'cover' }} />
+                                            <View className="relative">
+                                                <Image source={{ uri: item.image }} className="w-full h-36" style={{ resizeMode: 'cover' }} />
+                                                {item.isPrivate && (
+                                                    <View className="absolute top-2 right-2 bg-black/70 px-2 py-1 rounded-full flex-row items-center">
+                                                        <Ionicons name="lock-closed" size={14} color="white" />
+                                                        <Text className="text-white text-xs font-semibold ml-1">Private</Text>
+                                                    </View>
+                                                )}
+                                            </View>
                                             <View className="p-4">
                                                 <Text className="font-bold text-base text-gray-800 mb-1">{item.title}</Text>
                                                 <View className="flex-row items-center justify-between">

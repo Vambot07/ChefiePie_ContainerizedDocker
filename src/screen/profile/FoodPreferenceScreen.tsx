@@ -129,6 +129,35 @@ const FoodPreferenceScreen = () => {
     const [customIngredient, setCustomIngredient] = useState<string>('');
     const [saving, setSaving] = useState(false);
 
+    // Dietary restriction definitions
+    const dietaryDefinitions: { [key: string]: string } = {
+        'None': 'No dietary restrictions. All foods allowed.',
+        'Vegetarian': 'No meat or fish. Allows dairy and eggs.\n\n✅ Vegetables, fruits, grains, eggs, dairy\n❌ Meat, fish, seafood',
+        'Vegan': 'No animal products at all. Only plant-based foods.\n\n✅ Vegetables, fruits, grains, nuts, beans\n❌ Meat, fish, eggs, dairy, honey',
+        'Pescatarian': 'Vegetarian diet plus fish and seafood.\n\n✅ Vegetables, fish, seafood, eggs, dairy\n❌ Meat (beef, pork, chicken)',
+        'Paleo': 'Caveman diet - no processed foods or grains.\n\n✅ Meat, fish, eggs, vegetables, fruits, nuts\n❌ Grains, dairy, beans, processed foods',
+        'Low-Carb': 'Limited carbohydrates and sugars.\n\n✅ Meat, fish, vegetables, healthy fats\n❌ Bread, pasta, rice, sugar, starchy foods',
+        'Keto': 'Very low-carb, high-fat diet.\n\n✅ Meat, fish, eggs, cheese, low-carb vegetables\n❌ Bread, pasta, rice, sugar, most fruits',
+        'Kosher': 'Jewish dietary laws.\n\n✅ Kosher-certified foods, certain meats/fish\n❌ Pork, shellfish, mixing dairy+meat',
+        'Gluten': 'Gluten intolerance/celiac disease.\n\n❌ Wheat, barley, rye, bread, pasta',
+        'Dairy': 'Lactose intolerance or dairy allergy.\n\n❌ Milk, cheese, yogurt, butter, cream',
+        'Egg': 'Egg allergy.\n\n❌ Eggs and egg-based products',
+        'Soy': 'Soy allergy.\n\n❌ Soybeans, tofu, soy sauce, edamame',
+        'Peanut': 'Peanut allergy.\n\n❌ Peanuts and peanut products',
+        'Tree Nut': 'Tree nut allergy.\n\n❌ Almonds, walnuts, cashews, pistachios',
+        'Fish': 'Fish allergy.\n\n❌ All types of fish',
+        'Shellfish': 'Shellfish allergy.\n\n❌ Shrimp, crab, lobster, clams, oysters'
+    };
+
+    const showDietInfo = (diet: string) => {
+        const definition = dietaryDefinitions[diet] || 'No information available.';
+        Alert.alert(
+            diet,
+            definition,
+            [{ text: 'Got it', style: 'default' }]
+        );
+    };
+
     useEffect(() => {
         if (user) {
             setDietaryRestrictions(user.dietaryRestrictions || []);
@@ -255,23 +284,42 @@ const FoodPreferenceScreen = () => {
             showsVerticalScrollIndicator={false}
         >
             {dietaryOptions.map((option) => (
-                <TouchableOpacity
+                <View
                     key={option}
                     className="flex-row items-center justify-between py-3 border-b border-gray-200"
-                    onPress={() => handleDietaryToggle(option)}
                 >
-                    <Text className="text-gray-800 text-base">{option}</Text>
-                    <View
-                        className={`w-6 h-6 rounded-full border-2 items-center justify-center ${dietaryRestrictions.includes(option)
-                            ? 'border-orange-400 bg-orange-400'
-                            : 'border-gray-400'
-                            }`}
+                    <TouchableOpacity
+                        className="flex-1 flex-row items-center"
+                        onPress={() => handleDietaryToggle(option)}
                     >
-                        {dietaryRestrictions.includes(option) && (
-                            <Ionicons name="checkmark" size={16} color="white" />
-                        )}
+                        <Text className="text-gray-800 text-base flex-1">{option}</Text>
+                    </TouchableOpacity>
+
+                    <View className="flex-row items-center">
+                        {/* Info Icon */}
+                        <TouchableOpacity
+                            onPress={() => showDietInfo(option)}
+                            className="p-1 mr-3"
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Ionicons name="information-circle-outline" size={20} color="#FF9966" />
+                        </TouchableOpacity>
+
+                        {/* Checkbox */}
+                        <TouchableOpacity onPress={() => handleDietaryToggle(option)}>
+                            <View
+                                className={`w-6 h-6 rounded-full border-2 items-center justify-center ${dietaryRestrictions.includes(option)
+                                    ? 'border-orange-400 bg-orange-400'
+                                    : 'border-gray-400'
+                                    }`}
+                            >
+                                {dietaryRestrictions.includes(option) && (
+                                    <Ionicons name="checkmark" size={16} color="white" />
+                                )}
+                            </View>
+                        </TouchableOpacity>
                     </View>
-                </TouchableOpacity>
+                </View>
             ))}
         </ScrollView>
     );

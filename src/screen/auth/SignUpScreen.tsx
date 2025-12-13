@@ -4,10 +4,11 @@ import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '~/context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadProfileToFirebase } from '~/utils/uploadImage';
+import { updateProfileImage } from '~/utils/uploadImage';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { KeyboardAvoidingView, Platform } from 'react-native';
-import EditModal from '~/components/modal/EditModal';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../../firebaseConfig';
 
 const SignUpScreen = () => {
     const navigation = useNavigation<any>();
@@ -16,14 +17,15 @@ const SignUpScreen = () => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [profileImage, setProfileImage] = useState<string | null>(null);
-    const { signup } = useAuth();
+    const { signup, refreshUserData } = useAuth();
     const [loading, setLoading] = useState(false);
+    const [loadingStatus, setLoadingStatus] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'], // Updated: Use array instead of MediaTypeOptions
             allowsEditing: true as boolean,
             quality: 0.8,
             aspect: [4, 3],
@@ -54,28 +56,58 @@ const SignUpScreen = () => {
             }
 
             setLoading(true);
-            let profileImageUrl = '';
 
-            // Upload profile image if selected
-            if (profileImage) {
-                const fileName = `profile_${Date.now()}.jpg`;
-                profileImageUrl = await uploadProfileToFirebase(profileImage, fileName);
-            }
+            // Step 1: Create user account WITHOUT profile image
+            setLoadingStatus('Creating your account...');
+            console.log('📝 Step 1: Creating account...');
+            const response = await signup(username, email, password);
 
-            // Create user account
-            const response = await signup(username, email, password, profileImageUrl);
-
-            console.log('Signup response:', response);
-
-            if (response.success) {
-                Alert.alert('Signup Success', 'Account created successfully!');
-            } else {
+            if (!response.success) {
                 Alert.alert('Signup Failed', response.msg + '\nPlease try again later');
+                return;
             }
+
+            console.log('✅ Account created successfully!');
+            const userId = response.user?.uid;
+
+            if (!userId) {
+                throw new Error('User ID not found after signup');
+            }
+
+            // Step 2: Upload profile image if selected (now we have userId!)
+            if (profileImage) {
+                setLoadingStatus('Uploading profile picture...');
+                console.log('📤 Step 2: Uploading profile image with userId:', userId);
+
+                const profileImageUrl = await updateProfileImage(profileImage, userId);
+                console.log('✅ Profile image uploaded:', profileImageUrl);
+
+                // Step 3: Update user profile with image URL
+                setLoadingStatus('Updating profile...');
+                console.log('🔄 Step 3: Updating Firestore with image URL...');
+
+                await updateDoc(doc(db, 'users', userId), {
+                    profileImage: profileImageUrl
+                });
+
+                console.log('✅ Profile updated with image URL!');
+
+                // Step 4: Refresh user data in AuthContext
+                setLoadingStatus('Loading your profile...');
+                console.log('🔄 Step 4: Refreshing AuthContext...');
+                await refreshUserData();
+                console.log('✅ AuthContext refreshed!');
+            }
+
+            setLoadingStatus('');
+            Alert.alert('Success! 🎉', 'Your account has been created successfully!');
+
         } catch (error) {
+            console.error('❌ Signup error:', error);
             Alert.alert('Error', error instanceof Error ? error.message : 'An unknown error occurred');
         } finally {
             setLoading(false);
+            setLoadingStatus('');
         }
     };
 
@@ -198,8 +230,10 @@ const SignUpScreen = () => {
                 <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/50 justify-center items-center z-[1000]">
                     <View className="bg-white p-[30px] rounded-[15px] items-center min-w-[250px] shadow-lg">
                         <ActivityIndicator size="large" color="#FF9966" />
-                        <Text className="text-lg font-semibold text-[#333] mt-[15px] text-center">Creating your account...</Text>
-                        <Text className="text-sm text-[#666] mt-2 text-center">Please wait while we set up your profile</Text>
+                        <Text className="text-lg font-semibold text-[#333] mt-[15px] text-center">
+                            {loadingStatus || 'Creating your account...'}
+                        </Text>
+                        <Text className="text-sm text-[#666] mt-2 text-center">Please wait, this may take a moment</Text>
                     </View>
                 </View>
             )}

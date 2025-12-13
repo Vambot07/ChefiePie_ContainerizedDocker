@@ -12,6 +12,7 @@ import {
     loadMealPlanWithDetails,
     deleteRecipeFromDay,
     addRecipeToDay,
+    cleanupPastWeeks,
 } from '~/controller/planner';
 import { getSavedRecipes } from '~/controller/recipe';
 import { RootStackParamList } from '~/navigation/AppStack';
@@ -165,60 +166,32 @@ export default function PlannerScreen() {
         }
     }, [userId, weekOffset]);
 
-    // Cleanup recipes from past dates (only for current week)
-    const cleanupPastDays = useCallback(async () => {
-        if (weekOffset !== 0 || !userId) return; // Only clean current week
+    // Cleanup weeks that have completely passed
+    const runWeeklyCleanup = useCallback(async () => {
+        if (!userId) return;
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Reset to start of day
+        try {
+            console.log('🗑️ Running weekly cleanup...');
+            const result = await cleanupPastWeeks(userId);
 
-        const weekDates = getWeekDates(weekOffset);
-        const daysToClean: number[] = [];
-
-        // Find which days are in the past
-        weekDates.forEach((date, index) => {
-            if (date < today) {
-                daysToClean.push(index);
+            if (result.success && result.deletedCount && result.deletedCount > 0) {
+                console.log(`✅ Cleaned up ${result.deletedCount} past week(s)`);
+                // Reload the current week's data after cleanup
+                loadSavedPlan();
             }
-        });
-
-        if (daysToClean.length === 0) return;
-
-        console.log('🗑️ Cleaning up past days:', daysToClean);
-
-        // Delete recipes from past days
-        for (const dayIndex of daysToClean) {
-            const recipes = recipesByDay[dayIndex];
-            if (recipes && recipes.length > 0) {
-                console.log(`   Deleting ${recipes.length} recipe(s) from day ${dayIndex}`);
-                for (const recipe of recipes) {
-                    await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipe.id);
-                }
-            }
+        } catch (error) {
+            console.error('❌ Error during weekly cleanup:', error);
         }
-
-        // Update local state to remove past days
-        setRecipesByDay(prev => {
-            const updated = { ...prev };
-            daysToClean.forEach(dayIndex => {
-                delete updated[dayIndex];
-            });
-            return updated;
-        });
-
-        console.log('✅ Cleanup complete - removed recipes from past days');
-    }, [weekOffset, userId, recipesByDay]);
+    }, [userId]);
 
     useEffect(() => {
         loadSavedPlan();
     }, [weekOffset, userId]);
 
-    // Run cleanup after meal plan loads
+    // Run weekly cleanup when screen first loads
     useEffect(() => {
-        if (!loadingWeek && Object.keys(recipesByDay).length > 0) {
-            cleanupPastDays();
-        }
-    }, [recipesByDay, loadingWeek, cleanupPastDays]);
+        runWeeklyCleanup();
+    }, [runWeeklyCleanup]);
 
     useFocusEffect(
         useCallback(() => {
@@ -375,10 +348,26 @@ export default function PlannerScreen() {
 
         setLoadingRecipes(true);
         try {
+            // Prepare user preference filters
+            const filters: {
+                diet?: string[];
+                excludeIngredients?: string[];
+            } = {};
+
+            if (user?.dietaryRestrictions && user.dietaryRestrictions.length > 0) {
+                filters.diet = user.dietaryRestrictions;
+                console.log('🥗 Applying dietary restrictions to meal plan:', user.dietaryRestrictions);
+            }
+
+            if (user?.ingredientsToAvoid && user.ingredientsToAvoid.length > 0) {
+                filters.excludeIngredients = user.ingredientsToAvoid;
+                console.log('🚫 Excluding ingredients from meal plan:', user.ingredientsToAvoid);
+            }
+
             const newRecipesByDay: { [key: number]: Recipe[] } = {};
 
             for (const index of selectedDays) {
-                const results = await fetchRandomRecipes(1);
+                const results = await fetchRandomRecipes(1, filters);
                 newRecipesByDay[index] = results.map((item: any) => ({
                     id: item.id.toString(),
                     title: item.title,
@@ -395,8 +384,11 @@ export default function PlannerScreen() {
             if (userId) {
                 await saveMealPlan(userId, weekOffset, newRecipesByDay);
             }
+
+            console.log('✅ Meal plan created with user preferences applied');
         } catch (error) {
             console.log('Error fetching recipes for days:', error);
+            Alert.alert('Error', 'Failed to generate meal plan. Please try again.');
         } finally {
             setLoadingRecipes(false);
         }

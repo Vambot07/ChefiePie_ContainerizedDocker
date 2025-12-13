@@ -29,7 +29,7 @@ const Header: React.FC<HeaderProps> = ({
             <View style={{ backgroundColor }} className="px-4 py-4">
                 <View className="flex-row items-center justify-between">
                     {/* Left side - Back button or spacer */}
-                    <View className="w-8">
+                    <View className="w-20">
                         {showBackButton && (
                             <TouchableOpacity
                                 onPress={onBack}
