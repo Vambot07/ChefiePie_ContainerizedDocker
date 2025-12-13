@@ -35,6 +35,7 @@ export interface RecipeData {
   nutrition: string;
   sourceUrl: string;
   youtube: string;
+  isPrivate?: boolean;
 }
 
 export interface Ingredient {
@@ -66,6 +67,7 @@ export interface Recipe {
   youtube?: string;
   createdAt?: Timestamp;
   savedDocId?: string;
+  isPrivate?: boolean;
 }
 
 export interface UserProfile {
@@ -198,6 +200,7 @@ export const addRecipe = async (recipeData: RecipeData): Promise<string> => {
       nutrition: recipeData.nutrition,
       sourceUrl: recipeData.sourceUrl,
       youtube: recipeData.youtube,
+      isPrivate: recipeData.isPrivate || false,
       createdAt: serverTimestamp(),
       savedBy: [],
       source: 'created',
@@ -227,11 +230,16 @@ export const searchRecipes = async (searchQuery: string): Promise<Recipe[]> => {
         userId: data.userId || '',
         title: data.title || '',
         source: (data.source as 'created' | 'api') || 'created',
+        isPrivate: data.isPrivate || false,
       };
     });
 
     const filtered = allRecipes.filter(
-      (recipe) => recipe.title && recipe.title.toLowerCase().includes(searchQuery.toLowerCase())
+      (recipe) =>
+        recipe.title &&
+        recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        // Privacy filter: Only show public recipes OR private recipes owned by current user
+        (!recipe.isPrivate || recipe.userId === user.uid)
     );
 
     const recipesWithUserData = await Promise.all(
@@ -298,6 +306,7 @@ export const saveRecipe = async ({
   image,
   totalTime,
   sourceUrl,
+  isPrivate,
 }: {
   id: string;
   title: string;
@@ -305,6 +314,7 @@ export const saveRecipe = async ({
   image: string;
   totalTime?: string;
   sourceUrl?: string | null;
+  isPrivate?: boolean;
 }): Promise<string> => {
   try {
     const user = auth.currentUser;
@@ -320,6 +330,7 @@ export const saveRecipe = async ({
       source: source || 'created',
       totalTime: totalTime || null,
       sourceUrl: sourceUrl || null,
+      isPrivate: isPrivate || false,
       savedAt: serverTimestamp(),
     };
 
@@ -348,6 +359,7 @@ export const saveApiRecipe = async (recipe: any): Promise<string> => {
       totalTime: recipe.readyInMinutes ? `${recipe.readyInMinutes}` : 'N/A',
       sourceUrl: recipe.sourceUrl || null,
       userId: user.uid,
+      isPrivate: false,
       savedAt: serverTimestamp(),
     });
 
@@ -422,10 +434,15 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe> => {
       const recipeData = docSnap.data();
       const isCreator = recipeData.userId === currentUserId;
 
+      const username = await getUsernameById(recipeData.userId);
+      const profileImage = await getProfileImageById(recipeData.userId);
+
       if (recipeData.source === 'created' || !recipeData.source) {
         return {
           id: docSnap.id,
           ...recipeData,
+          username,
+          profileImage,
           source: recipeData.source || 'created',
         } as Recipe;
       }
@@ -435,6 +452,8 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe> => {
         return {
           id: recipeId,
           ...apiRecipe,
+          username: 'Unknown',
+          profileImage: null,
           source: 'api',
         } as Recipe;
       }

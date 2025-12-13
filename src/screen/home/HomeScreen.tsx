@@ -8,10 +8,9 @@ import { NavigationProps } from '~/navigation/AppStack';
 import { useAuth } from '~/context/AuthContext';
 import {
     fetchRecipesByCategory,
-    fetchRecipesByIngredients,
-    fetchRecipeById
+    fetchRecipesByIngredients
 } from '~/api/spoonacular';
-import { saveApiRecipe, unsaveRecipe, getSavedRecipes, getRecipeByUser } from '~/controller/recipe';
+import { saveApiRecipe, unsaveRecipe, getSavedRecipes, getRecipeByUser, getRecipeById } from '~/controller/recipe';
 import { loadMealPlanWithDetails } from '~/controller/planner';
 import colors from '~/utils/color';
 import SpoonacularChatbot from '~/components/partials/SpooncularChatBot';
@@ -144,8 +143,9 @@ export const HomeScreen = () => {
             const dayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1; // Convert Sunday (0) to 6
 
             // Fetch today's meals from planner (current week = offset 0)
-            const mealPlan = await loadMealPlanWithDetails(userId, 0);
+            const mealPlan = await loadMealPlanWithDetails(userId, 0)
             const todayRecipes = mealPlan?.[dayIndex] || [];
+            console.log("Here it is: ", todayRecipes);
             setTodaysMeals(todayRecipes);
 
             // Fetch user stats
@@ -476,29 +476,44 @@ export const HomeScreen = () => {
         setShowLoadingModal(true);
 
         try {
-            const fullRecipe = await fetchRecipeById(recipe.id);
+            const fullRecipe: any = await getRecipeById(recipe.id);
 
             if (!fullRecipe) {
                 throw new Error('Failed to fetch recipe details');
             }
 
+            // For created recipes, preserve the structure from Firestore
+            // For API recipes, transform to match ViewRecipeScreen expectations
             const completeRecipe = {
                 id: fullRecipe.id?.toString() || recipe.id,
                 title: fullRecipe.title || recipe.title,
                 image: fullRecipe.image || recipe.image,
-                totalTime: fullRecipe.readyInMinutes?.toString() || '30',
-                difficulty: '',
-                source: 'api' as const,
+                totalTime: fullRecipe.totalTime || fullRecipe.readyInMinutes?.toString() || '30',
+                difficulty: fullRecipe.difficulty || '',
+                source: fullRecipe.source || 'api' as const,
                 servings: fullRecipe.servings || 4,
-                ingredients: fullRecipe.extendedIngredients?.map((ing: any) => ing.original) || [],
-                instructions: fullRecipe.instructions ||
-                    fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) =>
-                        `${idx + 1}. ${step.step}`
-                    ).join('\n\n') || 'No instructions available',
-                summary: fullRecipe.summary || '',
+                userId: fullRecipe.userId,
+                username: fullRecipe.username,
+                profileImage: fullRecipe.profileImage,
+                // Keep ingredients as objects, not strings
+                ingredients: fullRecipe.extendedIngredients?.map((ing: any) => ({
+                    name: ing.name || ing.original,
+                    amount: ing.amount?.toString() || '',
+                    unit: ing.unit || ''
+                })) || fullRecipe.ingredients || [],
+                // Keep steps as array of objects, not joined string
+                steps: fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) => ({
+                    title: `Step ${idx + 1}`,
+                    details: step.step,
+                    time: ''
+                })) || fullRecipe.steps || [],
+                intro: fullRecipe.summary?.replace(/<[^>]*>/g, '') || fullRecipe.intro || '',
+                sourceUrl: fullRecipe.sourceUrl || null,
+                youtube: fullRecipe.youtube || null,
                 cuisines: fullRecipe.cuisines || [],
                 dishTypes: fullRecipe.dishTypes || [],
                 diets: fullRecipe.diets || [],
+                serving: fullRecipe.serving || fullRecipe.servings?.toString() || 'N/A',
             };
 
             console.log('✅ Complete recipe ready:', completeRecipe.title);
@@ -1107,6 +1122,8 @@ export const HomeScreen = () => {
                                 </View>
                             </View>
 
+
+
                             {/* Info Message */}
                             {modalSelectedIngredients.length === 0 && (
                                 <View className="mt-4 bg-orange-50 p-3 rounded-lg">
@@ -1161,6 +1178,81 @@ export const HomeScreen = () => {
                     </TouchableOpacity>
                 </View>
             </Modal>
+
+            {/* AsyncStorage Size Check Button */}
+            {/* <View className="mt-6 mb-2">
+                <TouchableOpacity
+                    className="bg-purple-500 py-3 px-4 rounded-xl items-center"
+                    onPress={async () => {
+                        const keys = await AsyncStorage.getAllKeys();
+                        const stores = await AsyncStorage.multiGet(keys);
+
+                        let totalSize = 0;
+                        const itemSizes: any = {};
+
+                        stores.forEach(([key, value]) => {
+                            const size = (key.length + (value?.length || 0));
+                            itemSizes[key] = size;
+                            totalSize += size;
+                        });
+
+                        const formatSize = (bytes: number) => {
+                            if (bytes < 1024) return `${bytes} B`;
+                            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+                            return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+                        };
+
+                        let message = `📊 AsyncStorage Usage\n\n`;
+                        message += `Total Items: ${keys.length}\n`;
+                        message += `Total Size: ${formatSize(totalSize)}\n\n`;
+                        message += `Breakdown:\n`;
+
+                        Object.entries(itemSizes).forEach(([key, size]) => {
+                            message += `• ${key}: ${formatSize(size as number)}\n`;
+                        });
+
+                        Alert.alert('Storage Info', message);
+                    }}
+                >
+                    <View className="flex-row items-center">
+                        <Ionicons name="server-outline" size={20} color="white" />
+                        <Text className="text-white font-bold ml-2">Check AsyncStorage Size</Text>
+                    </View>
+                </TouchableOpacity>
+            </View> */}
+
+            {/* Clear Storage Button - DANGEROUS */}
+            {/* {__DEV__ && (
+                <TouchableOpacity
+                    className="bg-red-500 py-3 px-4 rounded-xl items-center mt-3"
+                    onPress={() => {
+                        Alert.alert(
+                            '⚠️ Clear Storage',
+                            'This will delete ALL AsyncStorage data. Are you sure?',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Clear All',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            await AsyncStorage.clear();
+                                            Alert.alert('✅ Success', 'All storage cleared!');
+                                        } catch (error) {
+                                            Alert.alert('❌ Error', 'Failed to clear storage');
+                                        }
+                                    }
+                                }
+                            ]
+                        );
+                    }}
+                >
+                    <View className="flex-row items-center">
+                        <Ionicons name="trash-outline" size={20} color="white" />
+                        <Text className="text-white font-bold ml-2">Clear All Storage</Text>
+                    </View>
+                </TouchableOpacity>
+            )} */}
         </SafeAreaView>
     );
 };

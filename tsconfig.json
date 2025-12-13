@@ -5,8 +5,12 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "~/*": ["src/*"],
-      "@firebase/auth": ["./node_modules/@firebase/auth/dist/index.rn.d.ts"]
+      "~/*": [
+        "src/*"
+      ],
+      "@firebase/auth": [
+        "./node_modules/firebase/node_modules/@firebase/auth/dist/index.rn.d.ts"
+      ]
     },
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true

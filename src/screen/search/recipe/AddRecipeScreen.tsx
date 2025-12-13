@@ -12,6 +12,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '~/context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { addRecipeToDay } from '~/controller/planner';
+import { Switch } from 'react-native';
 
 
 interface Ingredient {
@@ -53,6 +54,7 @@ export default function AddRecipeScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [showUnitModal, setShowUnitModal] = useState(false);
     const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(0);
+    const [isPrivate, setIsPrivate] = useState(false);
 
     const { viewMode, selectedDayIndex, weekOffset } = (route.params as any) || { viewMode: 'search' };
     const userId = user?.uid;
@@ -96,9 +98,9 @@ export default function AddRecipeScreen() {
     // Pick image from gallery
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],  // ✅ Changed from MediaTypeOptions.Images
+            mediaTypes: ['images'],
             allowsEditing: true,
-            quality: 0.8,  // ✅ Reduced quality to make upload faster
+            quality: 0.8,
             aspect: [4, 3],
         });
 
@@ -164,6 +166,7 @@ export default function AddRecipeScreen() {
                 nutrition,
                 youtube,
                 sourceUrl,
+                isPrivate,
             };
 
             // 1️⃣ Save recipe → return recipeId
@@ -306,15 +309,19 @@ export default function AddRecipeScreen() {
                                 <TextInput className="border border-gray-200 rounded-lg px-2 py-1 flex-1 bg-gray-50" placeholder="Name" value={ing.name} onChangeText={(v) => handleIngredientChange(idx, 'name', v)} />
                                 <TextInput className="border border-gray-200 rounded-lg px-2 py-1 w-14 bg-gray-50" placeholder="Amt" value={ing.amount} onChangeText={(v) => handleIngredientChange(idx, 'amount', v)} />
                                 <TouchableOpacity
-                                    className="border border-gray-200 rounded-lg bg-gray-50 w-20 justify-center items-center"
+                                    className="bg-orange-50 border-2 border-orange-200 rounded-xl px-2 py-2 w-24 justify-center items-center"
                                     onPress={() => {
                                         setSelectedIngredientIndex(idx);
                                         setShowUnitModal(true);
                                     }}
+                                    activeOpacity={0.7}
                                 >
-                                    <Text className="text-gray-700">
-                                        {ing.unit || 'Unit'}
-                                    </Text>
+                                    <View className="flex-row items-center">
+                                        <Text className="text-orange-600 font-bold text-xs mr-1" numberOfLines={1}>
+                                            {ing.unit || 'Unit'}
+                                        </Text>
+                                        <Ionicons name="chevron-down" size={12} color="#EA580C" />
+                                    </View>
                                 </TouchableOpacity>
                                 <TextInput className="border border-gray-200 rounded-lg px-2 py-1 flex-1 bg-gray-50" placeholder="Notes" value={ing.notes} onChangeText={(v) => handleIngredientChange(idx, 'notes', v)} />
                             </View>
@@ -376,42 +383,117 @@ export default function AddRecipeScreen() {
                             <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Source URL" value={sourceUrl} onChangeText={setSourceUrl} />
                         </View>
 
+                        {/* Privacy Toggle - ADD THIS */}
+                        <View className="mb-8">
+                            <View className="flex-row items-center justify-between mb-1">
+                                <View className="flex-1">
+                                    <Text className="font-semibold text-gray-700 flex-row items-center">
+                                        <Ionicons
+                                            name={isPrivate ? "lock-closed" : "lock-open"}
+                                            size={18}
+                                            color="#FFB47B"
+                                        /> Recipe Privacy
+                                    </Text>
+                                    <Text className="text-gray-500 text-sm mt-1">
+                                        {isPrivate
+                                            ? 'Only you can see this recipe'
+                                            : 'Everyone can see this recipe'
+                                        }
+                                    </Text>
+                                </View>
+
+                                <Switch
+                                    value={isPrivate}
+                                    onValueChange={setIsPrivate}
+                                    trackColor={{ false: '#E5E5E5', true: '#FFB47B' }}
+                                    thumbColor="#FFFFFF"
+                                    ios_backgroundColor="#E5E5E5"
+                                />
+                            </View>
+                        </View>
                         {/* Submit Button */}
                         <TouchableOpacity className="bg-[#FFB47B] p-4 rounded-xl mb-2" onPress={handleAddRecipe}>
                             <Text className="text-white text-center font-semibold text-base">Save Recipe</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
-            )}
+            )
+            }
 
-            {/* Unit Selection Modal */}
+            {/* Beautiful Unit Selection Modal */}
             {showUnitModal && (
-                <View className="absolute inset-0 bg-black bg-opacity-50 justify-center items-center">
-                    <View className="bg-white rounded-lg p-4 w-80 max-h-96">
-                        <Text className="text-lg font-semibold text-center mb-4">Select Unit</Text>
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            {units.map((unit) => (
-                                <TouchableOpacity
-                                    key={unit}
-                                    className="p-3 border-b border-gray-200"
-                                    onPress={() => {
-                                        handleIngredientChange(selectedIngredientIndex, 'unit', unit);
-                                        setShowUnitModal(false);
-                                    }}
-                                >
-                                    <Text className="text-center text-gray-700">{unit}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                        <TouchableOpacity
-                            className="mt-4 p-3 bg-gray-200 rounded-lg"
-                            onPress={() => setShowUnitModal(false)}
+                <View className="absolute inset-0 justify-center items-center px-6" style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}>
+                    <View className="bg-white rounded-3xl p-6 w-full max-w-sm" style={{
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 10 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 20,
+                        elevation: 10,
+                    }}>
+                        {/* Header */}
+                        <View className="flex-row items-center justify-between mb-4">
+                            <Text className="text-2xl font-bold text-gray-800">Select Unit</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowUnitModal(false)}
+                                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+                            >
+                                <Ionicons name="close" size={20} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Unit Grid */}
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            className="max-h-96"
+                            contentContainerStyle={{ paddingBottom: 8 }}
                         >
-                            <Text className="text-center text-gray-700">Cancel</Text>
-                        </TouchableOpacity>
+                            <View className="flex-row flex-wrap gap-2">
+                                {units.map((unit) => {
+                                    const isSelected = ingredients[selectedIngredientIndex]?.unit === unit;
+                                    return (
+                                        <TouchableOpacity
+                                            key={unit}
+                                            className={`px-4 py-3 rounded-xl border-2 ${
+                                                isSelected
+                                                    ? 'bg-orange-500 border-orange-500'
+                                                    : 'bg-white border-gray-200'
+                                            }`}
+                                            onPress={() => {
+                                                handleIngredientChange(selectedIngredientIndex, 'unit', unit);
+                                                setShowUnitModal(false);
+                                            }}
+                                            activeOpacity={0.7}
+                                            style={{
+                                                shadowColor: isSelected ? '#FF9966' : '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: isSelected ? 0.3 : 0.05,
+                                                shadowRadius: 4,
+                                                elevation: isSelected ? 3 : 1,
+                                            }}
+                                        >
+                                            <View className="flex-row items-center">
+                                                <Text className={`font-semibold ${
+                                                    isSelected ? 'text-white' : 'text-gray-700'
+                                                }`}>
+                                                    {unit}
+                                                </Text>
+                                                {isSelected && (
+                                                    <Ionicons
+                                                        name="checkmark-circle"
+                                                        size={18}
+                                                        color="white"
+                                                        style={{ marginLeft: 6 }}
+                                                    />
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </ScrollView>
                     </View>
                 </View>
             )}
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingView >
     );
 }

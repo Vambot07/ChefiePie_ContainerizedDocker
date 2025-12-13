@@ -8,6 +8,9 @@ import Header from '../../../components/partials/Header';
 import { getAuth, type Auth } from 'firebase/auth';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '~/context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../../../firebaseConfig';
 
 const auth: Auth = getAuth();
 
@@ -26,12 +29,13 @@ const ViewRecipeScreen = () => {
     const [ownerRecipeId, setOwnerRecipeId] = useState<string | null>(null);
     const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
     const [isSummaryFullModal, setIsSummaryFullModal] = useState<boolean>(false);
+    const [showIntroModal, setShowIntroModal] = useState<boolean>(false);
 
     // API Recipe state
     const [apiRecipeDetails, setApiRecipeDetails] = useState<any>(null);
     const [loadingApiDetails, setLoadingApiDetails] = useState(false);
 
-    // ✅ Get recipe and viewMode from params
+    // Get recipe and viewMode from params
     const {
         recipe,
         viewMode = 'discover',
@@ -78,7 +82,7 @@ const ViewRecipeScreen = () => {
         // Never show for API recipes
         if (isApiRecipe) return false;
 
-        // ✅ ADMIN can manage any user-created recipe
+        // ADMIN can manage any user-created recipe
         if (isAdmin) return true;
 
         // For non-admin users, only show if they own the recipe
@@ -138,6 +142,47 @@ const ViewRecipeScreen = () => {
         }
     };
 
+    // Save to recently viewed
+    const saveRecentlyViewed = useCallback(async (recipeData: any) => {
+        const userId = currentUserId;
+        if (!userId || !recipeData?.id) return;
+
+        try {
+            const key = `recentlyViewed_${userId}`;
+            const stored = await AsyncStorage.getItem(key);
+            let recipes = stored ? JSON.parse(stored) : [];
+
+            // Remove if already exists (to move to top)
+            recipes = recipes.filter((r: any) => r.id !== recipeData.id.toString());
+
+            // Format time
+            let formattedTime = 'N/A';
+            if (recipeData.totalTime) {
+                const timeValue = recipeData.totalTime.toString();
+                formattedTime = timeValue.includes('Mins') ? timeValue : `${timeValue} Mins`;
+            } else if (recipeData.readyInMinutes) {
+                formattedTime = `${recipeData.readyInMinutes} Mins`;
+            }
+
+            // Add to top
+            recipes.unshift({
+                id: recipeData.id.toString(),
+                title: recipeData.title,
+                image: recipeData.image,
+                time: formattedTime,
+                viewedAt: new Date().toISOString()
+            });
+
+            // Keep only last 20
+            recipes = recipes.slice(0, 20);
+            await AsyncStorage.setItem(key, JSON.stringify(recipes));
+
+            console.log('✅ Added to recently viewed:', recipeData.title);
+        } catch (error) {
+            console.error('❌ Error saving to recently viewed:', error);
+        }
+    }, [currentUserId]);
+
     // Fetch full API recipe details
     useEffect(() => {
         console.log(recipe);
@@ -166,6 +211,21 @@ const ViewRecipeScreen = () => {
 
         fetchApiRecipeDetails();
     }, [recipe?.id, isApiRecipe]);
+
+    // Track recently viewed when recipe is loaded
+    useEffect(() => {
+        const trackView = async () => {
+            if (isApiRecipe && apiRecipeDetails) {
+                // For API recipes, wait until full details are loaded
+                await saveRecentlyViewed(apiRecipeDetails);
+            } else if (!isApiRecipe && recipe) {
+                // For user-created recipes, track immediately
+                await saveRecentlyViewed(recipe);
+            }
+        };
+
+        trackView();
+    }, [isApiRecipe, apiRecipeDetails, recipe, saveRecentlyViewed]);
 
     useFocusEffect(
         useCallback(() => {
@@ -197,6 +257,22 @@ const ViewRecipeScreen = () => {
         const ownerId = getOwnerId();
         setOwnerRecipeId(ownerId);
     }, []);
+
+    // Privacy Guard: Block unauthorized access to private recipes
+    useEffect(() => {
+        if (!isApiRecipe && recipe?.isPrivate && !isOwner && !isAdmin) {
+            Alert.alert(
+                'Private Recipe',
+                'This recipe is private and only visible to the owner.',
+                [
+                    {
+                        text: 'OK',
+                        onPress: () => navigation.goBack()
+                    }
+                ]
+            );
+        }
+    }, [recipe, isOwner, isApiRecipe, isAdmin]);
 
     const getOwnerId = () => {
         if (!isApiRecipe) {
@@ -244,7 +320,7 @@ const ViewRecipeScreen = () => {
         title = recipe?.title || 'Recipe';
         time = recipe?.totalTime || recipe?.time || 'N/A';
         ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
-        items = recipe?.items;
+        items = ingredients.length;
         profileImage = recipe?.profileImage || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836';
         steps = recipe?.steps || [];
         intro = recipe?.intro;
@@ -266,6 +342,8 @@ const ViewRecipeScreen = () => {
 
     const handleSaveRecipe = async () => {
         setLoadingAction('saving');
+        console.log("dlkmkkddlk ", recipe);
+        console.log(items);
 
         try {
             if (isApiRecipe) {
@@ -293,6 +371,29 @@ const ViewRecipeScreen = () => {
             Alert.alert('Success', 'Recipe has been unsaved.');
         } catch (error) {
             Alert.alert('Error', error instanceof Error ? error.message : 'Failed to unsave recipe');
+        } finally {
+            setLoadingAction(null);
+        }
+    };
+
+    const togglePrivacy = async () => {
+        setLoadingAction('toggling-privacy');
+        try {
+            const newPrivacyStatus = !recipe.isPrivate;
+            await updateDoc(doc(db, 'recipes', recipe.id), {
+                isPrivate: newPrivacyStatus
+            });
+
+            // Update local recipe object
+            recipe.isPrivate = newPrivacyStatus;
+
+            Alert.alert(
+                'Success',
+                `Recipe is now ${newPrivacyStatus ? 'private' : 'public'}`,
+                [{ text: 'OK', onPress: () => setModalVisible(false) }]
+            );
+        } catch (error) {
+            Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update privacy');
         } finally {
             setLoadingAction(null);
         }
@@ -416,6 +517,28 @@ const ViewRecipeScreen = () => {
                             <View className="w-12 h-1 bg-gray-300 rounded-full mx-auto mt-2 mb-4" />
                             <TouchableOpacity
                                 className={`flex-row items-center px-6 py-4 border-b border-gray-200 ${loadingAction ? 'opacity-50' : ''}`}
+                                onPress={togglePrivacy}
+                                disabled={!!loadingAction}
+                            >
+                                {loadingAction === 'toggling-privacy' ? (
+                                    <ActivityIndicator size="small" color="#FF9966" />
+                                ) : (
+                                    <Ionicons
+                                        name={recipe.isPrivate ? "lock-open-outline" : "lock-closed-outline"}
+                                        size={24}
+                                        color="#FF9966"
+                                    />
+                                )}
+                                <Text className="text-[#FF9966] text-lg font-semibold ml-3">
+                                    {loadingAction === 'toggling-privacy'
+                                        ? 'Updating...'
+                                        : recipe.isPrivate
+                                            ? 'Make it public'
+                                            : 'Make it private'}
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className={`flex-row items-center px-6 py-4 border-b border-gray-200 ${loadingAction ? 'opacity-50' : ''}`}
                                 onPress={showDeleteConfirmation}
                                 disabled={!!loadingAction}
                             >
@@ -474,7 +597,16 @@ const ViewRecipeScreen = () => {
                 <View className="px-5 mt-3">
                     <Text className="text-lg font-bold text-gray-900">{title}</Text>
                     {intro && (
-                        <Text className="text-gray-700 mt-2" numberOfLines={4}>{intro}</Text>
+                        <View className="mt-2">
+                            <Text className="text-gray-700" numberOfLines={3}>
+                                {intro}
+                            </Text>
+                            {intro.length > 150 && (
+                                <TouchableOpacity onPress={() => setShowIntroModal(true)} className="mt-1">
+                                    <Text className="text-orange-500 font-semibold text-sm">Read more</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     )}
 
                     {/* Badge for API recipes */}
@@ -606,8 +738,23 @@ const ViewRecipeScreen = () => {
                         {/* Serving & Items (Removed 'serves' variable here for consistency) */}
                         {(serving || items) && (
                             <View className="flex-row justify-between px-5 mt-4 mb-2">
-                                {serving && serving !== 'N/A' && <Text className="text-xs text-gray-400">{serving} serve{Number(serving) > 1 ? 's' : ''}</Text>}
-                                {items && <Text className="text-xs text-gray-400">{items} item{items > 1 ? 's' : ''}</Text>}
+                                {/* Left side - Serving (always render to hold position) */}
+                                <View>
+                                    {serving && serving !== 'N/A' && (
+                                        <Text className="text-xs text-gray-500 font-bold">
+                                            {serving} serve{Number(serving) > 1 ? 's' : ''}
+                                        </Text>
+                                    )}
+                                </View>
+
+                                {/* Right side - Items (always render to hold position) */}
+                                <View>
+                                    {items > 0 && (
+                                        <Text className="text-xs text-gray-500 font-bold">
+                                            {items} item{items > 1 ? 's' : ''}
+                                        </Text>
+                                    )}
+                                </View>
                             </View>
                         )}
 
@@ -684,6 +831,49 @@ const ViewRecipeScreen = () => {
 
                 </View>
             )}
+
+            {/* Intro Modal */}
+            <Modal
+                visible={showIntroModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowIntroModal(false)}
+            >
+                <Pressable
+                    style={{
+                        flex: 1,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        padding: 20,
+                    }}
+                    onPress={() => setShowIntroModal(false)}
+                >
+                    <Pressable
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: 16,
+                            padding: 24,
+                            maxHeight: '80%',
+                            width: '100%',
+                        }}
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View className="flex-row items-center justify-between mb-4">
+                            <Text className="text-xl font-bold text-gray-900">About this recipe</Text>
+                            <TouchableOpacity onPress={() => setShowIntroModal(false)}>
+                                <Ionicons name="close-circle" size={28} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <Text className="text-gray-700 text-base leading-6">
+                                {intro}
+                            </Text>
+                        </ScrollView>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
     );
 };

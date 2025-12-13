@@ -3,6 +3,51 @@ import axios from 'axios';
 const API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY;
 const BASE_URL = process.env.EXPO_PUBLIC_SPOONACULAR_BASE_URL;
 
+// Haram ingredients to ALWAYS exclude from recipes (Islamic dietary laws)
+export const HARAM_INGREDIENTS = [
+  // Pork products
+  'pork',
+  'bacon',
+  'ham',
+  'prosciutto',
+  'pancetta',
+  'lard',
+  'pork chops',
+  'pork belly',
+  'pork sausage',
+  'chorizo',
+  'pepperoni',
+  'salami',
+  'mortadella',
+  'guanciale',
+
+  // Alcohol
+  'wine',
+  'beer',
+  'rum',
+  'vodka',
+  'whiskey',
+  'brandy',
+  'sake',
+  'champagne',
+  'sherry',
+  'port wine',
+  'liqueur',
+  'tequila',
+  'gin',
+  'cognac',
+  'bourbon',
+  'alcohol',
+  'liquor',
+  'red wine',
+  'white wine',
+  'cooking wine',
+  'marsala',
+  'amaretto',
+  'kahlua',
+  'baileys',
+];
+
 // Map category names to Spoonacular cuisine names
 const categoryToCuisine: Record<string, string> = {
   All: 'All',
@@ -17,7 +62,11 @@ const categoryToCuisine: Record<string, string> = {
 export const fetchRecipesByCategory = async (cuisine: string = 'All', number: number = 10) => {
   try {
     let url = '';
-    let params: any = { apiKey: API_KEY, number };
+    let params: any = {
+      apiKey: API_KEY,
+      number,
+      excludeIngredients: HARAM_INGREDIENTS.join(','), // Always exclude haram ingredients
+    };
 
     const mappedCuisine = categoryToCuisine[cuisine] || cuisine;
 
@@ -73,6 +122,7 @@ export const fetchRecipesByIngredients = async (
       number: number,
       ranking: 2, // 1 = maximize used ingredients, 2 = minimize missing ingredients
       ignorePantry: true, // Ignore typical pantry items
+      excludeIngredients: HARAM_INGREDIENTS.join(','), // Always exclude haram ingredients
     };
 
     const response = await axios.get(url, { params });
@@ -106,15 +156,55 @@ export const fetchRecipeApiById = async (recipeId: string | number) => {
   }
 };
 
-export const fetchRandomRecipes = async (number: number = 10) => {
+export const fetchRandomRecipes = async (
+  number: number = 10,
+  filters?: {
+    diet?: string[];
+    excludeIngredients?: string[];
+  }
+) => {
   try {
     const url = `${BASE_URL}/recipes/random`;
-    const params = {
+    const params: any = {
       apiKey: API_KEY,
       number,
     };
 
+    // Add diet filter (Spoonacular supports: vegetarian, vegan, glutenFree, ketogenic, etc.)
+    if (filters?.diet && filters.diet.length > 0) {
+      // Map common dietary restrictions to Spoonacular format
+      const dietMap: Record<string, string> = {
+        'Vegetarian': 'vegetarian',
+        'Vegan': 'vegan',
+        'Gluten': 'gluten free',
+        'Gluten-Free': 'gluten free',
+        'Ketogenic': 'ketogenic',
+        'Paleo': 'paleo',
+        'Dairy-Free': 'dairy free',
+      };
+
+      const mappedDiets = filters.diet
+        .map(d => dietMap[d] || d.toLowerCase())
+        .join(',');
+
+      if (mappedDiets) {
+        params.tags = mappedDiets;
+      }
+    }
+
+    // Always exclude haram ingredients + merge with user-provided exclusions
+    const allExcludedIngredients = [
+      ...HARAM_INGREDIENTS,
+      ...(filters?.excludeIngredients || []),
+    ];
+
+    params.excludeIngredients = allExcludedIngredients.join(',');
+
+    console.log('🔍 Fetching random recipes with filters:', params);
+
     const response = await axios.get(url, { params });
+
+    console.log(response.data.recipes);
 
     return response.data.recipes || [];
   } catch (error) {

@@ -10,6 +10,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import CryptoJS from "crypto-js";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- Types ---
 
@@ -43,6 +44,7 @@ interface AuthContextType {
     resetPassword: (email: string) => Promise<{ success: boolean; msg?: string }>;
     updateUserProfile: (updates: Partial<UserData>) => Promise<{ success: boolean; error?: any }>;
     updateUserInFirestore: (userId: string, updates: Partial<UserData>) => Promise<{ success: boolean; error?: any }>;
+    refreshUserData: () => Promise<void>;
 }
 
 interface AuthProviderProps {
@@ -61,27 +63,88 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Listen for auth state changes
     useEffect(() => {
         let mounted = true;
+        let hasStoredAuth = false;
+        let authCheckTimer: NodeJS.Timeout | null = null;
 
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (!mounted) return;
+        const initAuth = async () => {
+            // First, check AsyncStorage for saved auth
+            try {
+                const stored = await AsyncStorage.getItem('userAuth');
+                if (stored) {
+                    const authData = JSON.parse(stored);
+                    console.log('📦 Found saved auth in AsyncStorage:', authData.email);
+                    const date = new Date(authData.loginTime);
 
-            if (firebaseUser) {
-                // ✅ Ambil data dari Firestore
-                await updateUserData(firebaseUser);
-            } else {
-                setUser(null);
-                setIsAuthenticated(false);
+                    console.log('Full date:', date.toString());
+
+                    // Check if session expired (7 days)
+                    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+                    if (Date.now() - authData.loginTime > sevenDays) {
+                        console.log('⏰ Session expired, clearing...');
+                        await AsyncStorage.removeItem('userAuth');
+                        hasStoredAuth = false;
+                    } else {
+                        console.log('✅ Session valid, waiting for Firebase to restore...');
+                        hasStoredAuth = true;
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error checking AsyncStorage:', error);
             }
 
-            if (mounted) {
-                setLoading(false);
-            }
-        });
+            // Listen for Firebase auth state changes
+            const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+                if (!mounted) return;
 
-        return () => {
-            mounted = false;
-            unsubscribe();
+                // Clear any pending timer
+                if (authCheckTimer) {
+                    clearTimeout(authCheckTimer);
+                    authCheckTimer = null;
+                }
+
+                if (firebaseUser) {
+                    // User is authenticated
+                    console.log('✅ Firebase auth detected:', firebaseUser.email);
+                    await updateUserData(firebaseUser);
+
+                    if (mounted) {
+                        setLoading(false);
+                    }
+                } else {
+                    // No Firebase user
+                    console.log('❌ No Firebase auth found');
+
+                    // If we have stored auth, wait a bit for Firebase to restore
+                    // Otherwise, immediately show login screen
+                    if (hasStoredAuth) {
+                        console.log('⏳ Waiting for Firebase to restore session...');
+                        authCheckTimer = setTimeout(() => {
+                            if (mounted) {
+                                console.log('⚠️ Firebase session restore timeout, showing login');
+                                setUser(null);
+                                setIsAuthenticated(false);
+                                setLoading(false);
+                            }
+                        }, 2000); // Wait 2 seconds for Firebase to restore
+                    } else {
+                        setUser(null);
+                        setIsAuthenticated(false);
+                        setLoading(false);
+                    }
+                }
+            });
+
+            return unsubscribe;
         };
+
+        initAuth().then(unsubscribe => {
+            // Cleanup function
+            return () => {
+                mounted = false;
+                if (authCheckTimer) clearTimeout(authCheckTimer);
+                if (unsubscribe) unsubscribe();
+            };
+        });
     }, []);
 
     const updateUserData = async (firebaseUser: FirebaseUser) => {
@@ -93,13 +156,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             const firestoreEmail = userData.email;
             const authEmail = firebaseUser.email;
 
-            // ✅ Check kalau email berbeza (meaning user dah verify email baru)
+            // Check kalau email berbeza (meaning user dah verify email baru)
             if (firestoreEmail !== authEmail && authEmail) {
                 console.log("📧 Email mismatch detected!");
                 console.log("Firestore email:", firestoreEmail);
                 console.log("Auth email:", authEmail);
 
-                // ✅ Update Firestore dengan email yang baru (yang dah verified)
+                // Update Firestore dengan email yang baru (yang dah verified)
                 try {
                     await updateDoc(docRef, {
                         email: authEmail
@@ -152,9 +215,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         try {
             const response = await signInWithEmailAndPassword(auth, email, password);
 
-            // ✅ updateUserData akan auto-trigger oleh onAuthStateChanged
+            // updateUserData akan auto-trigger oleh onAuthStateChanged
             // Tapi kita boleh panggil manual untuk instant update
             await updateUserData(response.user);
+
+            // Save to AsyncStorage for auto sign-in
+            try {
+                await AsyncStorage.setItem('userAuth', JSON.stringify({
+                    userId: response.user.uid,
+                    email: response.user.email,
+                    rememberMe: true,
+                    loginTime: Date.now()
+                }));
+                console.log('✅ Auth data saved to AsyncStorage');
+            } catch (storageError) {
+                console.error('❌ Error saving to AsyncStorage:', storageError);
+                // Don't fail login if storage fails
+            }
 
             return { success: true, user: response.user };
         } catch (error: any) {
@@ -208,6 +285,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const logout = async () => {
         try {
             await signOut(auth);
+
+            // Clear AsyncStorage on logout
+            try {
+                await AsyncStorage.removeItem('userAuth');
+                console.log('✅ Auth data cleared from AsyncStorage');
+            } catch (storageError) {
+                console.error('❌ Error clearing AsyncStorage:', storageError);
+            }
+
             return { success: true };
         } catch (error: any) {
             return { success: false, msg: error.message, error };
@@ -255,6 +341,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
     }
 
+    // Refresh user data from Firestore
+    const refreshUserData = async () => {
+        try {
+            const currentUser = auth.currentUser;
+            if (currentUser) {
+                console.log('🔄 Refreshing user data from Firestore...');
+                await updateUserData(currentUser);
+                console.log('✅ User data refreshed successfully!');
+            } else {
+                console.warn('⚠️ No authenticated user to refresh');
+            }
+        } catch (error) {
+            console.error('❌ Error refreshing user data:', error);
+        }
+    };
+
     return (
         <AuthContext.Provider
             value={{
@@ -268,6 +370,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 resetPassword,
                 updateUserProfile,
                 updateUserInFirestore,
+                refreshUserData,
             }}
         >
             {children}

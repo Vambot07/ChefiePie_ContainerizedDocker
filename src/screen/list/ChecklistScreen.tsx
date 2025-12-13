@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, RefreshControl, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AntDesign } from '@react-native-vector-icons/ant-design';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
     getAllUserItems,
     toggleChecklistItem,
-    clearCheckedShoppingItems,
+    clearHistoryListItems,
     deleteChecklistItem,
-    moveItemsToFoodList,
     addItemsToChecklist,
+    moveItemsToHistoryList,
 } from '../../controller/checklist';
 import Header from '../../components/partials/Header';
 
@@ -19,7 +20,7 @@ interface ChecklistItem {
     amount: string;
     unit: string;
     checked: boolean;
-    status: 'shopping' | 'pantry';
+    status: 'shopping' | 'history';
 }
 
 // Main Component
@@ -28,13 +29,18 @@ const ChecklistScreen = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'shopping' | 'food'>('shopping');
+    const [activeTab, setActiveTab] = useState<'shopping' | 'history'>('shopping');
     const navigation = useNavigation();
 
     // Add ingredient input state
     const [newItemName, setNewItemName] = useState('');
     const [newItemAmount, setNewItemAmount] = useState('');
-    const [newItemUnit, setNewItemUnit] = useState('pcs');
+    const [newItemUnit, setNewItemUnit] = useState('Unit');
+
+    const [showUnitModal, setShowUnitModal] = useState(false);
+
+    // Units matching AddRecipeScreen
+    const units = ['cup', 'piece', 'clove', 'tablespoon', 'teaspoon', 'ml', 'gram', 'kg', 'ounce', 'pound', 'pinch', 'slice', 'bunch', 'can', 'jar'];
 
     // Fetching data
     const fetchItems = useCallback(async () => {
@@ -63,6 +69,13 @@ const ChecklistScreen = () => {
 
     // Actions
     const handleToggleItem = async (item: ChecklistItem) => {
+        // Prevent toggling items with temporary IDs
+        if (item.id.startsWith('temp-')) {
+            Alert.alert('Please wait', 'Item is still being saved. Please try again in a moment.');
+            return;
+        }
+
+        //console.log(`toggle-${item.id}`);
         setActionLoading(`toggle-${item.id}`);
         const originalItems = [...items];
 
@@ -80,21 +93,21 @@ const ChecklistScreen = () => {
         }
     };
 
-    const handleMoveToFoodList = async () => {
+    const handleMoveToHistoryList = async () => {
         const checkedShoppingItems = items.filter(item => item.status === 'shopping' && item.checked);
         if (checkedShoppingItems.length === 0) return;
 
         Alert.alert(
-            "Move to Food List",
-            `Move ${checkedShoppingItems.length} purchased item(s) to your food list?`,
+            "Clear Purchased Items",
+            "Are you sure you want to remove all purchased items from the shopping list?",
             [
                 { text: "Cancel", style: "cancel" },
                 {
-                    text: "Move",
+                    text: "Clear",
                     onPress: async () => {
                         setActionLoading('move');
                         try {
-                            await moveItemsToFoodList();
+                            await moveItemsToHistoryList();
                             await fetchItems(); // Refresh the list
                         } catch (error) {
                             Alert.alert("Error", "Failed to move items to food list.");
@@ -107,9 +120,10 @@ const ChecklistScreen = () => {
         );
     };
 
-    const handleClearChecked = async () => {
-        const checkedShoppingItems = items.filter(item => item.status === 'shopping' && item.checked);
-        if (checkedShoppingItems.length === 0) return;
+    const handleClearHistoryList = async () => {
+        console.log(items);
+        const historyItems = items.filter(item => item.status === 'history' && !item.checked);
+        if (historyItems.length === 0) return;
 
         Alert.alert(
             "Clear Purchased Items",
@@ -122,9 +136,10 @@ const ChecklistScreen = () => {
                     onPress: async () => {
                         setActionLoading('clear');
                         const originalItems = [...items];
-                        setItems(items.filter(i => !(i.status === 'shopping' && i.checked))); // Optimistic UI update
+                        setItems(items.filter(i => !(i.status === 'history' && i.checked))); // Optimistic UI update
                         try {
-                            await clearCheckedShoppingItems();
+                            await clearHistoryListItems();
+                            await fetchItems();
                         } catch (error) {
                             Alert.alert("Error", "Failed to clear items.");
                             setItems(originalItems); // Revert
@@ -189,7 +204,7 @@ const ChecklistScreen = () => {
         // Clear inputs immediately for better UX
         setNewItemName('');
         setNewItemAmount('');
-        setNewItemUnit('pcs');
+        setNewItemUnit('Unit');
 
         try {
             // Add to database in background
@@ -199,8 +214,8 @@ const ChecklistScreen = () => {
                 unit: newItemUnit,
             }]);
 
-            // Success! No need to refresh - temp item works fine
-            // Real ID will be fetched on next natural refresh (focus, pull-to-refresh, etc.)
+            // Fetch updated items to replace temp ID with real Firestore ID
+            await fetchItems();
         } catch (error) {
             // Error - remove the temporary item
             setItems(prevItems => prevItems.filter(i => i.id !== tempItem.id));
@@ -220,7 +235,7 @@ const ChecklistScreen = () => {
     }
 
     const shoppingItems = items.filter(item => item.status === 'shopping');
-    const foodItems = items.filter(item => item.status === 'pantry');
+    const historyItems = items.filter(item => item.status === 'history');
     const uncheckedShoppingItems = shoppingItems.filter(item => !item.checked);
     const checkedShoppingItems = shoppingItems.filter(item => item.checked);
 
@@ -248,15 +263,20 @@ const ChecklistScreen = () => {
                         editable={!actionLoading}
                     />
                 </View>
-                <View className="w-20">
-                    <TextInput
-                        className="bg-gray-100 rounded-xl px-4 py-3 text-center"
-                        placeholder="Unit"
-                        value={newItemUnit}
-                        onChangeText={setNewItemUnit}
-                        editable={!actionLoading}
-                    />
-                </View>
+                <TouchableOpacity
+                    className="bg-orange-50 border-2 border-orange-200 rounded-xl px-3 py-3 w-24 justify-center items-center"
+                    onPress={() => {
+                        setShowUnitModal(true);
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View className="flex-row items-center">
+                        <Text className="text-orange-600 font-bold text-sm mr-1">
+                            {newItemUnit || 'Unit'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={14} color="#EA580C" />
+                    </View>
+                </TouchableOpacity>
             </View>
             <TouchableOpacity
                 className="bg-orange-400 rounded-xl py-3"
@@ -304,10 +324,7 @@ const ChecklistScreen = () => {
                     <View className="flex-row items-center justify-between mb-2">
                         <Text className="text-xl font-bold text-gray-800">Checked items</Text>
                         <View className="flex-row">
-                            <TouchableOpacity onPress={handleMoveToFoodList} disabled={!!actionLoading} className="mr-4">
-                                <Text className="text-green-600 font-semibold">Move to Food List</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleClearChecked} disabled={!!actionLoading}>
+                            <TouchableOpacity onPress={handleMoveToHistoryList} disabled={!!actionLoading}>
                                 <Text className="text-orange-500 font-semibold">Clear</Text>
                             </TouchableOpacity>
                         </View>
@@ -329,12 +346,20 @@ const ChecklistScreen = () => {
         </>
     );
 
-    const renderFoodList = () => (
+    const renderHistoryList = () => (
         <View className="bg-white rounded-2xl p-4 mt-4">
-            <Text className="text-xl font-bold text-gray-800 mb-2">My Food Items</Text>
-            {foodItems.length > 0 ? (
-                foodItems.map((item, index) => (
-                    <View key={item.id} className={`flex-row items-center justify-between py-3 ${index < foodItems.length - 1 ? 'border-b border-gray-100' : ''}`}>
+            <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-xl font-bold text-gray-800 mb-2">My History Items</Text>
+                {historyItems.length > 0 && (
+                    <TouchableOpacity onPress={handleClearHistoryList} disabled={!!actionLoading}>
+                        <Text className="text-orange-500 font-semibold">Clear All</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {historyItems.length > 0 ? (
+                historyItems.map((item, index) => (
+                    <View key={item.id} className={`flex-row items-center justify-between py-3 ${index < historyItems.length - 1 ? 'border-b border-gray-100' : ''}`}>
                         <TouchableOpacity
                             onPress={() => handleToggleItem(item)}
                             disabled={!!actionLoading}
@@ -370,9 +395,13 @@ const ChecklistScreen = () => {
                     </View>
                 ))
             ) : (
-                <Text className="text-gray-400 text-center py-4">No food items yet. Check off items from your shopping list to move them here!</Text>
+                <View className="items-center justify-center py-4">
+                    <AntDesign name='history' size={80} color="#D1D5DB" />
+                    <Text className="text-gray-400 text-center py-4">No history items. Check off items from your shopping list to move them here!</Text>
+                </View>
             )}
         </View>
+
     );
 
     return (
@@ -387,10 +416,10 @@ const ChecklistScreen = () => {
                     <Text className={`text-center font-bold ${activeTab === 'shopping' ? 'text-white' : 'text-gray-600'}`}>Shopping List</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    onPress={() => setActiveTab('food')}
-                    className={`flex-1 py-3 rounded-full ml-2 ${activeTab === 'food' ? 'bg-orange-400' : 'bg-gray-200'}`}
+                    onPress={() => setActiveTab('history')}
+                    className={`flex-1 py-3 rounded-full ml-2 ${activeTab === 'history' ? 'bg-orange-400' : 'bg-gray-200'}`}
                 >
-                    <Text className={`text-center font-bold ${activeTab === 'food' ? 'text-white' : 'text-gray-600'}`}>Food List</Text>
+                    <Text className={`text-center font-bold ${activeTab === 'history' ? 'text-white' : 'text-gray-600'}`}>History</Text>
                 </TouchableOpacity>
             </View>
 
@@ -419,9 +448,84 @@ const ChecklistScreen = () => {
                         </>
                     )
                 ) : (
-                    renderFoodList()
+                    renderHistoryList()
                 )}
             </ScrollView>
+
+            {/* Beautiful Unit Selection Modal */}
+            {showUnitModal && (
+                <View className="absolute inset-0 justify-center items-center px-6" style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}>
+                    <View className="bg-white rounded-3xl p-6 w-full max-w-sm" style={{
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 10 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 20,
+                        elevation: 10,
+                    }}>
+                        {/* Header */}
+                        <View className="flex-row items-center justify-between mb-4">
+                            <Text className="text-2xl font-bold text-gray-800">Select Unit</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowUnitModal(false)}
+                                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+                            >
+                                <Ionicons name="close" size={20} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Unit Grid */}
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            className="max-h-96"
+                            contentContainerStyle={{ paddingBottom: 8 }}
+                        >
+                            <View className="flex-row flex-wrap gap-2">
+                                {units.map((unit) => {
+                                    const isSelected = newItemUnit === unit;
+                                    return (
+                                        <TouchableOpacity
+                                            key={unit}
+                                            className={`px-4 py-3 rounded-xl border-2 ${
+                                                isSelected
+                                                    ? 'bg-orange-500 border-orange-500'
+                                                    : 'bg-white border-gray-200'
+                                            }`}
+                                            onPress={() => {
+                                                setNewItemUnit(unit);
+                                                setShowUnitModal(false);
+                                            }}
+                                            activeOpacity={0.7}
+                                            style={{
+                                                shadowColor: isSelected ? '#FF9966' : '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: isSelected ? 0.3 : 0.05,
+                                                shadowRadius: 4,
+                                                elevation: isSelected ? 3 : 1,
+                                            }}
+                                        >
+                                            <View className="flex-row items-center">
+                                                <Text className={`font-semibold ${
+                                                    isSelected ? 'text-white' : 'text-gray-700'
+                                                }`}>
+                                                    {unit}
+                                                </Text>
+                                                {isSelected && (
+                                                    <Ionicons
+                                                        name="checkmark-circle"
+                                                        size={18}
+                                                        color="white"
+                                                        style={{ marginLeft: 6 }}
+                                                    />
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            )}
         </View>
     );
 };

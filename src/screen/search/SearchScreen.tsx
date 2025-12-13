@@ -3,14 +3,14 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from '
 import { Entypo, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchRecipes } from '~/controller/recipe';
-import { fetchRandomRecipes, fetchRecipesByCategory, fetchRecipesByIngredients } from '~/api/spoonacular';
+import { fetchRandomRecipes, fetchRecipesByCategory, fetchRecipesByIngredients, HARAM_INGREDIENTS } from '~/api/spoonacular';
 import { detectIngredientsFromImage, formatIngredientsForSearch } from '~/api/roboflow';
 import Header from '../../components/partials/Header';
 import GeminiTestModal from '~/components/modal/GeminiTestModal';
 import RecipeComparisonModal from '~/components/modal/RecipeComparisonModal';
+import { useAuth } from '~/context/AuthContext';
 
 // Navigation types
 type RootStackParamList = {
@@ -34,6 +34,7 @@ interface Recipe {
     matchPercentage?: number;
     missingIngredients?: string[];
     ingredients?: any[]; // Add this for created recipes
+    isPrivate?: boolean;
 }
 
 interface RecipeCardProps {
@@ -105,7 +106,11 @@ export default function SearchScreen() {
     const [showGeminiModal, setShowGeminiModal] = useState(false);
     const [showComparisonModal, setShowComparisonModal] = useState(false);
     const [comparisonData, setComparisonData] = useState<any>(null);
+
+    const [isPrivate, setIsPrivate] = useState<boolean>(false);
+
     const scrollViewRef = useRef<ScrollView>(null);
+    const { user } = useAuth();
 
     // Track if initial fetch has been done
     const hasFetchedCreated = useRef(false);
@@ -117,7 +122,10 @@ export default function SearchScreen() {
             console.log('Fetching user recipes...');
             const results = await searchRecipes(searchQuery);
 
-            const transformedRecipes = results.map((recipe: any) => ({
+            // Filter to show ONLY public recipes in search
+            const publicRecipesOnly = results.filter((recipe: any) => !recipe.isPrivate);
+
+            const transformedRecipes = publicRecipesOnly.map((recipe: any) => ({
                 ...recipe,
                 source: 'created' as const
             }));
@@ -137,17 +145,47 @@ export default function SearchScreen() {
             setLoading(true);
             console.log('Fetching discover recipes from API...');
 
+            // Prepare user preference filters
+            const filters: {
+                diet?: string[];
+                excludeIngredients?: string[];
+            } = {};
+
+            if (user?.dietaryRestrictions && user.dietaryRestrictions.length > 0) {
+                filters.diet = user.dietaryRestrictions;
+                console.log('🥗 Applying dietary restrictions:', user.dietaryRestrictions);
+            }
+
+            // Always exclude haram ingredients + user preferences
+            const userExclusions = user?.ingredientsToAvoid || [];
+            filters.excludeIngredients = [...HARAM_INGREDIENTS, ...userExclusions];
+            console.log('🚫 Excluding ingredients:', filters.excludeIngredients);
+
             let results;
             if (searchQuery.trim().length > 0 && !forceRandom) {
                 console.log('Searching API for:', searchQuery);
-                const response = await fetch(
-                    `https://api.spoonacular.com/recipes/complexSearch?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&query=${searchQuery}&number=20&addRecipeInformation=true`
-                );
-                const data = await response.json(); ``
+
+                // Build URL with filters
+                let url = `https://api.spoonacular.com/recipes/complexSearch?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&query=${searchQuery}&number=20&addRecipeInformation=true`;
+
+                // Add dietary restrictions to search
+                if (filters.diet && filters.diet.length > 0) {
+                    const dietParam = filters.diet.map(d => d.toLowerCase()).join(',');
+                    url += `&diet=${encodeURIComponent(dietParam)}`;
+                }
+
+                // Add excluded ingredients to search
+                if (filters.excludeIngredients && filters.excludeIngredients.length > 0) {
+                    const excludeParam = filters.excludeIngredients.join(',');
+                    url += `&excludeIngredients=${encodeURIComponent(excludeParam)}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
                 results = { results: data.results || [] };
             } else {
-                console.log('Fetching random recipes');
-                const randomRecipes = await fetchRandomRecipes(20);
+                console.log('Fetching random recipes with user preferences');
+                const randomRecipes = await fetchRandomRecipes(20, filters);
                 results = { recipes: randomRecipes };
             }
 

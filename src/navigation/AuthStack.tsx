@@ -10,7 +10,7 @@ const AuthStack = () => {
     return (
         <Stack.Navigator
             screenOptions={{
-                headerShown: false,  // ✅ Make sure this is boolean
+                headerShown: false,  // 
                 animation: 'default', // Try adding this
             }}
             initialRouteName="Landing"
@@ -18,7 +18,7 @@ const AuthStack = () => {
             <Stack.Screen
                 name="Landing"
                 component={LandingScreen}
-                options={{ headerShown: false }}  // ✅ Explicit boolean
+                options={{ headerShown: false }}  // 
             />
             <Stack.Screen
                 name="SignIn"
