@@ -129,12 +129,37 @@ export default function PlannerScreen() {
     const [loadingMenuAction, setLoadingMenuAction] = useState(false);
     const [swapMode, setSwapMode] = useState(false);
     const [recipeToSwapId, setRecipeToSwapId] = useState<string | null>(null);
+    const [mealPlanCache, setMealPlanCache] = useState<{ [weekOffset: number]: { data: any; timestamp: number } }>({});
 
     const buttonRefs = useRef<{ [key: string]: View | null }>({});
     const userId = user?.userId;
 
-    const loadSavedPlan = useCallback(async () => {
+    // Helper to invalidate cache for current week
+    const invalidateWeekCache = useCallback(() => {
+        setMealPlanCache(prev => {
+            const updated = { ...prev };
+            delete updated[weekOffset];
+            return updated;
+        });
+        console.log(`🗑️ Cache invalidated for week ${weekOffset}`);
+    }, [weekOffset]);
+
+    const loadSavedPlan = useCallback(async (forceRefresh: boolean = false) => {
         if (!userId) return;
+
+        // Cache for 3 minutes (180000ms) - same as HomeScreen
+        const CACHE_DURATION = 180000;
+        const now = Date.now();
+
+        // Check if we have valid cache for this week
+        const weekCache = mealPlanCache[weekOffset];
+        if (!forceRefresh && weekCache && (now - weekCache.timestamp) < CACHE_DURATION) {
+            console.log(`✅ Using cached meal plan for week ${weekOffset}`);
+            setRecipesByDay(weekCache.data.recipesByDay);
+            setPlannedWeeks(weekCache.data.plannedWeeks);
+            setLoadingWeek(false);
+            return;
+        }
 
         setLoadingWeek(true);
         try {
@@ -143,7 +168,20 @@ export default function PlannerScreen() {
             if (savedRecipes && Object.keys(savedRecipes).length > 0) {
                 setRecipesByDay(savedRecipes);
                 setPlannedWeeks(prev => ({ ...prev, [weekOffset]: true }));
-                console.log('✅ Loaded saved meal plan for week:', weekOffset);
+
+                // Cache the result for this week
+                setMealPlanCache(prev => ({
+                    ...prev,
+                    [weekOffset]: {
+                        data: {
+                            recipesByDay: savedRecipes,
+                            plannedWeeks: { ...plannedWeeks, [weekOffset]: true }
+                        },
+                        timestamp: now
+                    }
+                }));
+
+                console.log(`✅ Loaded & cached meal plan for week ${weekOffset}`);
             } else {
                 setRecipesByDay({});
                 setPlannedWeeks(prev => {
@@ -151,7 +189,20 @@ export default function PlannerScreen() {
                     delete updated[weekOffset];
                     return updated;
                 });
-                console.log('ℹ️ No saved plan for week:', weekOffset);
+
+                // Cache empty result too
+                setMealPlanCache(prev => ({
+                    ...prev,
+                    [weekOffset]: {
+                        data: {
+                            recipesByDay: {},
+                            plannedWeeks: {}
+                        },
+                        timestamp: now
+                    }
+                }));
+
+                console.log(`ℹ️ No saved plan for week ${weekOffset}`);
             }
         } catch (error) {
             console.error('❌ Error loading saved plan:', error);
@@ -164,7 +215,7 @@ export default function PlannerScreen() {
         } finally {
             setLoadingWeek(false);
         }
-    }, [userId, weekOffset]);
+    }, [userId, weekOffset, mealPlanCache, plannedWeeks]);
 
     // Cleanup weeks that have completely passed
     const runWeeklyCleanup = useCallback(async () => {
@@ -176,13 +227,13 @@ export default function PlannerScreen() {
 
             if (result.success && result.deletedCount && result.deletedCount > 0) {
                 console.log(`✅ Cleaned up ${result.deletedCount} past week(s)`);
-                // Reload the current week's data after cleanup
-                loadSavedPlan();
+                // Force refresh after cleanup
+                loadSavedPlan(true);
             }
         } catch (error) {
             console.error('❌ Error during weekly cleanup:', error);
         }
-    }, [userId]);
+    }, [userId, loadSavedPlan]);
 
     useEffect(() => {
         loadSavedPlan();
@@ -193,10 +244,11 @@ export default function PlannerScreen() {
         runWeeklyCleanup();
     }, [runWeeklyCleanup]);
 
+    // OPTIMIZED: Use cache when screen is focused
     useFocusEffect(
         useCallback(() => {
-            console.log('🔄 Screen focused - reloading meal plan');
-            loadSavedPlan();
+            console.log('🔄 Screen focused - loading meal plan (will use cache if available)');
+            loadSavedPlan(false); // Don't force refresh, use cache if valid
         }, [loadSavedPlan])
     );
 
@@ -447,6 +499,8 @@ export default function PlannerScreen() {
 
                         if (userId) {
                             await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
+                            // Invalidate cache after deletion
+                            invalidateWeekCache();
                         }
                     }
                 }
@@ -542,6 +596,27 @@ export default function PlannerScreen() {
             console.log("🟡 Recipes to add/swap:", recipesToAdd);
 
             if (swapMode && recipeToSwapId) {
+                // SWAP MODE: Check for duplicates first
+                const existingRecipes = recipesByDay[selectedDayIndex] || [];
+
+                // Filter out the recipe being swapped (it will be removed)
+                const otherRecipes = existingRecipes.filter(r => r.id !== recipeToSwapId);
+
+                // Check if the new recipe already exists in the remaining recipes
+                const isDuplicate = recipesToAdd.some(newRecipe =>
+                    otherRecipes.some(existing => existing.id === newRecipe.id)
+                );
+
+                if (isDuplicate) {
+                    Alert.alert(
+                        'Duplicate Recipe',
+                        'This recipe is already in your meal plan for this day. Please choose a different recipe.',
+                        [{ text: 'OK' }]
+                    );
+                    setLoadingSavedRecipes(false);
+                    return;
+                }
+
                 // SWAP MODE: Replace the old recipe with the new one
                 if (userId) {
                     // Delete old recipe
@@ -564,6 +639,7 @@ export default function PlannerScreen() {
                 });
 
                 console.log('✅ Swapped recipe on day:', selectedDayIndex);
+                invalidateWeekCache(); // Invalidate cache after swap
             } else {
                 // ADD MODE: Just add the recipes
                 if (userId) {
@@ -580,6 +656,7 @@ export default function PlannerScreen() {
                 });
 
                 console.log('✅ Added saved recipes to day:', selectedDayIndex);
+                invalidateWeekCache(); // Invalidate cache after add
             }
 
             setShowSavedRecipesModal(false);
@@ -602,6 +679,26 @@ export default function PlannerScreen() {
 
         try {
             if (swapMode && recipeToSwapId) {
+                // SWAP MODE: Check for duplicates first
+                const existingRecipes = recipesByDay[selectedDayIndex] || [];
+
+                // Filter out the recipe being swapped (it will be removed)
+                const otherRecipes = existingRecipes.filter(r => r.id !== recipeToSwapId);
+
+                // Check if the new recipe already exists in the remaining recipes
+                const isDuplicate = recipes.some(newRecipe =>
+                    otherRecipes.some(existing => existing.id === newRecipe.id)
+                );
+
+                if (isDuplicate) {
+                    Alert.alert(
+                        'Duplicate Recipe',
+                        'This recipe is already in your meal plan for this day. Please choose a different recipe.',
+                        [{ text: 'OK' }]
+                    );
+                    throw new Error('Duplicate recipe detected');
+                }
+
                 // SWAP MODE: Replace the old recipe with the new one
                 if (userId) {
                     // Delete old recipe
@@ -624,6 +721,7 @@ export default function PlannerScreen() {
                 });
 
                 console.log('✅ Swapped recipe with search result on day:', selectedDayIndex);
+                invalidateWeekCache(); // Invalidate cache after swap
             } else {
                 // ADD MODE: Just add the recipes
                 if (userId) {
@@ -640,6 +738,7 @@ export default function PlannerScreen() {
                 });
 
                 console.log('✅ Added search recipes to day:', selectedDayIndex);
+                invalidateWeekCache(); // Invalidate cache after add
             }
 
             setSelectedDayIndex(null);
@@ -696,7 +795,7 @@ export default function PlannerScreen() {
             />
 
             {loadingWeek ? (
-                <View className="flex-1 justify-center items-center">
+                <View className="flex-1 bg-gray-150 justify-center items-center">
                     <ActivityIndicator size="large" color="#FF9966" />
                     <Text className="mt-4 text-gray-600">Loading meal plan...</Text>
                 </View>

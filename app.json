@@ -24,7 +24,8 @@
           "photosPermission": "Allow Chefie Pie to access your photos to select ingredient images.",
           "cameraPermission": "Allow Chefie Pie to access your camera to take photos of ingredients for recipe suggestions."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "orientation": "portrait",
     "icon": "./assets/ChefiePieLogo.png",

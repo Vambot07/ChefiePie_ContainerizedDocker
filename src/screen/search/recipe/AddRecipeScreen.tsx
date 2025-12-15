@@ -11,7 +11,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '~/context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
-import { addRecipeToDay } from '~/controller/planner';
+import { addRecipeToDay, loadMealPlanWithDetails } from '~/controller/planner';
 import { Switch } from 'react-native';
 
 
@@ -187,7 +187,34 @@ export default function AddRecipeScreen() {
                 console.log("Sini skdjnskjn ", weekOffset);
                 console.log(selectedDayIndex);
                 console.log(plannerRecipe);
+
                 if (userId) {
+                    // ✅ Check for duplicate recipe on the same day
+                    const existingMealPlan = await loadMealPlanWithDetails(userId, weekOffset);
+                    const recipesForDay = existingMealPlan?.[selectedDayIndex] || [];
+
+                    // Check if recipe with same title already exists
+                    const isDuplicate = recipesForDay.some(
+                        (recipe) => recipe.title.toLowerCase() === plannerRecipe.title.toLowerCase()
+                    );
+
+                    if (isDuplicate) {
+                        Alert.alert(
+                            'Duplicate Recipe',
+                            'This recipe is already in your meal plan for this day. Please choose a different recipe or day.',
+                            [
+                                {
+                                    text: 'OK',
+                                    onPress: () => {
+                                        setIsLoading(false);
+                                    }
+                                }
+                            ]
+                        );
+                        return; // Exit early, don't add the recipe
+                    }
+
+                    // If no duplicate, add to planner
                     await addRecipeToDay(
                         userId,
                         weekOffset,
@@ -225,41 +252,109 @@ export default function AddRecipeScreen() {
                     <Text>Saving your recipe...</Text>
                 </View>
             ) : (
-                <ScrollView className="flex-1 bg-secondary px-2 pt-6" showsVerticalScrollIndicator={false}>
+                <ScrollView className="flex-1 bg-gradient-to-b from-orange-50 to-white px-4 pt-2" showsVerticalScrollIndicator={false}>
                     <Header
-                        title="Add Recipe"
+                        title="Create New Recipe"
                         showBackButton={true}
                         onBack={() => navigation.goBack()}
                     />
-                    <View className="bg-white rounded-2xl shadow-md p-4 mb-8">
+                    <View className="bg-white rounded-3xl shadow-lg p-6 mb-8" style={{
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 12,
+                        elevation: 8,
+                    }}>
                         {/* Image Picker */}
-                        <TouchableOpacity className="items-center mb-6" onPress={pickImage}>
-                            {image ? (
-                                <Image source={{ uri: image }} className="w-32 h-32 rounded-xl shadow" />
-                            ) : (
-                                <View className="w-32 h-32 rounded-xl bg-gray-100 items-center justify-center shadow">
-                                    <Feather name="image" size={32} color="#FFB47B" />
-                                    <Text className="text-gray-400 mt-2">Pick Image</Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-
-                        {/* Title */}
-                        <View className="mb-4">
-                            <Text className="font-semibold text-gray-700 mb-1 flex-row items-center">
-                                <Ionicons name="book-outline" size={18} color="#FFB47B" /> Recipe Title
-                                <Text className="text-red-500"> *</Text>
-                            </Text>
-                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Recipe Title" value={title} onChangeText={setTitle} />
+                        <View className="items-center mb-8">
+                            <Text className="text-sm font-semibold text-gray-500 mb-3">RECIPE PHOTO</Text>
+                            <TouchableOpacity
+                                onPress={pickImage}
+                                activeOpacity={0.8}
+                                className="relative"
+                                style={{
+                                    shadowColor: '#FF9966',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.3,
+                                    shadowRadius: 8,
+                                    elevation: 6,
+                                }}
+                            >
+                                {image ? (
+                                    <>
+                                        <Image source={{ uri: image }} className="w-40 h-40 rounded-2xl" />
+                                        <View className="absolute bottom-2 right-2 bg-orange-500 rounded-full p-2">
+                                            <Feather name="edit-2" size={16} color="white" />
+                                        </View>
+                                    </>
+                                ) : (
+                                    <View className="w-40 h-40 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 items-center justify-center border-2 border-dashed border-orange-300">
+                                        <Feather name="camera" size={40} color="#FF9966" />
+                                        <Text className="text-orange-500 font-semibold mt-3">Add Photo</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
                         </View>
 
-                        {/* Introduction */}
-                        <View className="mb-4">
-                            <Text className="font-semibold text-gray-700 mb-1 flex-row items-center">
-                                <Ionicons name="information-circle-outline" size={18} color="#FFB47B" /> Brief Introduction
-                                <Text className="text-red-500"> *</Text>
-                            </Text>
-                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Brief Introduction" value={intro} onChangeText={setIntro} />
+                        {/* Section: Basic Info */}
+                        <View className="mb-6">
+                            <View className="flex-row items-center mb-4">
+                                <View className="w-1 h-6 bg-orange-500 rounded-full mr-2" />
+                                <Text className="text-xl font-bold text-gray-800">Basic Information</Text>
+                            </View>
+
+                            {/* Title */}
+                            <View className="mb-4">
+                                <View className="flex-row items-center mb-2">
+                                    <Ionicons name="restaurant" size={18} color="#FF9966" />
+                                    <Text className="font-semibold text-gray-700 ml-2">
+                                        Recipe Title
+                                        <Text className="text-red-500"> *</Text>
+                                    </Text>
+                                </View>
+                                <TextInput
+                                    className="border-2 border-gray-100 rounded-xl px-4 py-3 bg-white text-gray-800"
+                                    placeholder="e.g., Grandma's Chocolate Cake"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={title}
+                                    onChangeText={setTitle}
+                                    style={{
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 1 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 2,
+                                        elevation: 1,
+                                    }}
+                                />
+                            </View>
+
+                            {/* Introduction */}
+                            <View className="mb-4">
+                                <View className="flex-row items-center mb-2">
+                                    <Ionicons name="document-text-outline" size={18} color="#FF9966" />
+                                    <Text className="font-semibold text-gray-700 ml-2">
+                                        Description
+                                        <Text className="text-red-500"> *</Text>
+                                    </Text>
+                                </View>
+                                <TextInput
+                                    className="border-2 border-gray-100 rounded-xl px-4 py-3 bg-white text-gray-800"
+                                    placeholder="Describe your recipe..."
+                                    placeholderTextColor="#9CA3AF"
+                                    value={intro}
+                                    onChangeText={setIntro}
+                                    multiline
+                                    numberOfLines={3}
+                                    textAlignVertical="top"
+                                    style={{
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 1 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 2,
+                                        elevation: 1,
+                                    }}
+                                />
+                            </View>
                         </View>
 
                         {/* Times */}
@@ -412,8 +507,23 @@ export default function AddRecipeScreen() {
                             </View>
                         </View>
                         {/* Submit Button */}
-                        <TouchableOpacity className="bg-[#FFB47B] p-4 rounded-xl mb-2" onPress={handleAddRecipe}>
-                            <Text className="text-white text-center font-semibold text-base">Save Recipe</Text>
+                        <TouchableOpacity
+                            className="p-5 rounded-2xl mb-2"
+                            onPress={handleAddRecipe}
+                            activeOpacity={0.8}
+                            style={{
+                                backgroundColor: '#FF914D',
+                                shadowColor: '#FF914D',
+                                shadowOffset: { width: 0, height: 6 },
+                                shadowOpacity: 0.4,
+                                shadowRadius: 10,
+                                elevation: 8,
+                            }}
+                        >
+                            <View className="flex-row items-center justify-center">
+                                <Ionicons name="checkmark-circle" size={24} color="white" />
+                                <Text className="text-white text-center font-bold text-lg ml-2">Save Recipe</Text>
+                            </View>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
@@ -453,11 +563,10 @@ export default function AddRecipeScreen() {
                                     return (
                                         <TouchableOpacity
                                             key={unit}
-                                            className={`px-4 py-3 rounded-xl border-2 ${
-                                                isSelected
+                                            className={`px-4 py-3 rounded-xl border-2 ${isSelected
                                                     ? 'bg-orange-500 border-orange-500'
                                                     : 'bg-white border-gray-200'
-                                            }`}
+                                                }`}
                                             onPress={() => {
                                                 handleIngredientChange(selectedIngredientIndex, 'unit', unit);
                                                 setShowUnitModal(false);
@@ -472,9 +581,8 @@ export default function AddRecipeScreen() {
                                             }}
                                         >
                                             <View className="flex-row items-center">
-                                                <Text className={`font-semibold ${
-                                                    isSelected ? 'text-white' : 'text-gray-700'
-                                                }`}>
+                                                <Text className={`font-semibold ${isSelected ? 'text-white' : 'text-gray-700'
+                                                    }`}>
                                                     {unit}
                                                 </Text>
                                                 {isSelected && (

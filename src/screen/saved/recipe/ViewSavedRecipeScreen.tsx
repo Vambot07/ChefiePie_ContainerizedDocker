@@ -736,6 +736,44 @@ const ViewSavedRecipeScreen = () => {
                             </View>
                         )}
 
+
+                        {/* Tips Section for Created Recipes */}
+                        {recipe.source === 'created' && recipe?.tips && (
+                            <View className="mb-4">
+                                <View className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                                    <View className="flex-row items-center mb-2">
+                                        <Ionicons name="bulb-outline" size={20} color="#F59E0B" />
+                                        <Text className="font-bold text-gray-800 ml-2 text-base">Tips & Tricks</Text>
+                                    </View>
+                                    <Text className="text-gray-700 leading-5">{recipe.tips}</Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Nutrition Section for Created Recipes */}
+                        {recipe.source === 'created' && recipe?.nutrition && (
+                            <View className="mb-4">
+                                <View className="bg-green-50 border border-green-200 rounded-2xl p-4">
+                                    <View className="flex-row items-center mb-2">
+                                        <Ionicons name="nutrition-outline" size={20} color="#10B981" />
+                                        <Text className="font-bold text-gray-800 ml-2 text-base">Nutrition Facts</Text>
+                                    </View>
+                                    <Text className="text-gray-700 leading-5">{recipe.nutrition}</Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Difficulty Badge for Created Recipes */}
+                        {recipe.source === 'created' && recipe.difficulty && (
+                            <View className="mb-4">
+                                <View className="bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 flex-row items-center">
+                                    <Ionicons name="bar-chart-outline" size={20} color="#9333EA" />
+                                    <Text className="font-bold text-gray-800 ml-2">Difficulty:</Text>
+                                    <Text className="font-bold text-purple-600 ml-2 capitalize">{recipe.difficulty}</Text>
+                                </View>
+                            </View>
+                        )}
+
                         {/* Serving & Items */}
                         {((recipe.serving && recipe.serving !== 'N/A') || (recipe.ingredients?.length > 0)) && (
                             <View className="flex-row justify-between px-5 mt-4 mb-2">
@@ -816,6 +854,7 @@ const ViewSavedRecipeScreen = () => {
                                     const isSelected = selectedIngredients.some(item => item.name === ing.name);
                                     return (
                                         <TouchableOpacity
+                                            key={idx}
                                             onPress={() => toggleIngredientSelection(ing)}
                                             activeOpacity={0.7}
                                             style={{

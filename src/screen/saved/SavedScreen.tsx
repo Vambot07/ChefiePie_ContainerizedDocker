@@ -107,6 +107,7 @@ export default function SavedScreen() {
             {loading ? (
                 <View className="flex-1 bg-gray-150 justify-center items-center">
                     <ActivityIndicator size="large" color="#FFB47B" />
+                    <Text className="mt-4 text-gray-600">Loading Saved Recipe...</Text>
                 </View>
             ) : (
                 <FlatList

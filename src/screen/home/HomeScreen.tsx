@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, Alert, ActivityIndicator, Pressable, TextInput, Modal } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, FlatList, Alert, ActivityIndicator, Pressable, TextInput, Modal, RefreshControl } from 'react-native';
 import { Ionicons, Feather, Fontisto } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -13,7 +13,9 @@ import {
 import { saveApiRecipe, unsaveRecipe, getSavedRecipes, getRecipeByUser, getRecipeById } from '~/controller/recipe';
 import { loadMealPlanWithDetails } from '~/controller/planner';
 import colors from '~/utils/color';
-import SpoonacularChatbot from '~/components/partials/SpooncularChatBot';
+import GeminiChatbot from '~/components/partials/GeminiChatBot';
+import { useFonts, Oswald_400Regular } from '@expo-google-fonts/oswald';
+import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
 
 const categories = ['All', 'Asian', 'Italian', 'Indian', 'Chinese', 'Mexican'];
 const baseIngredients = ['Chicken', 'Tomato', 'Curry', 'Salad', 'Chilli', 'Onion'];
@@ -92,6 +94,12 @@ const LoadingModal = ({ visible, message }: { visible: boolean; message?: string
 
 // --- HOME SCREEN ---
 export const HomeScreen = () => {
+    // Load Oswald font
+    const [fontsLoaded] = useFonts({
+        Oswald_400Regular,
+        ArchivoBlack_400Regular
+    });
+
     const [activeCategory, setActiveCategory] = useState('All');
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
     const [tempSelectedIngredients, setTempSelectedIngredients] = useState<string[]>([]);
@@ -115,6 +123,8 @@ export const HomeScreen = () => {
     const [loadingStats, setLoadingStats] = useState<boolean>(true);
     const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
     const [loadingRecent, setLoadingRecent] = useState<boolean>(true);
+    const [statsCache, setStatsCache] = useState<{ data: any; timestamp: number } | null>(null);
+    const [refreshing, setRefreshing] = useState<boolean>(false);
 
     const navigation = useNavigation<NavigationProps>();
     const { user } = useAuth();
@@ -131,41 +141,62 @@ export const HomeScreen = () => {
     const displayedCategoryRecipes = categoryRecipes.slice(0, 10);
     const categoryFinalData = [...displayedCategoryRecipes, { id: 'see-more-categories', type: 'seeMore' }];
 
-    // --- FETCH TODAY'S MEALS AND STATS ---
-    const fetchTodaysMealsAndStats = useCallback(async () => {
+
+    // --- FETCH TODAY'S MEALS AND STATS (OPTIMIZED WITH CACHING) ---
+    const fetchTodaysMealsAndStats = useCallback(async (forceRefresh: boolean = false) => {
         if (!userId) return;
+
+        // Cache for 5 minutes (300000ms)
+        const CACHE_DURATION = 300000;
+        const now = Date.now();
+
+        // Use cache if available and not expired
+        if (!forceRefresh && statsCache && (now - statsCache.timestamp) < CACHE_DURATION) {
+            console.log('✅ Using cached stats data');
+            setUserStats(statsCache.data.stats);
+            setTodaysMeals(statsCache.data.todaysMeals);
+            setLoadingStats(false);
+            return;
+        }
 
         try {
             setLoadingStats(true);
 
             // Get today's day index (0 = Monday, 6 = Sunday)
             const today = new Date();
-            const dayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1; // Convert Sunday (0) to 6
+            const dayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1;
 
-            // Fetch today's meals from planner (current week = offset 0)
-            const mealPlan = await loadMealPlanWithDetails(userId, 0)
-            const todayRecipes = mealPlan?.[dayIndex] || [];
-            console.log("Here it is: ", todayRecipes);
-            setTodaysMeals(todayRecipes);
-
-            // Fetch user stats
-            const [savedRecipes, createdRecipes] = await Promise.all([
+            // OPTIMIZATION: Fetch all data in parallel
+            const [mealPlan, savedRecipes, createdRecipes] = await Promise.all([
+                loadMealPlanWithDetails(userId, 0),
                 getSavedRecipes(),
                 getRecipeByUser(userId)
             ]);
+
+            const todayRecipes = mealPlan?.[dayIndex] || [];
 
             // Count planned days this week
             const plannedDaysCount = mealPlan
                 ? Object.keys(mealPlan).filter(key => mealPlan[Number(key)]?.length > 0).length
                 : 0;
 
-            setUserStats({
+            const stats = {
                 savedCount: savedRecipes.length,
                 createdCount: createdRecipes.length,
                 plannedDays: plannedDaysCount
+            };
+
+            // Update state
+            setUserStats(stats);
+            setTodaysMeals(todayRecipes);
+
+            // Cache the results
+            setStatsCache({
+                data: { stats, todaysMeals: todayRecipes },
+                timestamp: now
             });
 
-            console.log('📊 Stats loaded:', {
+            console.log('📊 Stats loaded & cached:', {
                 saved: savedRecipes.length,
                 created: createdRecipes.length,
                 plannedDays: plannedDaysCount,
@@ -177,21 +208,38 @@ export const HomeScreen = () => {
         } finally {
             setLoadingStats(false);
         }
+    }, [userId, statsCache]);
+
+    // OPTIMIZED: Only fetch stats once on mount, use cache on subsequent focuses
+    useEffect(() => {
+        // Initial load
+        fetchTodaysMealsAndStats(false);
     }, [userId]);
 
-    // Refresh stats when screen comes into focus
+    // Refresh stats when screen comes into focus (use cache)
     useFocusEffect(
         useCallback(() => {
-            fetchTodaysMealsAndStats();
+            fetchTodaysMealsAndStats(false); // Will use cache if available
         }, [fetchTodaysMealsAndStats])
     );
 
-    // Load recently viewed recipes on focus
-    useFocusEffect(
-        useCallback(() => {
-            loadRecentlyViewed();
-        }, [userId])
-    );
+    // OPTIMIZED: Load recently viewed only once
+    useEffect(() => {
+        loadRecentlyViewed();
+    }, [userId]);
+
+    // Manual refresh handler
+    const handleManualRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([
+                fetchTodaysMealsAndStats(true), // Force refresh
+                loadRecentlyViewed()
+            ]);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [fetchTodaysMealsAndStats]);
 
     // --- SHUFFLE AND AUTO SELECT FIRST INGREDIENT ON MOUNT ---
     useEffect(() => {
@@ -456,18 +504,6 @@ export const HomeScreen = () => {
         }
     };
 
-    const clearRecentlyViewed = async () => {
-        if (!userId) return;
-        try {
-            const key = `recentlyViewed_${userId}`;
-            await AsyncStorage.removeItem(key);
-            setRecentlyViewed([]);
-            console.log('✅ Recently viewed cleared!');
-        } catch (error) {
-            console.error('Error clearing recently viewed:', error);
-        }
-    };
-
     // --- HANDLE RECIPE CARD PRESS WITH FULL DETAILS FETCH ---
     const handleRecipePress = async (recipe: any) => {
         console.log('Fetching full details for recipe:', recipe.id);
@@ -572,76 +608,190 @@ export const HomeScreen = () => {
                         <ActivityIndicator size="large" color="#FF9966" />
                     </View>
                 ) : (
-                    <ScrollView className="px-2 pt-4" showsVerticalScrollIndicator={false}>
-                        {/* HEADER */}
-                        <View className="flex-row justify-between px-4">
-                            <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId: userId, viewMode: 'profile' })}>
-                                <View
-                                    className="w-16 h-16 rounded-full items-center justify-center border-line"
-                                    style={{ backgroundColor: colors.white, borderWidth: 2, borderColor: colors.lightBrown }}
+                    <ScrollView
+                        className="px-2 pt-4"
+                        showsVerticalScrollIndicator={false}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={handleManualRefresh}
+                                colors={['#FF9966']}
+                                tintColor="#FF9966"
+                            />
+                        }
+                    >
+                        {/* MODERN HEADER */}
+                        <View className="px-4 mb-2 pt-2">
+                            <View className="flex-row justify-between items-center">
+                                <TouchableOpacity
+                                    onPress={() => navigation.navigate('Profile', { userId: userId, viewMode: 'profile' })}
+                                    className="flex-row items-center"
                                 >
-                                    {profileImage ? (
-                                        <Image source={{ uri: profileImage }} className="w-16 h-16 rounded-full" />
-                                    ) : (
-                                        <Fontisto name="male" size={24} color={colors.lightBrown} />
-                                    )}
-                                </View>
-                            </TouchableOpacity>
+                                    <View
+                                        className="w-14 h-14 rounded-full items-center justify-center"
+                                        style={{
+                                            backgroundColor: colors.white,
+                                            borderWidth: 3,
+                                            borderColor: '#FF9966',
+                                            shadowColor: '#FF9966',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.3,
+                                            shadowRadius: 4,
+                                            elevation: 4,
+                                        }}
+                                    >
+                                        {profileImage ? (
+                                            <Image source={{ uri: profileImage }} className="w-12 h-12 rounded-full" />
+                                        ) : (
+                                            <Fontisto name="male" size={22} color={colors.lightBrown} />
+                                        )}
+                                    </View>
+                                    <View className="ml-3">
+                                        <Text className="text-gray-500 text-xs font-medium">Welcome back!</Text>
+                                        <Text className="text-gray-800 text-lg font-bold">{username || 'Guest'}</Text>
+                                    </View>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity className="p-2 rounded-lg" onPress={() => navigation.navigate('Setting')}>
-                                <Ionicons name="settings" size={24} color="#FF9966" />
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    className="w-11 h-11 rounded-full items-center justify-center"
+                                    style={{
+                                        backgroundColor: '#FFF4E0',
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.1,
+                                        shadowRadius: 3,
+                                        elevation: 2,
+                                    }}
+                                    onPress={() => navigation.navigate('Setting')}
+                                >
+                                    <Ionicons name="settings-outline" size={22} color="#FF9966" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* GREETING */}
+                            <View className="mt-6">
+                                <Text
+                                    style={{
+                                        fontFamily: 'ArchivoBlack_400Regular',
+                                        fontSize: 30,
+                                        color: '#1F2937'
+                                    }}
+                                >
+                                    What's cooking?
+                                </Text>
+                                <Text
+                                    className="mt-1 text-base"
+                                    style={{
+                                        fontFamily: 'Oswald_400Regular',
+                                        color: '#1F2937'
+                                    }}>
+                                    Discover delicious recipes for today 🍳
+                                </Text>
+                            </View>
                         </View>
 
-                        {/* GREETING */}
-                        <View className="mt-4 px-4">
-                            <Text className="text-3xl font-bold text-gray-800">
-                                Hello {username || 'Guest'}
-                            </Text>
-                            <Text className="text-gray-500 mt-1">What are we cooking today?</Text>
-                        </View>
-
-                        {/* QUICK STATS WIDGET */}
+                        {/* MODERN STATS WIDGET */}
                         {!loadingStats && (
-                            <View className="mx-2 mt-6 bg-white rounded-2xl p-4 shadow-sm" style={{ borderWidth: 1, borderColor: '#FFE4D6' }}>
-                                <Text className="text-lg font-bold text-gray-800 mb-3">Your Stats</Text>
+                            <View
+                                className="mx-2 mt-6 rounded-3xl p-5"
+                                style={{
+                                    backgroundColor: 'white',
+                                    shadowColor: '#FF9966',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.15,
+                                    shadowRadius: 12,
+                                    elevation: 6,
+                                }}
+                            >
+                                <View className="flex-row items-center justify-between mb-4">
+                                    <Text className="text-xl font-bold text-gray-800">Your Activity</Text>
+                                    <View className="bg-orange-50 px-3 py-1 rounded-full">
+                                        <Text className="text-orange-600 text-xs font-semibold">This Week</Text>
+                                    </View>
+                                </View>
                                 <View className="flex-row justify-around">
                                     <View className="items-center">
-                                        <View className="w-16 h-16 rounded-full items-center justify-center mb-2" style={{ backgroundColor: '#FFE4D6' }}>
-                                            <Feather name="bookmark" size={24} color="#FF9966" />
+                                        <View
+                                            className="w-20 h-20 rounded-2xl items-center justify-center mb-3"
+                                            style={{
+                                                backgroundColor: '#FFF4E0',
+                                                shadowColor: '#FF9966',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.2,
+                                                shadowRadius: 4,
+                                                elevation: 2,
+                                            }}
+                                        >
+                                            <Feather name="bookmark" size={28} color="#FF9966" />
                                         </View>
-                                        <Text className="text-2xl font-bold text-gray-800">{userStats.savedCount}</Text>
-                                        <Text className="text-xs text-gray-500">Saved</Text>
+                                        <Text className="text-3xl font-bold text-gray-800">{userStats.savedCount}</Text>
+                                        <Text className="text-xs text-gray-500 font-medium mt-1">Saved</Text>
                                     </View>
                                     <View className="items-center">
-                                        <View className="w-16 h-16 rounded-full items-center justify-center mb-2" style={{ backgroundColor: '#E8F5E9' }}>
-                                            <Feather name="edit" size={24} color="#4CAF50" />
+                                        <View
+                                            className="w-20 h-20 rounded-2xl items-center justify-center mb-3"
+                                            style={{
+                                                backgroundColor: '#E8F5E9',
+                                                shadowColor: '#4CAF50',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.2,
+                                                shadowRadius: 4,
+                                                elevation: 2,
+                                            }}
+                                        >
+                                            <Feather name="edit-3" size={28} color="#4CAF50" />
                                         </View>
-                                        <Text className="text-2xl font-bold text-gray-800">{userStats.createdCount}</Text>
-                                        <Text className="text-xs text-gray-500">Created</Text>
+                                        <Text className="text-3xl font-bold text-gray-800">{userStats.createdCount}</Text>
+                                        <Text className="text-xs text-gray-500 font-medium mt-1">Created</Text>
                                     </View>
                                     <View className="items-center">
-                                        <View className="w-16 h-16 rounded-full items-center justify-center mb-2" style={{ backgroundColor: '#E3F2FD' }}>
-                                            <Ionicons name="calendar" size={24} color="#2196F3" />
+                                        <View
+                                            className="w-20 h-20 rounded-2xl items-center justify-center mb-3"
+                                            style={{
+                                                backgroundColor: '#E3F2FD',
+                                                shadowColor: '#2196F3',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.2,
+                                                shadowRadius: 4,
+                                                elevation: 2,
+                                            }}
+                                        >
+                                            <Ionicons name="calendar-outline" size={28} color="#2196F3" />
                                         </View>
-                                        <Text className="text-2xl font-bold text-gray-800">{userStats.plannedDays}</Text>
-                                        <Text className="text-xs text-gray-500">Days Planned</Text>
+                                        <Text className="text-3xl font-bold text-gray-800">{userStats.plannedDays}</Text>
+                                        <Text className="text-xs text-gray-500 font-medium mt-1">Planned</Text>
                                     </View>
                                 </View>
                             </View>
                         )}
 
-                        {/* TODAY'S MEAL WIDGET */}
-                        <View className="mx-2 mt-4 rounded-2xl overflow-hidden" style={{ backgroundColor: colors.creamWhite }}>
-                            <View className="px-4 pt-4 pb-3 flex-row justify-between items-center">
+                        {/* MODERN TODAY'S MEAL WIDGET */}
+                        <View
+                            className="mx-2 mt-6 rounded-3xl overflow-hidden"
+                            style={{
+                                backgroundColor: 'white',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.1,
+                                shadowRadius: 8,
+                                elevation: 4,
+                            }}
+                        >
+                            <View className="px-5 pt-5 pb-3 flex-row justify-between items-center">
                                 <View>
-                                    <Text className="text-xl font-bold text-gray-800">Today's Plan</Text>
-                                    <Text className="text-sm text-gray-500 mt-1">
+                                    <View className="flex-row items-center mb-1">
+                                        <Ionicons name="restaurant" size={20} color="#FF9966" />
+                                        <Text className="text-xl font-bold text-gray-800 ml-2">Today's Menu</Text>
+                                    </View>
+                                    <Text className="text-sm text-gray-500 ml-7">
                                         {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                     </Text>
                                 </View>
-                                <TouchableOpacity onPress={() => navigation.navigate('Planner', {})}>
-                                    <Text className="text-orange-500 font-semibold">View All</Text>
+                                <TouchableOpacity
+                                    className="bg-orange-50 px-4 py-2 rounded-full"
+                                    onPress={() => navigation.navigate('Planner', {})}
+                                >
+                                    <Text className="text-orange-600 font-semibold text-sm">View All</Text>
                                 </TouchableOpacity>
                             </View>
                             {loadingStats ? (
@@ -669,46 +819,78 @@ export const HomeScreen = () => {
                                     ))}
                                 </ScrollView>
                             ) : todaysMeals.length === 0 ? (
-                                <View className="px-4 pb-4 items-center justify-center" style={{ minHeight: 120 }}>
-                                    <Ionicons name="calendar-outline" size={40} color="#D1D5DB" />
-                                    <Text className="text-gray-500 text-center mt-3">
-                                        No meals planned for today
+                                <View className="px-5 pb-6 items-center justify-center" style={{ minHeight: 140 }}>
+                                    <View
+                                        className="w-16 h-16 rounded-full items-center justify-center mb-3"
+                                        style={{ backgroundColor: '#FFF4E0' }}
+                                    >
+                                        <Ionicons name="calendar-outline" size={32} color="#FF9966" />
+                                    </View>
+                                    <Text className="text-gray-700 font-semibold text-base">No meals planned yet</Text>
+                                    <Text className="text-gray-500 text-center mt-1 text-sm">
+                                        Start planning your delicious day!
                                     </Text>
                                     <TouchableOpacity
-                                        className="mt-2 px-4 py-2 rounded-full bg-orange-500"
+                                        className="mt-4 px-6 py-3 rounded-full flex-row items-center"
+                                        style={{
+                                            backgroundColor: '#FF9966',
+                                            shadowColor: '#FF9966',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.3,
+                                            shadowRadius: 4,
+                                            elevation: 3,
+                                        }}
                                         onPress={() => navigation.navigate('Planner', {})}
                                     >
-                                        <Text className="text-white font-semibold text-sm">Add Meal</Text>
+                                        <Ionicons name="add-circle-outline" size={18} color="white" />
+                                        <Text className="text-white font-bold text-sm ml-2">Add Meal</Text>
                                     </TouchableOpacity>
                                 </View>
                             ) : (
                                 <ScrollView
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                                    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
                                 >
                                     {todaysMeals.map((meal) => (
                                         <TouchableOpacity
                                             key={meal.id}
-                                            className="bg-white rounded-xl mr-3 overflow-hidden shadow-sm"
-                                            style={{ width: 160 }}
+                                            className="rounded-2xl mr-4 overflow-hidden"
+                                            style={{
+                                                width: 180,
+                                                backgroundColor: '#FAFAFA',
+                                                shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 3 },
+                                                shadowOpacity: 0.12,
+                                                shadowRadius: 6,
+                                                elevation: 4,
+                                            }}
                                             onPress={() => handleRecipePress(meal)}
                                         >
-                                            <Image
-                                                source={{ uri: meal.image }}
-                                                className="w-full h-32"
-                                                style={{ resizeMode: 'cover' }}
-                                            />
+                                            <View className="relative">
+                                                <Image
+                                                    source={{ uri: meal.image }}
+                                                    className="w-full h-36"
+                                                    style={{ resizeMode: 'cover' }}
+                                                />
+                                                <View
+                                                    className="absolute bottom-0 left-0 right-0 px-3 py-2"
+                                                    style={{
+                                                        backgroundColor: 'rgba(0,0,0,0.4)',
+                                                    }}
+                                                >
+                                                    <View className="flex-row items-center">
+                                                        <Ionicons name="time" size={14} color="white" />
+                                                        <Text className="text-xs text-white ml-1 font-medium">
+                                                            {meal.totalTime || 'N/A'} mins
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            </View>
                                             <View className="p-3">
-                                                <Text className="font-semibold text-gray-800" numberOfLines={2}>
+                                                <Text className="font-bold text-gray-800 text-base" numberOfLines={2}>
                                                     {meal.title}
                                                 </Text>
-                                                <View className="flex-row items-center mt-2">
-                                                    <Ionicons name="time-outline" size={14} color="#FF9966" />
-                                                    <Text className="text-xs text-gray-500 ml-1">
-                                                        {meal.totalTime || 'N/A'} mins
-                                                    </Text>
-                                                </View>
                                             </View>
                                         </TouchableOpacity>
                                     ))}
@@ -716,19 +898,40 @@ export const HomeScreen = () => {
                             )}
                         </View>
 
-                        {/* SEARCH BY INGREDIENTS */}
-                        <View className="rounded-2xl justify-between mx-2 mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
-                            <View className="flex-row justify-between px-4 pt-4">
-                                <Text className="text-2xl font-semibold text-gray-800">Search By Ingredients</Text>
-                                <TouchableOpacity onPress={handleShowAddIngredientsModal}>
-                                    <Text className="text-2xl font-semibold text-orange-500">Add</Text>
+                        {/* MODERN SEARCH BY INGREDIENTS */}
+                        <View
+                            className="rounded-3xl mx-2 mt-6 mb-4 overflow-hidden"
+                            style={{
+                                backgroundColor: 'white',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.08,
+                                shadowRadius: 8,
+                                elevation: 3,
+                            }}
+                        >
+                            <View className="flex-row justify-between items-center px-5 pt-5 pb-3">
+                                <View className="flex-row items-center">
+                                    <View className="w-10 h-10 rounded-full items-center justify-center mr-2" style={{ backgroundColor: '#FFF4E0' }}>
+                                        <Ionicons name="leaf" size={20} color="#FF9966" />
+                                    </View>
+                                    <Text className="text-xl font-bold text-gray-800">Ingredients</Text>
+                                </View>
+                                <TouchableOpacity
+                                    className="bg-orange-50 px-4 py-2 rounded-full"
+                                    onPress={handleShowAddIngredientsModal}
+                                >
+                                    <View className="flex-row items-center">
+                                        <Ionicons name="add-circle" size={16} color="#FF9966" />
+                                        <Text className="text-orange-600 font-semibold text-sm ml-1">Add</Text>
+                                    </View>
                                 </TouchableOpacity>
                             </View>
 
                             <ScrollView
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                                contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12 }}
                             >
                                 {ingredients.map((ingredient, idx) => {
                                     const isSelected = tempSelectedIngredients.includes(ingredient);
@@ -736,9 +939,17 @@ export const HomeScreen = () => {
                                         <TouchableOpacity
                                             key={idx}
                                             onPress={() => toggleIngredient(ingredient)}
-                                            className={`mr-3 px-3 py-2 rounded-full ${isSelected ? 'bg-orange-400' : 'bg-gray-100'}`}
+                                            className={`mr-3 px-5 py-3 rounded-full`}
+                                            style={{
+                                                backgroundColor: isSelected ? '#FF9966' : '#F5F5F5',
+                                                shadowColor: isSelected ? '#FF9966' : '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: isSelected ? 0.3 : 0.05,
+                                                shadowRadius: isSelected ? 4 : 2,
+                                                elevation: isSelected ? 3 : 1,
+                                            }}
                                         >
-                                            <Text className={`font-semibold ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                                            <Text className={`font-bold text-sm ${isSelected ? 'text-white' : 'text-gray-700'}`}>
                                                 {ingredient}
                                             </Text>
                                         </TouchableOpacity>
@@ -855,21 +1066,44 @@ export const HomeScreen = () => {
                             </View>
                         </View>
 
-                        {/* CATEGORIES */}
-                        <View className="rounded-2xl mx-2 mt-6 mb-4" style={{ backgroundColor: colors.creamWhite }}>
-                            <Text className="text-2xl font-semibold text-gray-800 mb-3 px-4 pt-4">Categories</Text>
+                        {/* MODERN CATEGORIES */}
+                        <View
+                            className="rounded-3xl mx-2 mt-6 mb-4"
+                            style={{
+                                backgroundColor: 'white',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.08,
+                                shadowRadius: 8,
+                                elevation: 3,
+                            }}
+                        >
+                            <View className="flex-row items-center px-5 pt-5 pb-3">
+                                <View className="w-10 h-10 rounded-full items-center justify-center mr-2" style={{ backgroundColor: '#FFF4E0' }}>
+                                    <Ionicons name="grid" size={20} color="#FF9966" />
+                                </View>
+                                <Text className="text-xl font-bold text-gray-800">Explore Categories</Text>
+                            </View>
                             <ScrollView
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={{ paddingHorizontal: 16 }}
+                                contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12 }}
                             >
                                 {categories.map(category => (
                                     <TouchableOpacity
                                         key={category}
-                                        className={`mr-3 px-3 py-2 rounded-full ${activeCategory === category ? 'bg-orange-400' : 'bg-gray-100'}`}
+                                        className={`mr-3 px-5 py-3 rounded-full`}
                                         onPress={() => setActiveCategory(category)}
+                                        style={{
+                                            backgroundColor: activeCategory === category ? '#FF9966' : '#F5F5F5',
+                                            shadowColor: activeCategory === category ? '#FF9966' : '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: activeCategory === category ? 0.3 : 0.05,
+                                            shadowRadius: activeCategory === category ? 4 : 2,
+                                            elevation: activeCategory === category ? 3 : 1,
+                                        }}
                                     >
-                                        <Text className={`font-semibold ${activeCategory === category ? 'text-white' : 'text-gray-600'}`}>
+                                        <Text className={`font-bold text-sm ${activeCategory === category ? 'text-white' : 'text-gray-700'}`}>
                                             {category}
                                         </Text>
                                     </TouchableOpacity>
@@ -939,16 +1173,31 @@ export const HomeScreen = () => {
                             </View>
                         </View>
 
-                        {/* RECENTLY VIEWED */}
+                        {/* MODERN RECENTLY VIEWED */}
                         {recentlyViewed.length > 0 && (
-                            <View className="rounded-2xl mx-2 mt-2 mb-4" style={{ backgroundColor: colors.creamWhite }}>
-                                <View className="flex-row justify-between items-center px-4 pt-4 pb-3">
+                            <View
+                                className="rounded-3xl mx-2 mt-6 mb-4"
+                                style={{
+                                    backgroundColor: 'white',
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: 0.08,
+                                    shadowRadius: 8,
+                                    elevation: 3,
+                                }}
+                            >
+                                <View className="flex-row justify-between items-center px-5 pt-5 pb-3">
                                     <View className="flex-row items-center">
-                                        <Ionicons name="time-outline" size={24} color="#FF9966" />
-                                        <Text className="text-2xl font-semibold text-gray-800 ml-2">Recently Viewed</Text>
+                                        <View className="w-10 h-10 rounded-full items-center justify-center mr-2" style={{ backgroundColor: '#FFF4E0' }}>
+                                            <Ionicons name="time-outline" size={20} color="#FF9966" />
+                                        </View>
+                                        <Text className="text-xl font-bold text-gray-800">Recent History</Text>
                                     </View>
-                                    <TouchableOpacity onPress={() => navigation.navigate('RecentlyViewed')}>
-                                        <Text className="text-orange-500 font-semibold">See All</Text>
+                                    <TouchableOpacity
+                                        className="bg-orange-50 px-4 py-2 rounded-full"
+                                        onPress={() => navigation.navigate('RecentlyViewed')}
+                                    >
+                                        <Text className="text-orange-600 font-semibold text-sm">See All</Text>
                                     </TouchableOpacity>
                                 </View>
 
@@ -1161,7 +1410,7 @@ export const HomeScreen = () => {
                 onRequestClose={() => setShowChatbot(false)}
             >
                 <View className="flex-1 bg-white">
-                    <SpoonacularChatbot />
+                    <GeminiChatbot />
                     {/* Close button */}
                     <TouchableOpacity
                         className="absolute top-12 right-4 w-10 h-10 rounded-full bg-gray-200 items-center justify-center z-50"
