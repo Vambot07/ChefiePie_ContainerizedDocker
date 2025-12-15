@@ -28,7 +28,7 @@ const SignInScreen = () => {
         if (response.success) {
             Alert.alert('Signin Success', response.msg);
         } else {
-            Alert.alert('Signin Failed', response.msg + '\nPlease try again later');
+            Alert.alert('Signin Failed', response.msg);
         }
     };
 

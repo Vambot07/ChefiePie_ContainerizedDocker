@@ -126,8 +126,8 @@ const ChecklistScreen = () => {
         if (historyItems.length === 0) return;
 
         Alert.alert(
-            "Clear Purchased Items",
-            "Are you sure you want to remove all purchased items from the shopping list?",
+            "Clear History Items",
+            "Are you sure you want to remove all history items?",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -226,14 +226,6 @@ const ChecklistScreen = () => {
     };
 
     // UI Render
-    if (loading) {
-        return (
-            <View className="flex-1 bg-gray-150 justify-center items-center">
-                <ActivityIndicator size="large" color="#FF9966" />
-            </View>
-        );
-    }
-
     const shoppingItems = items.filter(item => item.status === 'shopping');
     const historyItems = items.filter(item => item.status === 'history');
     const uncheckedShoppingItems = shoppingItems.filter(item => !item.checked);
@@ -434,7 +426,12 @@ const ChecklistScreen = () => {
                     />
                 }
             >
-                {activeTab === 'shopping' ? (
+                {loading ? (
+                    <View className="flex-1 justify-center items-center py-20">
+                        <ActivityIndicator size="large" color="#FF9966" />
+                        <Text className="mt-4 text-gray-600">Loading Checklist...</Text>
+                    </View>
+                ) : activeTab === 'shopping' ? (
                     shoppingItems.length > 0 ? (
                         renderShoppingList()
                     ) : (
@@ -485,11 +482,10 @@ const ChecklistScreen = () => {
                                     return (
                                         <TouchableOpacity
                                             key={unit}
-                                            className={`px-4 py-3 rounded-xl border-2 ${
-                                                isSelected
-                                                    ? 'bg-orange-500 border-orange-500'
-                                                    : 'bg-white border-gray-200'
-                                            }`}
+                                            className={`px-4 py-3 rounded-xl border-2 ${isSelected
+                                                ? 'bg-orange-500 border-orange-500'
+                                                : 'bg-white border-gray-200'
+                                                }`}
                                             onPress={() => {
                                                 setNewItemUnit(unit);
                                                 setShowUnitModal(false);
@@ -504,9 +500,8 @@ const ChecklistScreen = () => {
                                             }}
                                         >
                                             <View className="flex-row items-center">
-                                                <Text className={`font-semibold ${
-                                                    isSelected ? 'text-white' : 'text-gray-700'
-                                                }`}>
+                                                <Text className={`font-semibold ${isSelected ? 'text-white' : 'text-gray-700'
+                                                    }`}>
                                                     {unit}
                                                 </Text>
                                                 {isSelected && (

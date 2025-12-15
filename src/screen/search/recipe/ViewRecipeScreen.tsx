@@ -687,6 +687,32 @@ const ViewRecipeScreen = () => {
                     </View>
                 )}
 
+                {/* Tips Section for Created Recipes */}
+                {!isApiRecipe && recipe?.tips && (
+                    <View className="px-5 mt-4">
+                        <View className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                            <View className="flex-row items-center mb-2">
+                                <Ionicons name="bulb-outline" size={20} color="#F59E0B" />
+                                <Text className="font-bold text-gray-800 ml-2 text-base">Tips & Tricks</Text>
+                            </View>
+                            <Text className="text-gray-700 leading-5">{recipe.tips}</Text>
+                        </View>
+                    </View>
+                )}
+
+                {/* Nutrition Section for Created Recipes */}
+                {!isApiRecipe && recipe?.nutrition && (
+                    <View className="px-5 mt-4">
+                        <View className="bg-green-50 border border-green-200 rounded-2xl p-4">
+                            <View className="flex-row items-center mb-2">
+                                <Ionicons name="nutrition-outline" size={20} color="#10B981" />
+                                <Text className="font-bold text-gray-800 ml-2 text-base">Nutrition Facts</Text>
+                            </View>
+                            <Text className="text-gray-700 leading-5">{recipe.nutrition}</Text>
+                        </View>
+                    </View>
+                )}
+
                 {/* Ensures both are displayed side-by-side for user recipes */}
                 {(!isApiRecipe && (difficulty || serving)) && (
                     <View className="px-5 mt-4">

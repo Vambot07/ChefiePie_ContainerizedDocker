@@ -256,7 +256,7 @@ export default function ProfileScreen() {
                         title="Profile"
                         showBackButton={true}
                         onBack={() => navigation.goBack()}
-                        rightIcon={(!userId || userId === currentUserId && viewMode === 'profile') ? "settings" : undefined}
+                        rightIcon={(!userId || userId === currentUserId && viewMode === 'profile') ? "settings-outline" : undefined}
                         onRightAction={handleSetting}
                     />
 
@@ -279,101 +279,149 @@ export default function ProfileScreen() {
                         >
                             {/* Profile Header Section - This will scroll away */}
                             <View>
-                                {/* Profile Card */}
-                                <View className="bg-white mx-4 mt-4 rounded-2xl p-4 shadow-sm">
-                                    <View className="flex-row">
-                                        {/* Profile Image */}
-                                        <TouchableOpacity
-                                            onPress={handleOpenImageViewer}
-                                            activeOpacity={0.8}
-                                        >
-                                            <View
-                                                className="w-36 h-36 rounded-full items-center justify-center"
-                                                style={{
-                                                    backgroundColor: colors.white,
-                                                    borderWidth: 2,
-                                                    borderColor: colors.lightBrown
-                                                }}
+                                {/* Profile Card with Solid Background */}
+                                <View
+                                    className="mx-4 mt-4 rounded-3xl overflow-hidden p-6"
+                                    style={{
+                                        backgroundColor: '#FFF4E0',
+                                        shadowColor: '#FF914D',
+                                        shadowOffset: { width: 0, height: 6 },
+                                        shadowOpacity: 0.2,
+                                        shadowRadius: 12,
+                                        elevation: 8
+                                    }}
+                                >
+                                    {/* Profile Image & Basic Info */}
+                                    <View className="items-center mb-4">
+                                            <TouchableOpacity
+                                                onPress={handleOpenImageViewer}
+                                                activeOpacity={0.8}
                                             >
-                                                {profileImage ? (
-                                                    <>
-                                                        {imageLoading && (
-                                                            <View style={{ position: 'absolute', zIndex: 1 }}>
-                                                                <ActivityIndicator size="large" color={colors.lightBrown} />
-                                                            </View>
-                                                        )}
-                                                        <Image
-                                                            source={{ uri: profileImage }}
-                                                            className="w-36 h-36 rounded-full"
-                                                            style={{ resizeMode: 'cover' }}
-                                                            onLoadStart={() => setImageLoading(true)}
-                                                            onLoadEnd={() => setImageLoading(false)}
-                                                            onError={() => setImageLoading(false)}
-                                                        />
-                                                    </>
-                                                ) : (
-                                                    <Fontisto name="male" size={40} color={colors.lightBrown} />
-                                                )}
-                                            </View>
-                                        </TouchableOpacity>
-
-                                        {/* User Info */}
-                                        <View className="flex-1 ml-4">
-                                            <Text className="font-bold text-lg text-gray-800">{username || 'User Name'}</Text>
-                                            <Text className="text-sm text-gray-500 mb-3">{bio || ''}</Text>
-
-                                            <View className='pt-8'>
-                                                {/* Social Media Icons */}
-                                                <View className='flex-row flex-wrap items-center pb-4' style={{ gap: 6 }}>
-                                                    {socialMediaIcons.map((social, index) => (
-                                                        <TouchableOpacity
-                                                            key={index}
-                                                            onPress={() => openSocialMedia(social.url, social.platform)}
-                                                            activeOpacity={0.7}
-                                                        >
-                                                            <View
-                                                                className="w-9 h-9 rounded-full items-center justify-center"
-                                                                style={{ backgroundColor: colors.lightPeach }}
-                                                            >
-                                                                {social.icon}
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                    ))}
+                                                <View
+                                                    className="w-28 h-28 rounded-full items-center justify-center"
+                                                    style={{
+                                                        backgroundColor: colors.white,
+                                                        borderWidth: 4,
+                                                        borderColor: '#FF914D',
+                                                        shadowColor: '#000',
+                                                        shadowOffset: { width: 0, height: 4 },
+                                                        shadowOpacity: 0.2,
+                                                        shadowRadius: 8,
+                                                        elevation: 6,
+                                                    }}
+                                                >
+                                                    {profileImage ? (
+                                                        <>
+                                                            {imageLoading && (
+                                                                <View style={{ position: 'absolute', zIndex: 1 }}>
+                                                                    <ActivityIndicator size="large" color="#FF914D" />
+                                                                </View>
+                                                            )}
+                                                            <Image
+                                                                source={{ uri: profileImage }}
+                                                                className="w-28 h-28 rounded-full"
+                                                                style={{ resizeMode: 'cover' }}
+                                                                onLoadStart={() => setImageLoading(true)}
+                                                                onLoadEnd={() => setImageLoading(false)}
+                                                                onError={() => setImageLoading(false)}
+                                                            />
+                                                        </>
+                                                    ) : (
+                                                        <Fontisto name="male" size={36} color="#FF914D" />
+                                                    )}
                                                 </View>
+                                            </TouchableOpacity>
 
-                                                {/* Edit Profile Button */}
-                                                {(!userId || userId === currentUserId && viewMode === 'profile') && (
-                                                    <TouchableOpacity
-                                                        className="bg-[#FFB47B] py-2 px-3 rounded-full self-start"
-                                                        onPress={() => navigation.navigate('EditProfile')}
-                                                    >
-                                                        <Text className="text-white font-semibold text-sm">Edit Profile</Text>
-                                                    </TouchableOpacity>
-                                                )}
+                                            <Text className="font-bold text-2xl text-gray-800 mt-4">{username || 'User Name'}</Text>
+                                            {bio && <Text className="text-sm text-gray-600 text-center mt-2 px-4">{bio}</Text>}
+                                        </View>
+
+                                        {/* Stats Section */}
+                                        <View className="flex-row justify-around py-4 px-4 bg-white/60 rounded-2xl mb-4">
+                                            <View className="items-center flex-1">
+                                                <Text className="font-bold text-2xl text-gray-800">{createdRecipes.length}</Text>
+                                                <Text className="text-xs text-gray-600 mt-1">Recipes</Text>
+                                            </View>
+                                            <View className="w-px bg-gray-300" />
+                                            <View className="items-center flex-1">
+                                                <Text className="font-bold text-2xl text-gray-800">{savedRecipes.length}</Text>
+                                                <Text className="text-xs text-gray-600 mt-1">Saved</Text>
+                                            </View>
+                                            <View className="w-px bg-gray-300" />
+                                            <View className="items-center flex-1">
+                                                <Text className="font-bold text-2xl text-gray-800">{privateRecipes.length}</Text>
+                                                <Text className="text-xs text-gray-600 mt-1">Private</Text>
                                             </View>
                                         </View>
-                                    </View>
+
+                                        {/* Social Media Icons */}
+                                        {socialMediaIcons.length > 0 && (
+                                            <View className="flex-row justify-center items-center mb-4" style={{ gap: 12 }}>
+                                                {socialMediaIcons.map((social, index) => (
+                                                    <TouchableOpacity
+                                                        key={index}
+                                                        onPress={() => openSocialMedia(social.url, social.platform)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <View
+                                                            className="w-11 h-11 rounded-full items-center justify-center"
+                                                            style={{
+                                                                backgroundColor: 'white',
+                                                                shadowColor: '#000',
+                                                                shadowOffset: { width: 0, height: 2 },
+                                                                shadowOpacity: 0.1,
+                                                                shadowRadius: 4,
+                                                                elevation: 3,
+                                                            }}
+                                                        >
+                                                            {social.icon}
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+
+                                        {/* Edit Profile Button */}
+                                        {(!userId || userId === currentUserId && viewMode === 'profile') && (
+                                            <TouchableOpacity
+                                                className="py-3 rounded-full"
+                                                style={{
+                                                    backgroundColor: '#FF914D',
+                                                    shadowColor: '#FF914D',
+                                                    shadowOffset: { width: 0, height: 4 },
+                                                    shadowOpacity: 0.3,
+                                                    shadowRadius: 8,
+                                                    elevation: 6,
+                                                }}
+                                                onPress={() => navigation.navigate('EditProfile')}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text className="text-white font-bold text-center text-base">Edit Profile</Text>
+                                            </TouchableOpacity>
+                                        )}
                                 </View>
 
                                 {/* Food Preferences Card */}
                                 {(!userId || userId === currentUserId && viewMode === 'profile') && (
-                                    <View className="bg-white mx-4 mt-4 rounded-2xl shadow-sm">
+                                    <View className="mx-4 mt-4 rounded-2xl overflow-hidden shadow-md" style={{ elevation: 4 }}>
                                         <TouchableOpacity
-                                            className="flex-row items-center justify-between px-6 py-8 active:opacity-70"
+                                            className="flex-row items-center justify-between px-6 py-5 bg-white active:opacity-70"
                                             onPress={() => navigation.navigate('FoodPreference')}
                                         >
-                                            <View className="flex-1">
-                                                <View className='flex-row'>
-                                                    <MaterialCommunityIcons name="food-variant" size={20} color="#FFB47B" />
-                                                    <Text className="font-semibold text-base text-gray-800 pl-2">
-                                                        My Food Preferences
+                                            <View className="flex-row items-center flex-1">
+                                                <View className="w-12 h-12 rounded-full items-center justify-center" style={{ backgroundColor: '#FFF4E0' }}>
+                                                    <MaterialCommunityIcons name="food-variant" size={24} color="#FF914D" />
+                                                </View>
+                                                <View className="flex-1 ml-4">
+                                                    <Text className="font-bold text-base text-gray-800">
+                                                        Food Preferences
+                                                    </Text>
+                                                    <Text className="text-xs text-gray-500 mt-0.5">
+                                                        Dietary restrictions & meal settings
                                                     </Text>
                                                 </View>
-                                                <Text className="text-sm text-gray-500 mt-1">
-                                                    Diet preferences, allergies, and meal plan settings.
-                                                </Text>
                                             </View>
-                                            <MaterialIcons name="arrow-forward-ios" size={18} color={colors.darkBrown} />
+                                            <MaterialIcons name="arrow-forward-ios" size={18} color="#FF914D" />
                                         </TouchableOpacity>
                                     </View>
                                 )}
@@ -381,31 +429,96 @@ export default function ProfileScreen() {
 
                             {/* Sticky Tabs Section */}
                             <View className="bg-[#F8F8F8] pt-6 pb-2">
-                                <View className="flex-row justify-around mx-4">
+                                <View className="flex-row justify-around mx-4" style={{ gap: 8 }}>
                                     <TouchableOpacity
-                                        className={`flex-1 py-2 rounded-xl ${tab === 'myrecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
+                                        className="flex-1 py-3 rounded-2xl relative"
+                                        style={{
+                                            backgroundColor: tab === 'myrecipe' ? '#FF914D' : 'white',
+                                            shadowColor: tab === 'myrecipe' ? '#FF914D' : '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: tab === 'myrecipe' ? 0.3 : 0.1,
+                                            shadowRadius: 4,
+                                            elevation: tab === 'myrecipe' ? 4 : 2,
+                                        }}
                                         onPress={() => setTab('myrecipe')}
+                                        activeOpacity={0.8}
                                     >
-                                        <Text className={`text-center font-semibold ${tab === 'myrecipe' ? 'text-white' : 'text-gray-700'}`}>
-                                            User Recipe
+                                        <Text className={`text-center font-bold text-sm ${tab === 'myrecipe' ? 'text-white' : 'text-gray-700'}`}>
+                                            My Recipes
                                         </Text>
+                                        {createdRecipes.length > 0 && (
+                                            <View
+                                                className="absolute -top-2 -right-2 rounded-full px-2 py-0.5 min-w-[20px] items-center justify-center"
+                                                style={{
+                                                    backgroundColor: tab === 'myrecipe' ? '#FFF4E0' : '#FF914D',
+                                                }}
+                                            >
+                                                <Text className={`text-xs font-bold ${tab === 'myrecipe' ? 'text-[#FF914D]' : 'text-white'}`}>
+                                                    {createdRecipes.length}
+                                                </Text>
+                                            </View>
+                                        )}
                                     </TouchableOpacity>
+
                                     <TouchableOpacity
-                                        className={`flex-1 py-2 rounded-xl mx-2 ${tab === 'savedrecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
+                                        className="flex-1 py-3 rounded-2xl relative"
+                                        style={{
+                                            backgroundColor: tab === 'savedrecipe' ? '#FF914D' : 'white',
+                                            shadowColor: tab === 'savedrecipe' ? '#FF914D' : '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: tab === 'savedrecipe' ? 0.3 : 0.1,
+                                            shadowRadius: 4,
+                                            elevation: tab === 'savedrecipe' ? 4 : 2,
+                                        }}
                                         onPress={() => setTab('savedrecipe')}
+                                        activeOpacity={0.8}
                                     >
-                                        <Text className={`text-center font-semibold ${tab === 'savedrecipe' ? 'text-white' : 'text-gray-700'}`}>
-                                            Saved Recipe
+                                        <Text className={`text-center font-bold text-sm ${tab === 'savedrecipe' ? 'text-white' : 'text-gray-700'}`}>
+                                            Saved
                                         </Text>
+                                        {savedRecipes.length > 0 && (
+                                            <View
+                                                className="absolute -top-2 -right-2 rounded-full px-2 py-0.5 min-w-[20px] items-center justify-center"
+                                                style={{
+                                                    backgroundColor: tab === 'savedrecipe' ? '#FFF4E0' : '#FF914D',
+                                                }}
+                                            >
+                                                <Text className={`text-xs font-bold ${tab === 'savedrecipe' ? 'text-[#FF914D]' : 'text-white'}`}>
+                                                    {savedRecipes.length}
+                                                </Text>
+                                            </View>
+                                        )}
                                     </TouchableOpacity>
+
                                     {(!userId || userId === currentUserId) && (
                                         <TouchableOpacity
-                                            className={`flex-1 py-2 rounded-xl mx-2 ${tab === 'privaterecipe' ? 'bg-[#FFB47B]' : 'bg-white'}`}
+                                            className="flex-1 py-3 rounded-2xl relative"
+                                            style={{
+                                                backgroundColor: tab === 'privaterecipe' ? '#FF914D' : 'white',
+                                                shadowColor: tab === 'privaterecipe' ? '#FF914D' : '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: tab === 'privaterecipe' ? 0.3 : 0.1,
+                                                shadowRadius: 4,
+                                                elevation: tab === 'privaterecipe' ? 4 : 2,
+                                            }}
                                             onPress={() => setTab('privaterecipe')}
+                                            activeOpacity={0.8}
                                         >
-                                            <Text className={`text-center font-semibold ${tab === 'privaterecipe' ? 'text-white' : 'text-gray-700'}`}>
-                                                Private Recipe
+                                            <Text className={`text-center font-bold text-sm ${tab === 'privaterecipe' ? 'text-white' : 'text-gray-700'}`}>
+                                                Private
                                             </Text>
+                                            {privateRecipes.length > 0 && (
+                                                <View
+                                                    className="absolute -top-2 -right-2 rounded-full px-2 py-0.5 min-w-[20px] items-center justify-center"
+                                                    style={{
+                                                        backgroundColor: tab === 'privaterecipe' ? '#FFF4E0' : '#FF914D',
+                                                    }}
+                                                >
+                                                    <Text className={`text-xs font-bold ${tab === 'privaterecipe' ? 'text-[#FF914D]' : 'text-white'}`}>
+                                                        {privateRecipes.length}
+                                                    </Text>
+                                                </View>
+                                            )}
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -415,58 +528,100 @@ export default function ProfileScreen() {
                             <View className="px-4" style={{ minHeight: 600 }}>
                                 {isLoading ? (
                                     <View className="items-center justify-center py-20">
-                                        <ActivityIndicator size="large" color="#FFB47B" />
-                                        <Text className="text-gray-400 mt-4">
-                                            {tab === 'myrecipe' ? 'Loading public recipes...' :
+                                        <ActivityIndicator size="large" color="#FF914D" />
+                                        <Text className="text-gray-400 mt-4 font-medium">
+                                            {tab === 'myrecipe' ? 'Loading recipes...' :
                                                 tab === 'privaterecipe' ? 'Loading private recipes...' :
                                                     'Loading saved recipes...'}
                                         </Text>
                                     </View>
                                 ) : displayedRecipes.length === 0 ? (
-                                    <View className="items-center justify-center py-20">
-                                        {tab === 'myrecipe' ? (
-                                            <>
-                                                <MaterialIcons name="create-new-folder" size={64} color="#ccc" />
-                                                <Text className="text-gray-400 mt-4">No public recipe has been created</Text>
-                                            </>
-                                        ) : tab === 'privaterecipe' ? (
-                                            <>
-                                                <Ionicons name="lock-closed-outline" size={64} color="#ccc" />
-                                                <Text className="text-gray-400 mt-4">No private recipes yet</Text>
-                                                <Text className="text-gray-300 mt-2 text-sm">Create a recipe and mark it as private</Text>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Ionicons name="bookmark-outline" size={64} color="#ccc" />
-                                                <Text className="text-gray-400 mt-4">No saved recipes yet</Text>
-                                            </>
-                                        )}
+                                    <View className="items-center justify-center py-16 mt-8">
+                                        <View
+                                            className="w-32 h-32 rounded-full items-center justify-center mb-6"
+                                            style={{
+                                                backgroundColor: '#FFF4E0',
+                                            }}
+                                        >
+                                            {tab === 'myrecipe' ? (
+                                                <MaterialIcons name="restaurant-menu" size={64} color="#FFB47B" />
+                                            ) : tab === 'privaterecipe' ? (
+                                                <Ionicons name="lock-closed-outline" size={64} color="#FFB47B" />
+                                            ) : (
+                                                <Ionicons name="bookmark-outline" size={64} color="#FFB47B" />
+                                            )}
+                                        </View>
+                                        <Text className="text-gray-700 font-bold text-lg mb-2">
+                                            {tab === 'myrecipe' ? 'No Recipes Yet' :
+                                                tab === 'privaterecipe' ? 'No Private Recipes' :
+                                                    'No Saved Recipes'}
+                                        </Text>
+                                        <Text className="text-gray-400 text-sm text-center px-8">
+                                            {tab === 'myrecipe' ? 'Start creating your first recipe and share it with others!' :
+                                                tab === 'privaterecipe' ? 'Create recipes and mark them as private to keep them just for you.' :
+                                                    'Save recipes you love to access them anytime.'}
+                                        </Text>
                                     </View>
                                 ) : (
                                     displayedRecipes.map((item) => (
                                         <TouchableOpacity
                                             key={item.id}
-                                            className="bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
+                                            className="bg-white rounded-3xl mb-4 overflow-hidden"
+                                            style={{
+                                                shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 3 },
+                                                shadowOpacity: 0.15,
+                                                shadowRadius: 8,
+                                                elevation: 5,
+                                            }}
                                             onPress={() => navigation.navigate('ViewRecipe', { recipe: item, viewMode, profileUserId: userId })}
+                                            activeOpacity={0.9}
                                         >
                                             <View className="relative">
-                                                <Image source={{ uri: item.image }} className="w-full h-36" style={{ resizeMode: 'cover' }} />
-                                                {item.isPrivate && (
-                                                    <View className="absolute top-2 right-2 bg-black/70 px-2 py-1 rounded-full flex-row items-center">
-                                                        <Ionicons name="lock-closed" size={14} color="white" />
-                                                        <Text className="text-white text-xs font-semibold ml-1">Private</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                            <View className="p-4">
-                                                <Text className="font-bold text-base text-gray-800 mb-1">{item.title}</Text>
-                                                <View className="flex-row items-center justify-between">
-                                                    <Text className="text-xs text-gray-500">By {item.username || 'Unknown'}</Text>
-                                                    <View className="flex-row items-center space-x-2">
-                                                        <Ionicons name="time-outline" size={16} color="#FFB47B" />
-                                                        <Text className="text-xs text-gray-500">{item.totalTime} Mins</Text>
+                                                <Image
+                                                    source={{ uri: item.image }}
+                                                    className="w-full h-48"
+                                                    style={{ resizeMode: 'cover' }}
+                                                />
+                                                {/* Solid Dark Overlay */}
+                                                <View
+                                                    style={{
+                                                        position: 'absolute',
+                                                        bottom: 0,
+                                                        left: 0,
+                                                        right: 0,
+                                                        height: 100,
+                                                        backgroundColor: 'rgba(0,0,0,0.6)',
+                                                    }}
+                                                />
+                                                {/* Title Overlay */}
+                                                <View className="absolute bottom-0 left-0 right-0 p-4">
+                                                    <Text className="font-bold text-lg text-white mb-1" numberOfLines={2}>
+                                                        {item.title}
+                                                    </Text>
+                                                    <View className="flex-row items-center justify-between">
+                                                        <Text className="text-xs text-white/90">By {item.username || 'Unknown'}</Text>
+                                                        {item.totalTime && (
+                                                            <View className="flex-row items-center bg-white/20 px-2 py-1 rounded-full">
+                                                                <Ionicons name="time-outline" size={14} color="white" />
+                                                                <Text className="text-xs text-white ml-1 font-medium">{item.totalTime} mins</Text>
+                                                            </View>
+                                                        )}
                                                     </View>
                                                 </View>
+                                                {/* Private Badge */}
+                                                {item.isPrivate && (
+                                                    <View className="absolute top-3 right-3 bg-gray-900/80 px-3 py-1.5 rounded-full flex-row items-center">
+                                                        <Ionicons name="lock-closed" size={12} color="white" />
+                                                        <Text className="text-white text-xs font-bold ml-1">PRIVATE</Text>
+                                                    </View>
+                                                )}
+                                                {/* Difficulty Badge (if available) */}
+                                                {item.difficulty && (
+                                                    <View className="absolute top-3 left-3 bg-[#FF914D] px-3 py-1.5 rounded-full">
+                                                        <Text className="text-white text-xs font-bold">{item.difficulty}</Text>
+                                                    </View>
+                                                )}
                                             </View>
                                         </TouchableOpacity>
                                     ))
