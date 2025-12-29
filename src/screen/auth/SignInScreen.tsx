@@ -46,7 +46,7 @@ const SignInScreen = () => {
             const result = await signInWithGoogle();
 
             if (result.success) {
-                Alert.alert('Success! 🎉', result.msg);
+                Alert.alert('Success!', result.msg);
             } else {
                 Alert.alert('Sign In Failed', result.msg);
             }

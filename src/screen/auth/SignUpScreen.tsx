@@ -125,7 +125,7 @@ const SignUpScreen = () => {
             const result = await signInWithGoogle();
 
             if (result.success) {
-                Alert.alert('Success! 🎉', 'Your account has been created successfully!');
+                Alert.alert('Success!', 'Your account has been created successfully!');
             } else {
                 Alert.alert('Sign Up Failed', result.msg);
             }
