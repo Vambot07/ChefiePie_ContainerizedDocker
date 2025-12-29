@@ -1,13 +1,3 @@
-const fs = require('fs');
-const path = require('path');
-
-// Handle google-services.json from environment variable
-if (process.env.GOOGLE_SERVICES_JSON) {
-  const targetPath = path.join(__dirname, 'google-services.json');
-  fs.writeFileSync(targetPath, process.env.GOOGLE_SERVICES_JSON);
-  console.log('✅ Successfully created google-services.json from environment variable');
-}
-
 module.exports = {
   expo: {
     name: "Chefie Pie",
