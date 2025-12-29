@@ -1,9 +1,10 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, Image } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { sendChatMessage } from '~/api/gemini/chatService';
 import Markdown from 'react-native-markdown-display';
 import { useFonts, ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
+import UnsplashImage from './UnsplashImage';
 
 interface Message {
     id: string;
@@ -17,6 +18,47 @@ const GeminiChatbot = () => {
     const [fontsLoaded] = useFonts({
         ArchivoBlack_400Regular,
     });
+
+    // Custom markdown rules to properly render images
+    const markdownRules = {
+        image: (node: any, children: any, parent: any, styles: any) => {
+            // The src is in node.attributes.src for react-native-markdown-display
+            const imageUri = node.attributes?.src || '';
+            const altText = node.attributes?.alt || 'Recipe Image';
+
+            console.log('🖼️ Rendering image:', imageUri); // Debug log
+
+            // Check if it's an Unsplash Source URL (now deprecated, so we handle it with our custom component)
+            if (imageUri.includes('source.unsplash.com')) {
+                // Extract query from URL like: https://source.unsplash.com/800x600/?chicken-rice,asian-food
+                const urlParts = imageUri.split('?');
+                const query = urlParts[1] || 'food';
+
+                console.log('🔄 Using Unsplash API for query:', query);
+
+                return (
+                    <UnsplashImage
+                        key={node.key}
+                        query={query}
+                        alt={altText}
+                        style={styles.image}
+                    />
+                );
+            }
+
+            // For regular image URLs, use standard Image component
+            return (
+                <Image
+                    key={node.key}
+                    source={{ uri: imageUri }}
+                    style={styles.image}
+                    resizeMode="cover"
+                    onError={(error) => console.error('❌ Image load error:', error.nativeEvent.error)}
+                    onLoad={() => console.log('✅ Image loaded successfully:', imageUri)}
+                />
+            );
+        },
+    };
 
     const [messages, setMessages] = useState<Message[]>([
         {
@@ -181,31 +223,47 @@ const GeminiChatbot = () => {
                     >
 
                         <Markdown
+                            rules={markdownRules}
                             style={{
                                 body: {
                                     color: message.sender === 'user' ? '#FFFFFF' : '#1F2937',
                                     fontSize: 16,
-                                    lineHeight: 24,
+                                    lineHeight: 28,
                                     fontFamily: Platform.select({
                                         ios: 'System',
                                         android: 'Roboto',
                                         default: 'System',
                                     }),
                                 },
+                                paragraph: {
+                                    marginTop: 8,
+                                    marginBottom: 8,
+                                    lineHeight: 28,
+                                },
                                 heading1: {
                                     fontSize: 24,
                                     fontWeight: 'bold',
-                                    marginVertical: 8,
+                                    marginTop: 16,
+                                    marginBottom: 12,
                                     color: message.sender === 'user' ? '#FFFFFF' : '#1F2937',
                                 },
                                 heading2: {
                                     fontSize: 20,
                                     fontWeight: 'bold',
-                                    marginVertical: 6,
+                                    marginTop: 14,
+                                    marginBottom: 10,
+                                    color: message.sender === 'user' ? '#FFFFFF' : '#1F2937',
+                                },
+                                heading3: {
+                                    fontSize: 18,
+                                    fontWeight: 'bold',
+                                    marginTop: 12,
+                                    marginBottom: 8,
                                     color: message.sender === 'user' ? '#FFFFFF' : '#1F2937',
                                 },
                                 strong: {
                                     fontWeight: 'bold',
+                                    marginVertical: 2,
                                 },
                                 em: {
                                     fontStyle: 'italic',
@@ -214,7 +272,7 @@ const GeminiChatbot = () => {
                                     width: 220,
                                     height: 160,
                                     borderRadius: 12,
-                                    marginVertical: 8,
+                                    marginVertical: 12,
                                     backgroundColor: '#F3F4F6',
                                     borderWidth: 2,
                                     borderColor: message.sender === 'user' ? 'rgba(255,255,255,0.3)' : '#E5E7EB',
@@ -235,7 +293,7 @@ const GeminiChatbot = () => {
                                     backgroundColor: message.sender === 'user' ? 'rgba(255,255,255,0.1)' : '#F3F4F6',
                                     padding: 10,
                                     borderRadius: 8,
-                                    marginVertical: 8,
+                                    marginVertical: 12,
                                     fontFamily: Platform.select({
                                         ios: 'Courier',
                                         android: 'monospace',
@@ -243,13 +301,17 @@ const GeminiChatbot = () => {
                                     }),
                                 },
                                 bullet_list: {
-                                    marginVertical: 8,
+                                    marginVertical: 12,
+                                    paddingLeft: 4,
                                 },
                                 ordered_list: {
-                                    marginVertical: 8,
+                                    marginVertical: 12,
+                                    paddingLeft: 4,
                                 },
                                 list_item: {
-                                    marginVertical: 4,
+                                    marginVertical: 14,
+                                    lineHeight: 28,
+                                    paddingBottom: 4,
                                 },
                             }}
                         >

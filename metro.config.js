@@ -26,9 +26,14 @@ config.resetCache = false;
 const assetExts = config.resolver.assetExts.filter(ext => ext !== "svg");
 const sourceExts = [...config.resolver.sourceExts, "svg"];
 
-config.transformer.babelTransformerPath = require.resolve("react-native-svg-transformer");
-config.resolver.assetExts = assetExts;
-config.resolver.sourceExts = sourceExts;
+// Use try-catch to handle cases where svg-transformer might not be installed yet
+try {
+  config.transformer.babelTransformerPath = require.resolve("react-native-svg-transformer");
+  config.resolver.assetExts = assetExts;
+  config.resolver.sourceExts = sourceExts;
+} catch (e) {
+  console.warn("react-native-svg-transformer not found, SVG support disabled");
+}
 
 //  Wrap with NativeWind config
 module.exports = withNativeWind(config, { input: './global.css' });

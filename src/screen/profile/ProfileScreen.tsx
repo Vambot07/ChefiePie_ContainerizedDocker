@@ -30,6 +30,7 @@ interface Recipe {
     difficulty?: string;
     source: string;
     isPrivate?: boolean;
+    userId?: string;
 }
 
 interface UserProfile {
@@ -101,11 +102,11 @@ export default function ProfileScreen() {
     };
 
     // Build social media icons array dynamically
-    const socialMediaIcons: Array<{
+    const socialMediaIcons: {
         platform: string;
         icon: React.ReactElement;
         url: string;
-    }> = [];
+    }[] = [];
 
     if (instagram) {
         socialMediaIcons.push({
@@ -160,7 +161,21 @@ export default function ProfileScreen() {
                 getRecipeByUser(userId)
             ]);
 
-            setSavedRecipes(savedResults as Recipe[]);
+            // Filter out private recipes that don't belong to the current user
+            const allSaved = savedResults as Recipe[];
+            const visibleSavedRecipes = allSaved.filter(recipe => {
+                // Show if recipe is not private
+                if (!recipe.isPrivate) return true;
+
+                // Show if recipe is private but belongs to current user
+                if (recipe.isPrivate && recipe.userId === currentUserId) return true;
+
+                // Hide if recipe is private and belongs to someone else
+                return false;
+            });
+
+            setSavedRecipes(visibleSavedRecipes);
+            console.log(`🔒 Filtered ${allSaved.length - visibleSavedRecipes.length} private saved recipes from other users`);
 
             // Separate public and private recipes
             const allCreated = createdResults as Recipe[];
@@ -171,7 +186,7 @@ export default function ProfileScreen() {
             setPrivateRecipes(privateRecipesFiltered);
 
             console.log("✅ All recipes loaded!");
-            console.log(`📊 Public: ${publicRecipes.length}, Private: ${privateRecipesFiltered.length}`);
+            console.log(`📊 Public: ${publicRecipes.length}, Private: ${privateRecipesFiltered.length}, Saved: ${visibleSavedRecipes.length}`);
 
         } catch (error) {
             console.error('❌ Error fetching data:', error);
@@ -428,7 +443,13 @@ export default function ProfileScreen() {
                             </View>
 
                             {/* Sticky Tabs Section */}
-                            <View className="bg-[#F8F8F8] pt-6 pb-2">
+                            <View
+                                className="bg-[#F8F8F8] pt-6 pb-2"
+                                style={{
+                                    zIndex: 100,
+                                    elevation: 10,
+                                }}
+                            >
                                 <View className="flex-row justify-around mx-4" style={{ gap: 8 }}>
                                     <TouchableOpacity
                                         className="flex-1 py-3 rounded-2xl relative"

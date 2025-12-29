@@ -81,7 +81,7 @@ const ForgotPasswordScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#FFF4E0', // secondary color
     },
     content: {
         flex: 1,

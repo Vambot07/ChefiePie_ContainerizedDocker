@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+import { wrapScrollView, ScrollIntoView } from 'react-native-scroll-into-view';
 import { getRecipeById, unsaveRecipe, isRecipeSaved } from '../../../controller/recipe';
 import { addItemsToChecklist } from '../../../controller/checklist';
 import Header from '../../../components/partials/Header';
@@ -11,6 +12,10 @@ import {
     ExpoSpeechRecognitionModule,
     useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
+
+// Create enhanced ScrollView with scroll-into-view functionality
+const EnhancedScrollView = wrapScrollView(ScrollView);
+import { getVoiceResponse } from '../../../api/gemini/recognitionService';
 
 const ViewSavedRecipeScreen = () => {
     const route = useRoute();
@@ -24,8 +29,12 @@ const ViewSavedRecipeScreen = () => {
     const [tab, setTab] = useState<'ingredient' | 'procedure'>('ingredient');
     const [selectedIngredients, setSelectedIngredients] = useState<any[]>([]);
     const [voiceMode, setVoiceMode] = useState<boolean>(false);
-    const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
     const [overlaySize, setOverlaySize] = useState({ w: 0, h: 0 });
+
+    //Time countdown
+    const [showTimerModal, setShowTimerModal] = useState<boolean>(false);
+    const [timerSeconds, setTimerSeconds] = useState<number>(0);
+    const [timerPaused, setTimerPaused] = useState<boolean>(false);
 
     // Voice Assistant States
     const [currentStep, setCurrentStep] = useState<number>(0);
@@ -37,10 +46,16 @@ const ViewSavedRecipeScreen = () => {
     const [recognizedText, setRecognizedText] = useState<string>('');
     const [speechRate, setSpeechRate] = useState<number>(0.75); // Adjustable speech rate (0.5 = slow, 0.75 = normal, 1.0 = fast)
     const [showIntroModal, setShowIntroModal] = useState<boolean>(false);
+    const [wakeWordListening, setWakeWordListening] = useState<boolean>(false); // NEW: Wake word detection mode
+    const [isProcessingAI, setIsProcessingAI] = useState<boolean>(false); // NEW: AI processing state
+    const [showWakeWordModal, setShowWakeWordModal] = useState<boolean>(false); // NEW: Modal for wake word indicator
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
     const voiceModeRef = useRef<boolean>(false);
+    const isSpeakingRef = useRef<boolean>(false); // NEW: Ref for immediate synchronous check
+    const lastSpeechEndTime = useRef<number>(0); // NEW: Timestamp of last speech end for cooldown
+    const recentAppSpeech = useRef<string[]>([]); // NEW: Track recent app speech for echo detection
 
     const shadowStyle = Platform.select({
         android: { elevation: 3 },
@@ -72,6 +87,9 @@ const ViewSavedRecipeScreen = () => {
             // Stop text-to-speech
             Speech.stop();
 
+            // Clear speaking state
+            isSpeakingRef.current = false;
+
             // Clear timer
             if (timerRef.current) {
                 clearInterval(timerRef.current);
@@ -88,6 +106,12 @@ const ViewSavedRecipeScreen = () => {
     useEffect(() => {
         const unsubscribe = navigation.addListener('blur', () => {
             console.log('📱 Screen blur detected');
+            // Clean up wake word listening
+            if (wakeWordListening) {
+                stopListening();
+                setWakeWordListening(false);
+            }
+            // Clean up voice assistant
             if (voiceMode) {
                 cleanupVoiceAssistant();
                 setVoiceMode(false);
@@ -98,11 +122,18 @@ const ViewSavedRecipeScreen = () => {
         });
 
         return unsubscribe;
-    }, [navigation, voiceMode, cleanupVoiceAssistant]);
+    }, [navigation, voiceMode, wakeWordListening, cleanupVoiceAssistant]);
 
     // Handle Android back button
     useEffect(() => {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            // Clean up wake word listening
+            if (wakeWordListening) {
+                console.log('⬅️ Back button pressed with wake word listening active');
+                stopListening();
+                setWakeWordListening(false);
+            }
+            // Clean up voice mode
             if (voiceMode) {
                 console.log('⬅️ Back button pressed with voice mode active');
                 cleanupVoiceAssistant();
@@ -116,7 +147,7 @@ const ViewSavedRecipeScreen = () => {
         });
 
         return () => backHandler.remove();
-    }, [voiceMode, cleanupVoiceAssistant]);
+    }, [voiceMode, wakeWordListening, cleanupVoiceAssistant]);
 
     // Handle component unmount (final cleanup)
     useEffect(() => {
@@ -139,26 +170,73 @@ const ViewSavedRecipeScreen = () => {
 
     // Result event - processes commands
     useSpeechRecognitionEvent('result', (event) => {
+
+        console.log('📍 Event berlaku');
+        console.log('   isSpeaking state:', isSpeaking);
         const transcript = event.results[0]?.transcript.toLowerCase();
 
         // IGNORE recognition while app is speaking (prevents echo)
-        if (isSpeaking) {
-            console.log('🔇 Ignoring recognition - app is speaking');
+        // Check BOTH state and ref for immediate protection
+        if (isSpeaking || isSpeakingRef.current) {
+            console.log('🔇 Ignoring recognition - app is speaking (ref:', isSpeakingRef.current, ', state:', isSpeaking, ')');
+            return;
+        }
+
+        // COOLDOWN PERIOD: Ignore any recognition within 3 seconds of last speech ending
+        const timeSinceLastSpeech = Date.now() - lastSpeechEndTime.current;
+        if (timeSinceLastSpeech < 3000) {
+            console.log('🔇 Ignoring recognition - cooldown period (', timeSinceLastSpeech, 'ms since last speech)');
             return;
         }
 
         if (transcript) {
+            // ECHO FILTER: Check if recognized text matches recent app speech
+            const isEcho = recentAppSpeech.current.some(appSpeech => {
+                // Check if the transcript is similar to what the app just said
+                const similarity = transcript.includes(appSpeech.substring(0, Math.min(20, appSpeech.length))) ||
+                    appSpeech.includes(transcript.substring(0, Math.min(20, transcript.length)));
+                return similarity;
+            });
+
+            if (isEcho) {
+                console.log('🔇 Ignoring recognition - detected echo of app speech:', transcript);
+                return;
+            }
+
             console.log('✅ Valid command received:', transcript);
             setRecognizedText(transcript);
-            handleVoiceCommand(transcript);
+
+            // Check for wake word if in wake word listening mode
+            if (wakeWordListening && !voiceMode) {
+                if (transcript.includes('chef') || transcript.includes('chefiepie') || transcript.includes('chef pie') || transcript.includes('chef pie') || transcript.includes('chefie pie')
+                    || transcript.includes('hi') || transcript.includes('hello') || transcript.includes('hey')) {
+                    console.log('🎯 Wake word detected! Starting voice assistant...');
+                    Vibration.vibrate([100, 50, 100]); // Double vibration for wake word
+                    setWakeWordListening(false); // Stop wake word listening
+                    stopListening(); // Stop current listening session
+                    setTimeout(() => {
+                        startVoiceAssistant(); // Start the voice assistant
+                    }, 500);
+                    return;
+                }
+            }
+
+            // Handle regular voice commands when in voice mode
+            if (voiceMode) {
+                handleVoiceCommand(transcript);
+            }
         }
     });
 
     // End event - rarely fires with continuous mode
     useSpeechRecognitionEvent('end', () => {
         console.log('Speech recognition ended unexpectedly');
+        // Restart wake word listening if we were in wake word mode
+        if (wakeWordListening && !voiceMode && !isSpeaking) {
+            setTimeout(() => startWakeWordListening(), 500);
+        }
         // Only restart if not speaking and still in voice mode
-        if (voiceMode && !isPaused && !isSpeaking) {
+        else if (voiceMode && !isPaused && !isSpeaking) {
             setTimeout(() => startListening(), 500);
         }
     });
@@ -170,7 +248,12 @@ const ViewSavedRecipeScreen = () => {
         // Silently ignore "no-speech" and "client" errors - just auto-restart
         if (event.error === 'no-speech' || event.error === 'client') {
             console.log('No speech/client error, restarting...');
-            if (voiceMode && !isPaused && !isSpeaking) {
+            // Restart wake word listening if we were in wake word mode
+            if (wakeWordListening && !voiceMode && !isSpeaking) {
+                setTimeout(() => startWakeWordListening(), 1000);
+            }
+            // Restart voice mode listening
+            else if (voiceMode && !isPaused && !isSpeaking) {
                 setTimeout(() => startListening(), 1000);
             }
             return; // Don't change UI state for silent periods
@@ -190,6 +273,7 @@ const ViewSavedRecipeScreen = () => {
         }
 
         setIsListening(false);
+        setWakeWordListening(false);
     });
 
     // Fetch recipe details on screen focus
@@ -226,6 +310,28 @@ const ViewSavedRecipeScreen = () => {
         }, [recipeId])
     );
 
+    // Start wake word listening when screen is focused
+    useFocusEffect(
+        useCallback(() => {
+            // Small delay to ensure screen is fully loaded
+            const timer = setTimeout(() => {
+                if (!voiceMode && !wakeWordListening) {
+                    console.log('📱 Screen focused - starting wake word detection');
+                    startWakeWordListening();
+                }
+            }, 1000);
+
+            return () => {
+                clearTimeout(timer);
+                // Stop wake word listening when screen loses focus
+                if (wakeWordListening && !voiceMode) {
+                    console.log('📱 Screen unfocused - stopping wake word detection');
+                    stopListening();
+                }
+            };
+        }, [voiceMode, wakeWordListening])
+    );
+
     // Start listening with continuous mode
     const startListening = async () => {
         try {
@@ -252,62 +358,115 @@ const ViewSavedRecipeScreen = () => {
         }
     };
 
+    // Start wake word listening (for detecting "hi chefiepie")
+    const startWakeWordListening = async () => {
+        try {
+            const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+            if (!result.granted) {
+                console.log('❌ Microphone permission denied for wake word');
+                return;
+            }
+
+            await ExpoSpeechRecognitionModule.start({
+                lang: 'en-US',
+                interimResults: false,
+                maxAlternatives: 1,
+                continuous: true,
+                requiresOnDeviceRecognition: false,
+                addsPunctuation: false,
+                contextualStrings: ['chef', 'chefiepie', 'chef pie', 'chefie pie', 'hey', 'hi', 'hello'],
+            });
+
+            setWakeWordListening(true);
+            setIsListening(true);
+            console.log('👂 Started wake word listening for "hi chefiepie"');
+        } catch (error) {
+            console.error('Error starting wake word listening:', error);
+        }
+    };
+
     const stopListening = () => {
         try {
             ExpoSpeechRecognitionModule.stop();
             setIsListening(false);
+            setWakeWordListening(false); // Also stop wake word listening
             console.log('🔇 Stopped listening');
         } catch (error) {
             console.error('Error stopping speech recognition:', error);
         }
     };
 
-    // ⭐ UPDATED: Enhanced speak function with echo prevention and adjustable rate
+    // Enhanced speak function with echo prevention and adjustable rate
     const speak = (text: string) => {
         console.log('🔊 Speaking:', text.substring(0, 50) + '...');
 
+        // Track what the app is saying to filter echoes later
+        const lowerText = text.toLowerCase();
+        recentAppSpeech.current.push(lowerText);
+        // Keep only last 5 utterances to prevent memory bloat
+        if (recentAppSpeech.current.length > 5) {
+            recentAppSpeech.current.shift();
+        }
+
+        // IMMEDIATELY set ref to prevent ANY recognition during speech
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
+
         // Stop listening before speaking to prevent echo
+        console.log("Check sini", isListening);
         if (isListening) {
             stopListening();
         }
 
-        setIsSpeaking(true);
+        // Add small delay to ensure microphone actually stops before speaking
+        setTimeout(() => {
+            Speech.speak(text, {
+                language: 'en-US',
+                pitch: 1.0,
+                rate: speechRate, // Use adjustable speech rate
 
-        Speech.speak(text, {
-            language: 'en-US',
-            pitch: 1.0,
-            rate: speechRate, // Use adjustable speech rate
+                onStart: () => {
+                    console.log('🔊 Speech started');
+                    isSpeakingRef.current = true;
+                    setIsSpeaking(true);
+                },
 
-            onStart: () => {
-                console.log('🔊 Speech started');
-                setIsSpeaking(true);
-            },
+                onDone: () => {
+                    console.log('✅ Speech finished');
 
-            onDone: () => {
-                console.log('✅ Speech finished');
-                setIsSpeaking(false);
+                    // Record the timestamp when speech ends for cooldown checking
+                    lastSpeechEndTime.current = Date.now();
 
-                // Resume listening after speech is done (only if still in voice mode)
-                if (voiceMode && !isPaused) {
+                    // Keep blocking recognition for a bit longer to avoid tail-end echo
                     setTimeout(() => {
-                        console.log('🎤 Resuming listening after speech...');
-                        startListening();
-                    }, 500); // 500ms delay for natural feel
-                }
-            },
+                        isSpeakingRef.current = false;
+                        setIsSpeaking(false);
+                    }, 500); // Increased to 500ms buffer after speech ends
 
-            onError: (error) => {
-                console.error('❌ Speech error:', error);
-                setIsSpeaking(false);
+                    // Resume listening after speech is done (only if still in voice mode)
+                    if (voiceMode && !isPaused) {
+                        setTimeout(() => {
+                            console.log('🎤 Resuming listening after speech...');
+                            startListening();
+                        }, 1500); // Increased to 1500ms for better protection
+                    }
+                },
 
-                // Still try to resume listening even if speech fails
-                if (voiceMode && !isPaused) {
-                    setTimeout(() => {
-                        startListening();
-                    }, 500);
-                }
-            },
-        });
+                onError: (error) => {
+                    console.error('❌ Speech error:', error);
+                    lastSpeechEndTime.current = Date.now();
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+
+                    // Still try to resume listening even if speech fails
+                    if (voiceMode && !isPaused) {
+                        setTimeout(() => {
+                            startListening();
+                        }, 1000);
+                    }
+                },
+            });
+        }, 200); // 200ms delay to ensure microphone stops
     };
 
     const startVoiceAssistant = () => {
@@ -321,34 +480,148 @@ const ViewSavedRecipeScreen = () => {
         setCurrentStep(0);
 
         setTimeout(() => {
-            const greeting = `Starting cooking assistant for ${recipe.title}. You have ${recipe.steps.length} steps. Say next to continue, previous to go back, repeat to hear again, or pause to stop listening. Let's begin`;
-            speak(greeting);
+            const greeting = `Hello Im ChefiePie. Starting cooking assistant for ${recipe.title}. You have ${recipe.steps.length} steps. You can say next, previous, repeat steps or wait for certain minutes for the recipe, or ask me any questions about the recipe. Let's begin`;
 
-            // Read first step after greeting (handled by speak's onDone callback chain)
-            setTimeout(() => {
-                readStep(0);
-            }, 8000); // Adjust timing based on greeting length
+            console.log('🔊 Speaking greeting:', greeting.substring(0, 50) + '...');
+
+            // IMMEDIATELY set ref to prevent recognition
+            isSpeakingRef.current = true;
+            setIsSpeaking(true);
+
+            // Stop listening before speaking to prevent echo
+            if (isListening) {
+                stopListening();
+            }
+
+            // Speak greeting with custom onDone callback
+            Speech.speak(greeting, {
+                language: 'en-US',
+                pitch: 1.0,
+                rate: speechRate,
+
+                onStart: () => {
+                    console.log('🔊 Greeting started');
+                    isSpeakingRef.current = true;
+                    setIsSpeaking(true);
+                },
+
+                onDone: () => {
+                    console.log('✅ Greeting finished');
+
+                    // Record timestamp for cooldown
+                    lastSpeechEndTime.current = Date.now();
+
+                    // Keep blocking for buffer period
+                    setTimeout(() => {
+                        isSpeakingRef.current = false;
+                        setIsSpeaking(false);
+                    }, 500);
+
+                    // Wait 1.5 seconds after greeting finishes, then read first step
+                    setTimeout(() => {
+                        console.log('📖 Reading first step...');
+                        readStep(0);
+                    }, 1500);
+                },
+
+                onError: (error) => {
+                    console.error('❌ Greeting speech error:', error);
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+
+                    // Still try to read first step even if greeting fails
+                    setTimeout(() => {
+                        readStep(0);
+                    }, 1000);
+                }
+            });
         }, 1000);
     };
 
     const stopVoiceAssistant = () => {
+        // Set voiceMode to false FIRST to prevent speak() from restarting listening
         setVoiceMode(false);
         setIsPaused(false);
         stopListening();
         Speech.stop();
         setCurrentStep(0);
         setRecognizedText('');
-        setIsSpeaking(false);
-        speak('Cooking assistant stopped. Goodbye');
+
+        // Speak goodbye WITHOUT using the regular speak function to avoid complications
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
+
+        // Track the goodbye message for echo filtering
+        const goodbyeText = 'Cooking assistant stopped. Goodbye';
+        recentAppSpeech.current.push(goodbyeText.toLowerCase());
+        if (recentAppSpeech.current.length > 5) {
+            recentAppSpeech.current.shift();
+        }
+
+        Speech.speak(goodbyeText, {
+            language: 'en-US',
+            pitch: 1.0,
+            rate: speechRate,
+            onStart: () => {
+                isSpeakingRef.current = true;
+                setIsSpeaking(true);
+            },
+            onDone: () => {
+                lastSpeechEndTime.current = Date.now();
+                setTimeout(() => {
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+                }, 500);
+                // Do NOT restart listening since voiceMode is false
+            },
+            onError: () => {
+                lastSpeechEndTime.current = Date.now();
+                isSpeakingRef.current = false;
+                setIsSpeaking(false);
+            }
+        });
     };
 
-    const handleVoiceCommand = (command: string) => {
+    const handleVoiceCommand = async (command: string) => {
         console.log('🎯 Voice command received:', command);
 
         // Haptic feedback for command recognition
         Vibration.vibrate(50);
 
-        if (command.includes('next') || command.includes('continue')) {
+        // Check for timer-specific commands first (higher priority when timer is active)
+        if ((command.includes('cancel') && command.includes('timer')) ||
+            (command.includes('stop') && command.includes('timer'))) {
+            if (timerActive) {
+                Vibration.vibrate([100, 50, 100]);
+                cancelTimer();
+            } else {
+                speak('No timer is running');
+            }
+        }
+        // Check for pause - prioritize timer if active, otherwise pause assistant
+        else if (command.includes('pause')) {
+            Vibration.vibrate([100, 50, 100]); // Double vibration for pause
+            if (timerActive && !timerPaused) {
+                pauseTimer();
+            } else if (!timerActive) {
+                pauseAssistant();
+            } else {
+                speak('Timer is already paused');
+            }
+        }
+        // Check for resume - prioritize timer if paused, otherwise resume assistant
+        else if (command.includes('resume')) {
+            Vibration.vibrate([100, 50, 100]); // Double vibration for resume
+            if (timerActive && timerPaused) {
+                resumeTimer();
+            } else if (isPaused) {
+                resumeAssistant();
+            } else {
+                speak('Nothing to resume');
+            }
+        }
+        // Check for standard navigation commands
+        else if (command.includes('next') || command.includes('continue')) {
             speak('Next step');
             setTimeout(() => goToNextStep(), 800);
         }
@@ -359,14 +632,6 @@ const ViewSavedRecipeScreen = () => {
         else if (command.includes('repeat') || command.includes('again')) {
             speak('Repeating');
             setTimeout(() => readCurrentStep(), 600);
-        }
-        else if (command.includes('pause')) {
-            Vibration.vibrate([100, 50, 100]); // Double vibration for pause
-            pauseAssistant();
-        }
-        else if (command.includes('resume')) {
-            Vibration.vibrate([100, 50, 100]); // Double vibration for resume
-            resumeAssistant();
         }
         else if (command.includes('stop') || command.includes('exit')) {
             Vibration.vibrate([100, 50, 100, 50, 100]); // Triple vibration for stop
@@ -383,9 +648,34 @@ const ViewSavedRecipeScreen = () => {
             }
         }
         else {
-            // Unknown command
-            Vibration.vibrate([50, 50, 50]); // Error pattern
-            speak('Sorry, I did not understand that command. Try saying next, previous, or repeat');
+            // Unknown command - ask Gemini AI for help
+            console.log('🤖 Sending to Gemini AI:', command);
+            setIsProcessingAI(true);
+            speak('Let me think about that');
+
+            try {
+                // Build recipe context for Gemini
+                const recipeContext = {
+                    recipeName: recipe?.title || 'Unknown Recipe',
+                    currentStepNumber: currentStep + 1,
+                    totalSteps: recipe?.steps?.length || 0,
+                    currentStepDetails: recipe?.steps?.[currentStep]?.details || 'No step details',
+                    ingredients: recipe?.ingredients?.map((ing: any) => ing.name) || [],
+                    difficulty: recipe?.difficulty || 'N/A'
+                };
+
+                const aiResponse = await getVoiceResponse(command, recipeContext);
+                console.log('✅ Gemini response:', aiResponse);
+
+                setIsProcessingAI(false);
+
+                // Speak the AI response
+                speak(aiResponse);
+            } catch (error) {
+                console.error('❌ Error getting AI response:', error);
+                setIsProcessingAI(false);
+                speak('Sorry, I could not process your question. Please try asking in a different way');
+            }
         }
     };
 
@@ -396,7 +686,10 @@ const ViewSavedRecipeScreen = () => {
 
     const startTimer = (minutes: number) => {
         setTimerMinutes(minutes);
+        setTimerSeconds(minutes * 60);
         setTimerActive(true);
+        setShowTimerModal(true);
+
         speak(`Starting timer for ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
 
         if (timerRef.current) {
@@ -407,16 +700,67 @@ const ViewSavedRecipeScreen = () => {
 
         timerRef.current = setInterval(() => {
             remainingSeconds -= 1;
+            setTimerSeconds(remainingSeconds);
 
             if (remainingSeconds <= 0) {
                 if (timerRef.current) {
                     clearInterval(timerRef.current);
                 }
                 setTimerActive(false);
-                Vibration.vibrate([500, 200, 500]);
+                setShowTimerModal(false);
+                Vibration.vibrate([500, 200, 500, 200, 500]);
                 speak('Timer finished! Ready to continue cooking?');
             } else {
                 setTimerMinutes(Math.ceil(remainingSeconds / 60));
+            }
+        }, 1000);
+    };
+
+    const cancelTimer = () => {
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+        setTimerActive(false);
+        setTimerSeconds(0);
+        setShowTimerModal(false);
+        speak('Timer cancelled');
+    };
+
+    const formatTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const pauseTimer = () => {
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+        setTimerPaused(true);
+        speak('Timer paused');
+    };
+
+    const resumeTimer = () => {
+        setTimerPaused(false);
+        speak('Timer resumed');
+
+        let remainingSeconds = timerSeconds;
+
+        timerRef.current = setInterval(() => {
+            remainingSeconds -= 1;
+            setTimerSeconds(remainingSeconds);
+
+            if (remainingSeconds <= 0) {
+                if (timerRef.current) {
+                    clearInterval(timerRef.current);
+                }
+                setTimerActive(false);
+                setTimerPaused(false);
+                setShowTimerModal(false);
+                Vibration.vibrate([500, 200, 500, 200, 500]);
+                speak('Timer finished! Ready to continue cooking?');
             }
         }, 1000);
     };
@@ -462,12 +806,16 @@ const ViewSavedRecipeScreen = () => {
         if (tab !== 'procedure') {
             setTab('procedure');
         }
+        // ScrollIntoView component will handle the actual scrolling automatically
+        // when currentStep changes, based on the scrollIntoViewKey prop
+        console.log(`📜 Scrolling to step ${stepIndex + 1}`);
     };
 
     const pauseAssistant = () => {
         setIsPaused(true);
         stopListening();
         Speech.stop();
+        isSpeakingRef.current = false; // Clear the ref
         setIsSpeaking(false);
         speak('Voice assistant paused. Say resume to continue');
     };
@@ -543,27 +891,16 @@ const ViewSavedRecipeScreen = () => {
         });
     };
 
-    const handlePressIn = () => {
-        const timer = setTimeout(() => {
-            Vibration.vibrate(1000);
-            startVoiceAssistant();
-        }, 1000);
-        setPressTimer(timer);
-    };
-
-    const handlePressOut = () => {
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            setPressTimer(null);
-        }
-    };
-
-    // ⭐ NEW: Manual interrupt function
+    // Manual interrupt function
     const handleManualInterrupt = () => {
         Speech.stop();
+        isSpeakingRef.current = false; // Clear the ref immediately
         setIsSpeaking(false);
         if (voiceMode && !isPaused) {
-            startListening();
+            // Add small delay before resuming listening
+            setTimeout(() => {
+                startListening();
+            }, 500);
         }
     };
 
@@ -615,8 +952,8 @@ const ViewSavedRecipeScreen = () => {
                     </View>
                 )}
 
-                <ScrollView
-                    ref={scrollViewRef}
+                <EnhancedScrollView
+                    innerRef={scrollViewRef}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingBottom: 40 }}
                 >
@@ -906,11 +1243,19 @@ const ViewSavedRecipeScreen = () => {
                                 {recipe.steps?.map((step: any, idx: number) => {
                                     const isCurrentStep = voiceMode && idx === currentStep;
                                     return (
-                                        <View
+                                        <ScrollIntoView
                                             key={idx}
-                                            className={`mb-6 rounded-xl p-4 ${isCurrentStep ? 'bg-green-50 border-2 border-green-500' : 'bg-white'}`}
-                                            style={!isCurrentStep ? shadowStyle : undefined}
+                                            scrollIntoViewKey={isCurrentStep ? `step-${idx}` : undefined}
+                                            animated={true}
+                                            onUpdate={true}
+                                            scrollIntoViewOptions={{
+                                                insets: { top: 200, bottom: 300 }
+                                            }}
                                         >
+                                            <View
+                                                className={`mb-6 rounded-xl p-4 ${isCurrentStep ? 'bg-green-50 border-2 border-green-500' : 'bg-white'}`}
+                                                style={!isCurrentStep ? shadowStyle : undefined}
+                                            >
                                             <View className="flex-row items-center mb-2">
                                                 <Text className={`font-bold mr-3 text-lg ${isCurrentStep ? 'text-green-600' : 'text-[#FFB47B]'}`}>
                                                     {idx + 1}
@@ -923,13 +1268,14 @@ const ViewSavedRecipeScreen = () => {
                                                 )}
                                             </View>
                                             <Text className="text-gray-700 ml-8">{step.details}</Text>
-                                        </View>
+                                            </View>
+                                        </ScrollIntoView>
                                     );
                                 })}
                             </View>
                         )}
                     </View>
-                </ScrollView>
+                </EnhancedScrollView>
 
                 {/* Add to Shopping List Floating Button */}
                 {tab === 'ingredient' && selectedIngredients.length > 0 && (
@@ -958,25 +1304,6 @@ const ViewSavedRecipeScreen = () => {
                     </TouchableOpacity>
                 )}
 
-                {/* Main Microphone Button */}
-                <TouchableOpacity
-                    onPressIn={handlePressIn}
-                    onPressOut={handlePressOut}
-                    style={{
-                        position: 'absolute',
-                        bottom: selectedIngredients.length > 0 && tab === 'ingredient' ? 90 : 20,
-                        right: 25,
-                        backgroundColor: voiceMode ? '#22C55E' : '#F9A826',
-                        width: 60,
-                        height: 60,
-                        borderRadius: 30,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        ...shadowStyle,
-                    }}
-                >
-                    <Ionicons name={voiceMode ? "mic" : "mic-outline"} size={30} color="white" />
-                </TouchableOpacity>
 
                 {/* Stop Voice Assistant Button */}
                 {voiceMode && (
@@ -999,7 +1326,7 @@ const ViewSavedRecipeScreen = () => {
                     </TouchableOpacity>
                 )}
 
-                {/* ⭐ NEW: Manual Interrupt Button (only shows when speaking) */}
+                {/* Manual Interrupt Button (only shows when speaking) */}
                 {voiceMode && isSpeaking && (
                     <TouchableOpacity
                         onPress={handleManualInterrupt}
@@ -1020,21 +1347,64 @@ const ViewSavedRecipeScreen = () => {
                     </TouchableOpacity>
                 )}
 
+                {/* Wake Word Detection Floating Icon */}
+                {wakeWordListening && !voiceMode && (
+                    <TouchableOpacity
+                        onPress={() => setShowWakeWordModal(true)}
+                        style={{
+                            position: 'absolute',
+                            top: 90,
+                            right: 20,
+                            backgroundColor: '#3B82F6',
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 40,
+                            ...shadowStyle,
+                        }}
+                    >
+                        <View style={{
+                            position: 'absolute',
+                            top: 0,
+                            right: 0,
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
+                            backgroundColor: '#22C55E',
+                        }} />
+                        <Ionicons name="mic" size={24} color="white" />
+                    </TouchableOpacity>
+                )}
+
                 {/* Voice Assistant Overlay */}
                 {voiceMode && (
                     <View className="absolute top-20 left-4 right-4 bg-white rounded-2xl p-4 z-40" style={shadowStyle}>
                         <View className="flex-row items-center justify-between mb-2">
                             <View className="flex-row items-center">
-                                <View className={`w-3 h-3 rounded-full mr-2 ${isSpeaking ? 'bg-blue-500' : isListening ? 'bg-green-500' : 'bg-gray-400'
+                                <View className={`w-3 h-3 rounded-full mr-2 ${isProcessingAI ? 'bg-purple-500' :
+                                    isSpeaking ? 'bg-blue-500' :
+                                        isListening ? 'bg-green-500' :
+                                            'bg-gray-400'
                                     }`} />
                                 <Text className="font-bold text-gray-800">
-                                    {isSpeaking ? 'Speaking...' : 'Voice Assistant'}
+                                    {isProcessingAI ? '🤖 AI Thinking...' : isSpeaking ? 'Speaking...' : 'Voice Assistant'}
                                 </Text>
                             </View>
                             <Text className="text-sm text-gray-600">
                                 Step {currentStep + 1}/{recipe.steps?.length || 0}
                             </Text>
                         </View>
+
+                        {/* AI Processing Indicator */}
+                        {isProcessingAI && (
+                            <View className="bg-purple-50 p-2 rounded-lg mb-2">
+                                <Text className="text-xs text-purple-700 text-center">
+                                    🧠 Processing your question with AI...
+                                </Text>
+                            </View>
+                        )}
 
                         {/* Speech Rate Controls */}
                         <View className="bg-gray-50 p-2 rounded-lg mb-2">
@@ -1085,11 +1455,13 @@ const ViewSavedRecipeScreen = () => {
                         )}
 
                         <Text className="text-xs text-gray-500 text-center">
-                            {isSpeaking
-                                ? 'Tap interrupt button to stop speaking'
-                                : isPaused
-                                    ? 'Paused - Say "resume" to continue'
-                                    : 'Listening for commands...'}
+                            {isProcessingAI
+                                ? 'AI is thinking about your question...'
+                                : isSpeaking
+                                    ? 'Tap interrupt button to stop speaking'
+                                    : isPaused
+                                        ? 'Paused - Say "resume" to continue'
+                                        : 'Say commands (next/previous/repeat) or ask questions about the recipe'}
                         </Text>
                     </View>
                 )}
@@ -1135,6 +1507,233 @@ const ViewSavedRecipeScreen = () => {
                             </ScrollView>
                         </Pressable>
                     </Pressable>
+                </Modal>
+
+                {/* Wake Word Modal */}
+                <Modal
+                    visible={showWakeWordModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowWakeWordModal(false)}
+                >
+                    <Pressable
+                        style={{
+                            flex: 1,
+                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            padding: 20,
+                        }}
+                        onPress={() => setShowWakeWordModal(false)}
+                    >
+                        <Pressable
+                            style={{
+                                backgroundColor: 'white',
+                                borderRadius: 16,
+                                padding: 24,
+                                width: '100%',
+                                maxWidth: 350,
+                            }}
+                            onPress={(e) => e.stopPropagation()}
+                        >
+                            <View className="flex-row items-center justify-between mb-4">
+                                <View className="flex-row items-center">
+                                    <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center mr-3">
+                                        <Ionicons name="mic" size={24} color="#3B82F6" />
+                                    </View>
+                                    <Text className="text-xl font-bold text-gray-900">Voice Assistant</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setShowWakeWordModal(false)}>
+                                    <Ionicons name="close-circle" size={28} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                                <View className="flex-row items-center mb-2">
+                                    <View className="w-3 h-3 rounded-full bg-green-500 mr-2" />
+                                    <Text className="font-bold text-blue-800 text-base">
+                                        Listening for Wake Word
+                                    </Text>
+                                </View>
+                                <Text className="text-blue-700 text-sm leading-5">
+                                    Say <Text className="font-bold">"Hi Chefiepie"</Text> to activate the voice cooking assistant
+                                </Text>
+                            </View>
+
+                            <View className="bg-gray-50 rounded-xl p-4 mb-4">
+                                <Text className="font-bold text-gray-800 mb-2">How it works:</Text>
+                                <Text className="text-gray-600 text-sm leading-5">
+                                    • The app is listening for the wake word{'\n'}
+                                    • Once activated, you can ask questions{'\n'}
+                                    • Use voice commands like "next", "repeat", or "pause"
+                                </Text>
+                            </View>
+                        </Pressable>
+                    </Pressable>
+                </Modal>
+
+
+                {/* Timer Countdown Modal */}
+                <Modal
+                    visible={showTimerModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={cancelTimer}
+                >
+                    <View
+                        style={{
+                            flex: 1,
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                        }}
+                    >
+                        <View
+                            style={{
+                                backgroundColor: 'white',
+                                borderRadius: 24,
+                                padding: 32,
+                                width: '85%',
+                                maxWidth: 400,
+                                alignItems: 'center',
+                                ...shadowStyle,
+                            }}
+                        >
+                            {/* Timer Icon */}
+                            <View
+                                style={{
+                                    width: 80,
+                                    height: 80,
+                                    borderRadius: 40,
+                                    backgroundColor: '#DBEAFE',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    marginBottom: 20,
+                                }}
+                            >
+                                <Ionicons name="timer-outline" size={48} color="#3B82F6" />
+                            </View>
+
+                            {/* Title */}
+                            <Text className="text-2xl font-bold text-gray-900 mb-2">
+                                Cooking Timer
+                            </Text>
+
+                            <Text className="text-sm text-gray-500 mb-6 text-center">
+                                Your timer is running
+                            </Text>
+
+                            {/* Countdown Display */}
+                            <View
+                                style={{
+                                    backgroundColor: '#F3F4F6',
+                                    borderRadius: 20,
+                                    paddingVertical: 24,
+                                    paddingHorizontal: 40,
+                                    marginBottom: 20,
+                                    width: '100%',
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 56,
+                                        fontWeight: 'bold',
+                                        color: '#1F2937',
+                                        fontVariant: ['tabular-nums'],
+                                    }}
+                                >
+                                    {formatTime(timerSeconds)}
+                                </Text>
+                                <Text className="text-gray-500 text-sm mt-2">
+                                    minutes : seconds
+                                </Text>
+                            </View>
+
+                            {/* Progress Bar */}
+                            <View
+                                style={{
+                                    width: '100%',
+                                    height: 8,
+                                    backgroundColor: '#E5E7EB',
+                                    borderRadius: 4,
+                                    marginBottom: 24,
+                                    overflow: 'hidden',
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        height: '100%',
+                                        backgroundColor: '#3B82F6',
+                                        width: `${(timerSeconds / (timerMinutes * 60)) * 100}%`,
+                                        borderRadius: 4,
+                                    }}
+                                />
+                            </View>
+
+                            {/* Warning when < 30 seconds */}
+                            {timerSeconds <= 30 && timerSeconds > 0 && (
+                                <View className="bg-orange-50 border border-orange-200 rounded-xl p-3 mb-4 w-full">
+                                    <View className="flex-row items-center justify-center">
+                                        <Ionicons name="warning" size={20} color="#F97316" />
+                                        <Text className="text-orange-700 font-semibold ml-2">
+                                            Almost done!
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Action Buttons Container */}
+                            <View style={{ flexDirection: 'row', width: '100%', gap: 12, marginTop: 8 }}>
+                                {/* Pause/Resume Button */}
+                                <TouchableOpacity
+                                    onPress={timerPaused ? resumeTimer : pauseTimer}
+                                    style={{
+                                        flex: 1,  // ✅ Now this works!
+                                        backgroundColor: timerPaused ? '#10B981' : '#F59E0B',
+                                        paddingVertical: 16,
+                                        borderRadius: 16,
+                                        alignItems: 'center',
+                                        flexDirection: 'row',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <Ionicons
+                                        name={timerPaused ? "play" : "pause"}
+                                        size={20}
+                                        color="white"
+                                    />
+                                    <Text className="text-white font-bold text-base ml-2">
+                                        {timerPaused ? 'Resume' : 'Pause'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {/* Cancel Button */}
+                                <TouchableOpacity
+                                    onPress={cancelTimer}
+                                    style={{
+                                        flex: 1,  // ✅ Now this works too!
+                                        backgroundColor: '#EF4444',
+                                        paddingVertical: 16,
+                                        borderRadius: 16,
+                                        alignItems: 'center',
+                                        flexDirection: 'row',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <Ionicons name="close" size={20} color="white" />
+                                    <Text className="text-white font-bold text-base ml-2">
+                                        Cancel
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Info Text */}
+                            <Text className="text-xs text-gray-400 mt-4 text-center">
+                                You can minimize this and continue cooking
+                            </Text>
+                        </View>
+                    </View>
                 </Modal>
             </View>
         </View>

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Alert, KeyboardAvoidingView, Platform , ActivityIndicator , Switch } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { addRecipe } from '../../../controller/recipe';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { ActivityIndicator } from 'react-native';
+
 import Header from '../../../components/partials/Header';
 import { uploadImageToFirebase } from '~/utils/uploadImage';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
@@ -12,7 +12,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '~/context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { addRecipeToDay, loadMealPlanWithDetails } from '~/controller/planner';
-import { Switch } from 'react-native';
+
 
 
 interface Ingredient {

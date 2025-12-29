@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { getSavedRecipes } from '~/controller/recipe'
 import Header from '../../components/partials/Header'
 import { Ionicons } from '@expo/vector-icons'
+import { useAuth } from '~/context/AuthContext'
 
 // Add navigation type
 type RootStackParamList = {
@@ -19,6 +20,8 @@ interface Recipe {
     image: string;
     totalTime?: string;
     difficulty?: string;
+    isPrivate?: boolean;
+    userId?: string;
 }
 
 interface RecipeCardProps {
@@ -55,19 +58,35 @@ export default function SavedScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const navigation = useNavigation<NavigationProp>();
+    const { user } = useAuth();
 
     const fetchSavedRecipes = useCallback(async () => {
         setLoading(true);
         try {
             const results = await getSavedRecipes();
-            setSavedRecipes(results as Recipe[]);
+
+            // Filter out private recipes that don't belong to the current user
+            const currentUserId = user?.uid;
+            const visibleRecipes = (results as Recipe[]).filter(recipe => {
+                // Show if recipe is not private
+                if (!recipe.isPrivate) return true;
+
+                // Show if recipe is private but belongs to current user
+                if (recipe.isPrivate && recipe.userId === currentUserId) return true;
+
+                // Hide if recipe is private and belongs to someone else
+                return false;
+            });
+
+            setSavedRecipes(visibleRecipes);
+            console.log(`✅ Filtered ${results.length - visibleRecipes.length} private recipes from other users`);
         } catch (error) {
             Alert.alert('Error', 'Failed to fetch saved recipes');
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [user]);
 
     useFocusEffect(
         useCallback(() => {

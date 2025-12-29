@@ -49,7 +49,7 @@ export type RootStackParamList = {
         recipeToSwapId?: string | null;
     };
     Checklist: undefined;
-    ViewSavedRecipe: { recipeId: String };
+    ViewSavedRecipe: { recipeId: string };
     Setting: undefined;
     MigrateImages: undefined;
     EditProfile: undefined;

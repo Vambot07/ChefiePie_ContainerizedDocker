@@ -80,7 +80,7 @@ export const saveMealPlan = async (
     console.log(endDate);
 
     // Save both ID and source
-    const days: { [key: number]: Array<{ id: string; source: 'created' | 'api' }> } = {};
+    const days: { [key: number]: { id: string; source: 'created' | 'api' }[] } = {};
     Object.keys(recipesByDay).forEach((dayIndex) => {
       const dayNum = Number(dayIndex);
       days[dayNum] = recipesByDay[dayNum].map((recipe) => ({
@@ -360,7 +360,7 @@ export const addRecipeToDay = async (
       });
     } else {
       // Week doesn't exist, create it
-      const days: { [key: number]: Array<{ id: string; source: 'created' | 'api' }> } = {
+      const days: { [key: number]: { id: string; source: 'created' | 'api' }[] } = {
         [dayIndex]: [
           {
             id: recipe.id,
