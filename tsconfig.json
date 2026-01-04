@@ -7,12 +7,11 @@
     "paths": {
       "~/*": [
         "src/*"
-      ],
-      "@firebase/auth": [
-        "./node_modules/firebase/node_modules/@firebase/auth/dist/index.rn.d.ts"
       ]
     },
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "moduleResolution": "bundler"
   }
 }

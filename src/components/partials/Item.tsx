@@ -30,12 +30,12 @@ const Item: React.FC<ItemProps> = ({
                 {/* Icon di kiri */}
                 <View
                     className="w-10 h-10 rounded-full items-center justify-center mr-4"
-                    style={{ backgroundColor: danger ? '#FEE2E2' : colors.lightPeach }}
+                    style={{ backgroundColor: danger ? '#FEE2E2' : colors.lightBrown }}
                 >
                     <Ionicons
                         name={icon}
                         size={20}
-                        color={danger ? '#DC2626' : colors.darkBrown}
+                        color={danger ? '#DC2626' : colors.white}
                     />
                 </View>
 

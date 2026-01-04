@@ -281,7 +281,8 @@ const EditProfileScreen = () => {
     };
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Edit Profile"
                 showBackButton={true}
@@ -575,7 +576,8 @@ const EditProfileScreen = () => {
             </KeyboardAvoidingView>
 
             {/* Save Button */}
-            <View className="px-4 py-4 bg-white border-t border-gray-100">
+            <View className="px-4 py-4 border-t border-gray-100"
+                style={{ backgroundColor: colors.secondary }}>
                 <TouchableOpacity
                     className="py-4 rounded-xl items-center"
                     style={{ backgroundColor: uploading ? colors.lightBrown : colors.primary }}

@@ -12,6 +12,7 @@ import {
     moveItemsToHistoryList,
 } from '../../controller/checklist';
 import Header from '../../components/partials/Header';
+import colors from '~/utils/color';
 
 // Interfaces
 interface ChecklistItem {
@@ -233,12 +234,13 @@ const ChecklistScreen = () => {
 
     // Reusable Add Input Component
     const renderAddInput = () => (
-        <View className="bg-white rounded-2xl p-4 mb-4">
+        <View className="rounded-2xl p-4 mb-4"
+            style={{ backgroundColor: colors.lightPeach }}>
             <Text className="text-base font-bold text-gray-800 mb-3">Add New Item</Text>
             <View className="flex-row items-center mb-3">
                 <View className="flex-1 mr-2">
                     <TextInput
-                        className="bg-gray-100 rounded-xl px-4 py-3"
+                        className="bg-white rounded-xl px-4 py-3"
                         placeholder="Ingredient name"
                         value={newItemName}
                         onChangeText={setNewItemName}
@@ -247,7 +249,7 @@ const ChecklistScreen = () => {
                 </View>
                 <View className="w-20 mr-2">
                     <TextInput
-                        className="bg-gray-100 rounded-xl px-4 py-3 text-center"
+                        className="bg-white rounded-xl px-4 py-3 text-center"
                         placeholder="Qty"
                         value={newItemAmount}
                         onChangeText={setNewItemAmount}
@@ -288,7 +290,8 @@ const ChecklistScreen = () => {
         <>
             {renderAddInput()}
             {/* My Items (To Buy) */}
-            <View className="bg-white rounded-2xl p-4 mt-4">
+            <View className="rounded-2xl p-4 mt-4"
+                style={{ backgroundColor: colors.secondary }}>
                 <Text className="text-xl font-bold text-gray-800 mb-2">My items</Text>
                 {uncheckedShoppingItems.length > 0 ? (
                     uncheckedShoppingItems.map((item, index) => (
@@ -397,21 +400,28 @@ const ChecklistScreen = () => {
     );
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header title="Your List" showBackButton={false} />
             {/* Tabs */}
             <View className="flex-row p-4">
                 <TouchableOpacity
                     onPress={() => setActiveTab('shopping')}
-                    className={`flex-1 py-3 rounded-full mr-2 ${activeTab === 'shopping' ? 'bg-orange-400' : 'bg-gray-200'}`}
+                    className="flex-1 py-3 rounded-full mr-2"
+                    style={{
+                        backgroundColor: activeTab === 'shopping' ? colors.primary : colors.white
+                    }}
                 >
-                    <Text className={`text-center font-bold ${activeTab === 'shopping' ? 'text-white' : 'text-gray-600'}`}>Shopping List</Text>
+                    <Text className={`text-center font-bold ${activeTab === 'shopping' ? 'text-white' : 'text-black'}`}>Shopping List</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     onPress={() => setActiveTab('history')}
-                    className={`flex-1 py-3 rounded-full ml-2 ${activeTab === 'history' ? 'bg-orange-400' : 'bg-gray-200'}`}
+                    className="flex-1 py-3 rounded-full ml-2"
+                    style={{
+                        backgroundColor: activeTab === 'history' ? colors.primary : colors.white
+                    }}
                 >
-                    <Text className={`text-center font-bold ${activeTab === 'history' ? 'text-white' : 'text-gray-600'}`}>History</Text>
+                    <Text className={`text-center font-bold ${activeTab === 'history' ? 'text-white' : 'text-black'}`}>History</Text>
                 </TouchableOpacity>
             </View>
 

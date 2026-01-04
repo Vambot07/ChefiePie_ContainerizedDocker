@@ -25,7 +25,8 @@
           "cameraPermission": "Allow Chefie Pie to access your camera to take photos of ingredients for recipe suggestions."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@react-native-google-signin/google-signin"
     ],
     "orientation": "portrait",
     "icon": "./assets/ChefiePieLogo.png",
@@ -51,8 +52,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/ChefiePieMascotLogo.png",
+        "backgroundColor": "#FFF4E0"
       },
       "package": "com.anonymous.chefiePie",
       "permissions": [
@@ -60,12 +61,14 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "extra": {
       "eas": {
         "projectId": "19c50855-8c98-4695-b140-f768ad27baad"
       }
-    }
+    },
+    "owner": "vambot07"
   }
 }

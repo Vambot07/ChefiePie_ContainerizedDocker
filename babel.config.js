@@ -3,9 +3,18 @@ module.exports = function (api) {
   return {
     presets: [
       ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
-      'nativewind/babel',
+      // Use custom NativeWind config without worklets plugin
     ],
     plugins: [
+      // NativeWind plugins (manually added without worklets)
+      require('react-native-css-interop/dist/babel-plugin').default,
+      [
+        '@babel/plugin-transform-react-jsx',
+        {
+          runtime: 'automatic',
+          importSource: 'react-native-css-interop',
+        },
+      ],
       [
         'module:react-native-dotenv',
         {
@@ -15,6 +24,7 @@ module.exports = function (api) {
           allowUndefined: true,
         },
       ],
+      // Reanimated plugin must be last
       'react-native-reanimated/plugin',
     ],
   };

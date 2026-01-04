@@ -16,6 +16,7 @@ import {
 } from '~/controller/planner';
 import { getSavedRecipes } from '~/controller/recipe';
 import { RootStackParamList } from '~/navigation/AppStack';
+import colors from '~/utils/color';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -33,16 +34,25 @@ interface RecipeCardProps {
     navigation: NavigationProp;
     onDelete?: (recipeId: string) => void;
     onSwap?: (recipeId: string) => void;
+    deleteMode?: boolean;
+    isSelected?: boolean;
+    onToggleSelect?: (recipeId: string) => void;
 }
 
-const RecipeCard = ({ recipe, navigation, onDelete, onSwap }: RecipeCardProps) => {
+const RecipeCard = ({ recipe, navigation, onDelete, onSwap, deleteMode, isSelected, onToggleSelect }: RecipeCardProps) => {
     const [loading, setLoading] = useState<boolean>(false);
 
     return (
         <TouchableOpacity
             className='bg-white rounded-xl shadow-sm mb-4'
             style={{ width: 160, marginRight: 12 }}
-            onPress={() => navigation.navigate('ViewRecipe', { recipe })}
+            onPress={() => {
+                if (deleteMode && onToggleSelect) {
+                    onToggleSelect(recipe.id);
+                } else {
+                    navigation.navigate('ViewRecipe', { recipe });
+                }
+            }}
         >
             <View className='w-full rounded-t-xl bg-gray-200 justify-center items-center'>
                 {loading && (
@@ -66,7 +76,22 @@ const RecipeCard = ({ recipe, navigation, onDelete, onSwap }: RecipeCardProps) =
                     onError={() => setLoading(false)}
                 />
 
-                {onSwap && (
+                {deleteMode && (
+                    <View className="absolute top-2 left-2">
+                        <View
+                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected
+                                ? 'border-red-500 bg-red-500'
+                                : 'border-white bg-white/30'
+                                }`}
+                        >
+                            {isSelected && (
+                                <Ionicons name="checkmark" size={16} color="white" />
+                            )}
+                        </View>
+                    </View>
+                )}
+
+                {!deleteMode && onSwap && (
                     <TouchableOpacity
                         className="absolute top-2 left-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
                         onPress={(e) => {
@@ -78,7 +103,7 @@ const RecipeCard = ({ recipe, navigation, onDelete, onSwap }: RecipeCardProps) =
                     </TouchableOpacity>
                 )}
 
-                {onDelete && (
+                {!deleteMode && onDelete && (
                     <TouchableOpacity
                         className="absolute top-2 right-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
                         onPress={(e) => {
@@ -130,6 +155,8 @@ export default function PlannerScreen() {
     const [swapMode, setSwapMode] = useState(false);
     const [recipeToSwapId, setRecipeToSwapId] = useState<string | null>(null);
     const [mealPlanCache, setMealPlanCache] = useState<{ [weekOffset: number]: { data: any; timestamp: number } }>({});
+    const [deleteMode, setDeleteMode] = useState(false);
+    const [selectedRecipesToDelete, setSelectedRecipesToDelete] = useState<{ [dayIndex: number]: string[] }>({});
 
     const buttonRefs = useRef<{ [key: string]: View | null }>({});
     const userId = user?.userId;
@@ -435,6 +462,8 @@ export default function PlannerScreen() {
 
             if (userId) {
                 await saveMealPlan(userId, weekOffset, newRecipesByDay);
+                // Invalidate cache after creating new meal plan
+                invalidateWeekCache();
             }
 
             console.log('✅ Meal plan created with user preferences applied');
@@ -501,6 +530,106 @@ export default function PlannerScreen() {
                             await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
                             // Invalidate cache after deletion
                             invalidateWeekCache();
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const toggleDeleteMode = () => {
+        setDeleteMode(!deleteMode);
+        setSelectedRecipesToDelete({});
+    };
+
+    const toggleRecipeSelection = (dayIndex: number, recipeId: string) => {
+        setSelectedRecipesToDelete(prev => {
+            const updated = { ...prev };
+            const daySelections = updated[dayIndex] || [];
+
+            if (daySelections.includes(recipeId)) {
+                // Remove from selection
+                updated[dayIndex] = daySelections.filter(id => id !== recipeId);
+                if (updated[dayIndex].length === 0) {
+                    delete updated[dayIndex];
+                }
+            } else {
+                // Add to selection
+                updated[dayIndex] = [...daySelections, recipeId];
+            }
+
+            return updated;
+        });
+    };
+
+    const getSelectedRecipesCount = () => {
+        return Object.values(selectedRecipesToDelete).reduce((total, recipes) => total + recipes.length, 0);
+    };
+
+    const handleBulkDelete = () => {
+        const count = getSelectedRecipesCount();
+        if (count === 0) {
+            Alert.alert('No Recipes Selected', 'Please select recipes to delete');
+            return;
+        }
+
+        Alert.alert(
+            'Delete Recipes',
+            `Are you sure you want to remove ${count} recipe${count > 1 ? 's' : ''} from your meal plan?`,
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel'
+                },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            // Delete from state
+                            setRecipesByDay(prev => {
+                                const updated = { ...prev };
+
+                                Object.keys(selectedRecipesToDelete).forEach(dayIndexStr => {
+                                    const dayIndex = Number(dayIndexStr);
+                                    const recipeIdsToDelete = selectedRecipesToDelete[dayIndex];
+
+                                    if (updated[dayIndex]) {
+                                        updated[dayIndex] = updated[dayIndex].filter(
+                                            recipe => !recipeIdsToDelete.includes(recipe.id)
+                                        );
+
+                                        if (updated[dayIndex].length === 0) {
+                                            delete updated[dayIndex];
+                                        }
+                                    }
+                                });
+
+                                return updated;
+                            });
+
+                            // Delete from Firebase
+                            if (userId) {
+                                for (const dayIndexStr of Object.keys(selectedRecipesToDelete)) {
+                                    const dayIndex = Number(dayIndexStr);
+                                    const recipeIds = selectedRecipesToDelete[dayIndex];
+
+                                    for (const recipeId of recipeIds) {
+                                        await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
+                                    }
+                                }
+
+                                invalidateWeekCache();
+                            }
+
+                            // Reset delete mode
+                            setDeleteMode(false);
+                            setSelectedRecipesToDelete({});
+
+                            console.log(`✅ Deleted ${count} recipe(s) from meal plan`);
+                        } catch (error) {
+                            console.error('❌ Error deleting recipes:', error);
+                            Alert.alert('Error', 'Failed to delete some recipes. Please try again.');
                         }
                     }
                 }
@@ -786,8 +915,14 @@ export default function PlannerScreen() {
 
     const currentWeekDates = getWeekDates(weekOffset);
 
+    const hasAnyRecipes = Object.keys(recipesByDay).some(dayIndex => {
+        const recipes = recipesByDay[Number(dayIndex)];
+        return recipes && recipes.length > 0;
+    });
+
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Meal Planner"
                 showBackButton={false}
@@ -801,7 +936,7 @@ export default function PlannerScreen() {
                 </View>
             ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 150 }}>
-                    <View style={{ backgroundColor: '#FFF7F0' }} className="m-6 mt-4 p-5 rounded-2xl">
+                    <View style={{ backgroundColor: colors.lightPeach }} className="m-6 mt-4 p-5 rounded-2xl">
                         <View className="flex-row justify-between items-center mb-2">
                             <TouchableOpacity onPress={goToPreviousWeek} disabled={weekOffset === 0} style={{ opacity: weekOffset === 0 ? 0.3 : 1 }}>
                                 <Ionicons name="chevron-back" size={24} color="black" />
@@ -831,7 +966,7 @@ export default function PlannerScreen() {
                                                 <TouchableOpacity
                                                     onPress={() => toggleDay(index)}
                                                     style={{
-                                                        backgroundColor: isSelected ? '#F9A826' : '#E5E7EB',
+                                                        backgroundColor: isSelected ? colors.primary : colors.white,
                                                         borderWidth: isSelected ? 2 : 0,
                                                         borderColor: isSelected ? '#D97706' : 'transparent'
                                                     }}
@@ -846,16 +981,61 @@ export default function PlannerScreen() {
                                 </View>
 
                                 <TouchableOpacity
-                                    style={{ backgroundColor: selectedDays.length > 0 ? '#F9A826' : '#D1D5DB', opacity: selectedDays.length > 0 ? 1 : 0.6 }}
+                                    style={{ backgroundColor: selectedDays.length > 0 ? '#F9A826' : colors.white, opacity: selectedDays.length > 0 ? 1 : 0.6 }}
                                     className="w-full py-4 rounded-xl"
                                     onPress={handleStartPlan}
                                     disabled={selectedDays.length === 0}
                                 >
-                                    <Text className="text-white text-center font-bold text-base">START MY PLAN</Text>
+                                    <Text className="text-black text-center font-bold text-base">START MY PLAN</Text>
                                 </TouchableOpacity>
                             </>
                         )}
                     </View>
+
+                    {/* Interactive Delete Mode Toggle - Below Week Selector */}
+                    {hasAnyRecipes && (
+                        <View className="mx-6 mt-4">
+                            <TouchableOpacity
+                                onPress={toggleDeleteMode}
+                                activeOpacity={0.7}
+                                style={{
+                                    backgroundColor: deleteMode ? '#FEE2E2' : '#FFFFFF',
+                                    borderWidth: 2,
+                                    borderColor: deleteMode ? '#EF4444' : '#E5E7EB',
+                                    shadowColor: deleteMode ? '#EF4444' : '#000',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: deleteMode ? 0.3 : 0.1,
+                                    shadowRadius: 4,
+                                    elevation: deleteMode ? 4 : 2,
+                                }}
+                                className="flex-row items-center justify-center py-3 px-4 rounded-xl"
+                            >
+                                <View className={`mr-3 ${deleteMode ? 'bg-red-500' : 'bg-gray-100'} w-10 h-10 rounded-full items-center justify-center`}>
+                                    <Ionicons
+                                        name={deleteMode ? "close-circle" : "trash-outline"}
+                                        size={22}
+                                        color={deleteMode ? "white" : "#EF4444"}
+                                    />
+                                </View>
+                                <View className="flex-1">
+                                    <Text className={`font-bold text-base ${deleteMode ? 'text-red-600' : 'text-gray-800'}`}>
+                                        {deleteMode ? 'Cancel Delete Mode' : 'Delete Recipes'}
+                                    </Text>
+                                    <Text className={`text-xs mt-0.5 ${deleteMode ? 'text-red-500' : 'text-gray-500'}`}>
+                                        {deleteMode
+                                            ? `${getSelectedRecipesCount()} recipe${getSelectedRecipesCount() !== 1 ? 's' : ''} selected`
+                                            : 'Select multiple recipes to remove'
+                                        }
+                                    </Text>
+                                </View>
+                                {deleteMode && (
+                                    <View className="bg-red-500 px-3 py-1 rounded-full">
+                                        <Text className="text-white font-bold text-xs">ACTIVE</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     <View className="px-6 mt-2">
                         {days.map((day, index) => {
@@ -880,7 +1060,8 @@ export default function PlannerScreen() {
                                             collapsable={false}
                                         >
                                             <TouchableOpacity
-                                                className="flex-row items-center bg-gray-100 px-3 py-2 rounded-lg"
+                                                className="flex-row items-center px-3 py-2 rounded-lg"
+                                                style={{ backgroundColor: colors.white }}
                                                 disabled={!isSelected && selectedDays.length > 0}
                                                 onPress={() => handleAddPress(day, index, buttonRefs.current[day])}
                                             >
@@ -896,14 +1077,20 @@ export default function PlannerScreen() {
                                         <FlatList
                                             data={recipesByDay[index] || []}
                                             keyExtractor={(item) => item.id}
-                                            renderItem={({ item }) => (
-                                                <RecipeCard
-                                                    recipe={item}
-                                                    navigation={navigation}
-                                                    onDelete={(recipeId) => handleDeleteRecipe(index, recipeId)}
-                                                    onSwap={(recipeId) => handleSwapRecipe(index, recipeId)}
-                                                />
-                                            )}
+                                            renderItem={({ item }) => {
+                                                const isSelected = selectedRecipesToDelete[index]?.includes(item.id) || false;
+                                                return (
+                                                    <RecipeCard
+                                                        recipe={item}
+                                                        navigation={navigation}
+                                                        onDelete={(recipeId) => handleDeleteRecipe(index, recipeId)}
+                                                        onSwap={(recipeId) => handleSwapRecipe(index, recipeId)}
+                                                        deleteMode={deleteMode}
+                                                        isSelected={isSelected}
+                                                        onToggleSelect={(recipeId) => toggleRecipeSelection(index, recipeId)}
+                                                    />
+                                                );
+                                            }}
                                             horizontal
                                             showsHorizontalScrollIndicator={false}
                                             contentContainerStyle={{ paddingVertical: 8 }}
@@ -1113,6 +1300,47 @@ export default function PlannerScreen() {
                 onSelectRecipes={handleAddSearchRecipes}
                 alreadyAddedIds={selectedDayIndex !== null ? (recipesByDay[selectedDayIndex] || []).map(r => r.id) : []}
             />
+
+            {deleteMode && (
+                <View style={{
+                    position: 'absolute',
+                    bottom: 20,
+                    left: 20,
+                    right: 20,
+                    backgroundColor: 'white',
+                    borderRadius: 16,
+                    padding: 16,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 8,
+                }}>
+                    <View className="flex-row items-center justify-between mb-3">
+                        <Text className="text-gray-700 font-semibold">
+                            {getSelectedRecipesCount()} recipe{getSelectedRecipesCount() !== 1 ? 's' : ''} selected
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => setSelectedRecipesToDelete({})}
+                            disabled={getSelectedRecipesCount() === 0}
+                        >
+                            <Text className="text-blue-500 font-medium">Clear All</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity
+                        onPress={handleBulkDelete}
+                        disabled={getSelectedRecipesCount() === 0}
+                        style={{
+                            backgroundColor: getSelectedRecipesCount() > 0 ? '#EF4444' : '#D1D5DB',
+                        }}
+                        className="py-3 rounded-xl"
+                    >
+                        <Text className="text-white text-center font-bold text-base">
+                            Delete Selected
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     );
 }

@@ -1,11 +1,13 @@
 // Import the functions you need from the SDKs
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeAuth, getAuth, Auth } from 'firebase/auth';
-import { getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+// @ts-ignore - React Native persistence import from @firebase/auth (not firebase/auth)
+import { getReactNativePersistence } from '@firebase/auth';
+
 import { getFirestore, collection, initializeFirestore, Firestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { LogBox } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Suppress Firebase Firestore warnings in development
 if (__DEV__) {

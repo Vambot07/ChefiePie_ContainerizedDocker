@@ -5,6 +5,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { getSavedRecipes } from '~/controller/recipe'
 import Header from '../../components/partials/Header'
 import { Ionicons } from '@expo/vector-icons'
+import { useAuth } from '~/context/AuthContext'
+import colors from '~/utils/color'
 
 // Add navigation type
 type RootStackParamList = {
@@ -19,6 +21,8 @@ interface Recipe {
     image: string;
     totalTime?: string;
     difficulty?: string;
+    isPrivate?: boolean;
+    userId?: string;
 }
 
 interface RecipeCardProps {
@@ -55,19 +59,35 @@ export default function SavedScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const navigation = useNavigation<NavigationProp>();
+    const { user } = useAuth();
 
     const fetchSavedRecipes = useCallback(async () => {
         setLoading(true);
         try {
             const results = await getSavedRecipes();
-            setSavedRecipes(results as Recipe[]);
+
+            // Filter out private recipes that don't belong to the current user
+            const currentUserId = user?.uid;
+            const visibleRecipes = (results as Recipe[]).filter(recipe => {
+                // Show if recipe is not private
+                if (!recipe.isPrivate) return true;
+
+                // Show if recipe is private but belongs to current user
+                if (recipe.isPrivate && recipe.userId === currentUserId) return true;
+
+                // Hide if recipe is private and belongs to someone else
+                return false;
+            });
+
+            setSavedRecipes(visibleRecipes);
+            console.log(`✅ Filtered ${results.length - visibleRecipes.length} private recipes from other users`);
         } catch (error) {
             Alert.alert('Error', 'Failed to fetch saved recipes');
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [user]);
 
     useFocusEffect(
         useCallback(() => {
@@ -98,14 +118,16 @@ export default function SavedScreen() {
     ), []);
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Saved Recipes"
                 showBackButton={false}
             />
 
             {loading ? (
-                <View className="flex-1 bg-gray-150 justify-center items-center">
+                <View className="flex-1 justify-center items-center"
+                    style={{ backgroundColor: colors.secondary }}>
                     <ActivityIndicator size="large" color="#FFB47B" />
                     <Text className="mt-4 text-gray-600">Loading Saved Recipe...</Text>
                 </View>

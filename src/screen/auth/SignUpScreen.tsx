@@ -1,12 +1,13 @@
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Image, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '~/context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import { updateProfileImage } from '~/utils/uploadImage';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import { KeyboardAvoidingView, Platform } from 'react-native';
+import { Ionicons, Feather, AntDesign, MaterialIcons } from '@expo/vector-icons';
+import { signInWithGoogle } from '~/utils/socialAuth';
+
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 
@@ -25,7 +26,7 @@ const SignUpScreen = () => {
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'], // Updated: Use array instead of MediaTypeOptions
+            mediaTypes: ['images'],
             allowsEditing: true as boolean,
             quality: 0.8,
             aspect: [4, 3],
@@ -45,8 +46,14 @@ const SignUpScreen = () => {
                 return;
             }
 
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                Alert.alert('Error', 'Please enter a valid email address');
+                return;
+            }
+
             if (password !== confirmPassword) {
-                Alert.alert('Error', 'Passwords do not match');
+                Alert.alert('Error', 'Passwords do not match. Please try again.');
                 return;
             }
 
@@ -111,113 +118,271 @@ const SignUpScreen = () => {
         }
     };
 
+    const handleGoogleSignUp = async () => {
+        try {
+            setLoading(true);
+            setLoadingStatus('Signing up with Google...');
+            const result = await signInWithGoogle();
+
+            if (result.success) {
+                Alert.alert('Success!', 'Your account has been created successfully!');
+            } else {
+                Alert.alert('Sign Up Failed', result.msg);
+            }
+        } catch (error) {
+            console.error('Google sign up error:', error);
+            Alert.alert('Error', 'An unexpected error occurred');
+        } finally {
+            setLoading(false);
+            setLoadingStatus('');
+        }
+    };
+
     return (
-        <SafeAreaView className="flex-1 bg-white">
-            <StatusBar style="auto" />
+        <SafeAreaView className="flex-1 bg-secondary">
+            <StatusBar style="dark" />
             <KeyboardAvoidingView
                 className="flex-1"
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-                <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-                    <View className="flex-1 items-center p-5">
-                        <Image
-                            source={require('../../../assets/ChefiePieLogo.png')}
-                            className="w-[120px] h-[120px] mt-5 mb-5 rounded-3xl"
-                            resizeMode="contain"
-                        />
+                <ScrollView
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View className="items-center pt-10 px-6">
+                        {/* Logo Container with Enhanced Design */}
+                        <View className="bg-white rounded-3xl p-3 mb-3"
+                            style={{
+                                shadowColor: '#FF914D',
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.15,
+                                shadowRadius: 12,
+                                elevation: 8
+                            }}
+                        >
+                            <Image
+                                source={require('../../../assets/ChefiePieLogo.png')}
+                                className="w-[70px] h-[70px] rounded-2xl"
+                                resizeMode="contain"
+                            />
+                        </View>
 
-                        <Text className="text-[28px] font-bold text-[#333] mb-2.5">Create Account</Text>
-                        <Text className="text-base text-[#666] mb-[30px]">Join Chefie Pie today!</Text>
+                        <Text className="text-[24px] font-bold text-darkBrown mb-1">Create Account</Text>
+                        <Text className="text-sm text-lightBrown mb-4">Join Chefie Pie today!</Text>
 
-                        <View className="w-full gap-[15px]">
-                            <TouchableOpacity className="items-center" onPress={pickImage}>
+                        <View className="w-full gap-3">
+                            {/* Profile Image Picker */}
+                            <TouchableOpacity
+                                className="items-center mb-1"
+                                onPress={pickImage}
+                                activeOpacity={0.7}
+                            >
                                 {profileImage ? (
-                                    <Image source={{ uri: profileImage }} className="w-20 h-20 rounded-[10px]" />
+                                    <View className="relative">
+                                        <Image
+                                            source={{ uri: profileImage }}
+                                            className="w-20 h-20 rounded-full border-3 border-primary"
+                                            style={{
+                                                shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.2,
+                                                shadowRadius: 4,
+                                                elevation: 4
+                                            }}
+                                        />
+                                        <View className="absolute bottom-0 right-0 bg-primary rounded-full p-1.5"
+                                            style={{
+                                                shadowColor: '#FF914D',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.3,
+                                                shadowRadius: 3,
+                                                elevation: 3
+                                            }}
+                                        >
+                                            <Feather name="edit-2" size={14} color="white" />
+                                        </View>
+                                    </View>
                                 ) : (
-                                    <View className="w-20 h-20 rounded-[10px] bg-[#f3f3f3] items-center justify-center">
-                                        <Feather name="image" size={24} color="#FFB47B" />
-                                        <Text className="text-[#aaa] text-xs mt-1">Pick Photo</Text>
+                                    <View className="w-20 h-20 rounded-full bg-white items-center justify-center border-3 border-dashed border-primary/30"
+                                        style={{
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 1 },
+                                            shadowOpacity: 0.1,
+                                            shadowRadius: 4,
+                                            elevation: 2
+                                        }}
+                                    >
+                                        <Feather name="camera" size={24} color="#FF914D" />
+                                        <Text className="text-primary text-[10px] mt-1 font-semibold">Add Photo</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
 
-                            <TextInput
-                                className="bg-[#f5f5f5] p-[15px] rounded-[10px] text-base w-full"
-                                placeholder="Username"
-                                value={username}
-                                onChangeText={setUsername}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-
-                            <TextInput
-                                className="bg-[#f5f5f5] p-[15px] rounded-[10px] text-base w-full"
-                                placeholder="Email"
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                            />
-
-                            <View className="relative w-full">
+                            {/* Username Input with Icon */}
+                            <View className="relative">
+                                <View className="absolute left-4 top-4 z-10">
+                                    <Ionicons name="person-outline" size={22} color="#A1887F" />
+                                </View>
                                 <TextInput
-                                    className="bg-[#f5f5f5] p-[15px] pr-[50px] rounded-[10px] text-base w-full"
+                                    className="bg-white pl-14 pr-4 py-4 rounded-2xl text-base w-full text-darkBrown"
+                                    placeholder="Username"
+                                    placeholderTextColor="#A1887F"
+                                    value={username}
+                                    onChangeText={setUsername}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    style={{
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 3,
+                                        elevation: 2
+                                    }}
+                                />
+                            </View>
+
+                            {/* Email Input with Icon */}
+                            <View className="relative">
+                                <View className="absolute left-4 top-4 z-10">
+                                    <MaterialIcons name="email" size={22} color="#A1887F" />
+                                </View>
+                                <TextInput
+                                    className="bg-white pl-14 pr-4 py-4 rounded-2xl text-base w-full text-darkBrown"
+                                    placeholder="Email"
+                                    placeholderTextColor="#A1887F"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    style={{
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 3,
+                                        elevation: 2
+                                    }}
+                                />
+                            </View>
+
+                            {/* Password Input with Icon */}
+                            <View className="relative">
+                                <View className="absolute left-4 top-4 z-10">
+                                    <Ionicons name="lock-closed-outline" size={22} color="#A1887F" />
+                                </View>
+                                <TextInput
+                                    className="bg-white pl-14 pr-14 py-4 rounded-2xl text-base w-full text-darkBrown"
                                     placeholder="Password"
+                                    placeholderTextColor="#A1887F"
                                     value={password}
                                     onChangeText={setPassword}
                                     secureTextEntry={!showPassword}
+                                    style={{
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 3,
+                                        elevation: 2
+                                    }}
                                 />
                                 <TouchableOpacity
-                                    className="absolute right-[15px] top-[15px] z-10"
+                                    className="absolute right-4 top-4 z-10"
                                     onPress={() => setShowPassword(!showPassword)}
                                 >
                                     <Ionicons
                                         name={showPassword ? "eye-off" : "eye"}
-                                        size={20}
-                                        color="#666"
+                                        size={22}
+                                        color="#A1887F"
                                     />
                                 </TouchableOpacity>
                             </View>
 
-                            <View className="relative w-full">
+                            {/* Confirm Password Input with Icon */}
+                            <View className="relative">
+                                <View className="absolute left-4 top-4 z-10">
+                                    <Ionicons name="lock-closed-outline" size={22} color="#A1887F" />
+                                </View>
                                 <TextInput
-                                    className="bg-[#f5f5f5] p-[15px] pr-[50px] rounded-[10px] text-base w-full"
+                                    className="bg-white pl-14 pr-14 py-4 rounded-2xl text-base w-full text-darkBrown"
                                     placeholder="Confirm Password"
+                                    placeholderTextColor="#A1887F"
                                     value={confirmPassword}
                                     onChangeText={setConfirmPassword}
                                     secureTextEntry={!showConfirmPassword}
+                                    style={{
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.05,
+                                        shadowRadius: 3,
+                                        elevation: 2
+                                    }}
                                 />
                                 <TouchableOpacity
-                                    className="absolute right-[15px] top-[15px] z-10"
+                                    className="absolute right-4 top-4 z-10"
                                     onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                                 >
                                     <Ionicons
                                         name={showConfirmPassword ? "eye-off" : "eye"}
-                                        size={20}
-                                        color="#666"
+                                        size={22}
+                                        color="#A1887F"
                                     />
                                 </TouchableOpacity>
                             </View>
 
+                            {/* Sign Up Button */}
                             <TouchableOpacity
-                                className={`bg-[#FF9966] p-[15px] rounded-[10px] w-full items-center mt-2.5 ${loading ? 'opacity-70' : ''}`}
+                                className={`bg-primary py-4 rounded-2xl w-full items-center mt-4 ${loading ? 'opacity-70' : ''}`}
                                 onPress={handleSignUp}
                                 disabled={loading}
+                                activeOpacity={0.8}
+                                style={{
+                                    shadowColor: '#FF914D',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.3,
+                                    shadowRadius: 8,
+                                    elevation: 6
+                                }}
                             >
                                 {loading ? (
                                     <View className="flex-row items-center justify-center gap-2.5">
                                         <ActivityIndicator size="small" color="#fff" />
-                                        <Text className="text-white text-base font-semibold">Creating Account...</Text>
+                                        <Text className="text-white text-base font-bold">Creating Account...</Text>
                                     </View>
                                 ) : (
-                                    <Text className="text-white text-base font-semibold">Sign Up</Text>
+                                    <Text className="text-white text-base font-bold tracking-wide">Sign Up</Text>
                                 )}
                             </TouchableOpacity>
 
-                            <View className="flex-row justify-center mt-5 mb-5">
-                                <Text className="text-[#666] text-sm">Already have an account? </Text>
+                            {/* Divider */}
+                            <View className="flex-row items-center w-full my-4">
+                                <View className="flex-1 h-[1px] bg-lightBrown/30" />
+                                <Text className="mx-4 text-lightBrown text-sm font-medium">Or continue with</Text>
+                                <View className="flex-1 h-[1px] bg-lightBrown/30" />
+                            </View>
+
+                            {/* Social Sign-Up Buttons */}
+                            <View className="flex-row gap-4 justify-center">
+                                <TouchableOpacity
+                                    className="w-16 h-16 bg-white rounded-2xl items-center justify-center"
+                                    onPress={handleGoogleSignUp}
+                                    disabled={loading}
+                                    activeOpacity={0.7}
+                                    style={{
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.08,
+                                        shadowRadius: 4,
+                                        elevation: 3
+                                    }}
+                                >
+                                    <AntDesign name="google" size={28} color="#DB4437" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Sign In Link */}
+                            <View className="flex-row justify-center mt-6 mb-4">
+                                <Text className="text-lightBrown text-base">Already have an account? </Text>
                                 <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
-                                    <Text className="text-[#FF6B6B] text-sm font-semibold">Sign In</Text>
+                                    <Text className="text-primary text-base font-bold">Sign In</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -228,12 +393,22 @@ const SignUpScreen = () => {
             {/* Loading Overlay */}
             {loading && (
                 <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/50 justify-center items-center z-[1000]">
-                    <View className="bg-white p-[30px] rounded-[15px] items-center min-w-[250px] shadow-lg">
-                        <ActivityIndicator size="large" color="#FF9966" />
-                        <Text className="text-lg font-semibold text-[#333] mt-[15px] text-center">
+                    <View className="bg-white p-8 rounded-3xl items-center min-w-[280px] mx-6"
+                        style={{
+                            shadowColor: '#FF914D',
+                            shadowOffset: { width: 0, height: 8 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 12,
+                            elevation: 10
+                        }}
+                    >
+                        <View className="bg-secondary rounded-full p-4 mb-4">
+                            <ActivityIndicator size="large" color="#FF914D" />
+                        </View>
+                        <Text className="text-lg font-bold text-darkBrown text-center">
                             {loadingStatus || 'Creating your account...'}
                         </Text>
-                        <Text className="text-sm text-[#666] mt-2 text-center">Please wait, this may take a moment</Text>
+                        <Text className="text-sm text-lightBrown mt-2 text-center">Please wait, this may take a moment</Text>
                     </View>
                 </View>
             )}

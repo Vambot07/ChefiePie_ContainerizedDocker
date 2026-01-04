@@ -257,7 +257,7 @@ const SettingScreen = () => {
     };
 
     return (
-        <View className="flex-1" style={{ backgroundColor: colors.white }}>
+        <View className="flex-1" style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Settings"
                 showBackButton={true}
@@ -271,7 +271,7 @@ const SettingScreen = () => {
 
                     <View
                         className="rounded-2xl p-1 mb-6"
-                        style={{ backgroundColor: colors.creamWhite }}
+                        style={{ backgroundColor: colors.lightPeach }}
                     >
                         <Item
                             title="Email Address"
@@ -295,7 +295,7 @@ const SettingScreen = () => {
 
                     <View
                         className="rounded-2xl p-1 mb-6"
-                        style={{ backgroundColor: colors.creamWhite }}
+                        style={{ backgroundColor: colors.lightPeach }}
                     >
 
                         <Item
@@ -320,7 +320,7 @@ const SettingScreen = () => {
 
                     <View
                         className="rounded-2xl p-1 mb-8"
-                        style={{ backgroundColor: colors.creamWhite }}
+                        style={{ backgroundColor: colors.lightPeach }}
                     >
                         <Item
                             title="Sign Out"

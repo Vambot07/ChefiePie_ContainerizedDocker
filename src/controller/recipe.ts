@@ -9,6 +9,7 @@ import {
   deleteDoc,
   query,
   where,
+  writeBatch,
   updateDoc,
   arrayUnion,
   arrayRemove,
@@ -274,26 +275,93 @@ export const searchRecipes = async (searchQuery: string): Promise<Recipe[]> => {
   }
 };
 
-export const deleteRecipe = async (recipeId: string): Promise<string> => {
+
+const removeFromAllSavedRecipes = async (recipeId: string) => {
   try {
-    const user = auth.currentUser;
-    if (!user) throw new Error('User not authenticated');
+    console.log(`🔍 Finding all users who saved recipe ${recipeId}...`);
 
-    const recipeRef = doc(db, 'recipes', recipeId);
-    const docSnap = await getDoc(recipeRef);
+    const recipeIdStr = recipeId.toString();
+    const savedRef = collection(db, 'saved');
 
-    if (!docSnap.exists()) throw new Error('Recipe not found');
-    const recipeData = docSnap.data();
+    // Query all saved entries for this recipe
+    const q = query(savedRef, where('recipeId', '==', recipeIdStr));
+    const snapshot = await getDocs(q);
 
-    if (recipeData.userId !== user.uid) {
-      throw new Error('You are not authorized to delete this recipe.');
+    if (snapshot.empty) {
+      console.log('ℹ️ Recipe was not saved by any users');
+      return { success: true, count: 0 };
     }
 
-    await deleteDoc(recipeRef);
-    return 'Recipe deleted successfully!';
+    // Delete all saved entries in batch
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((docItem) => {
+      batch.delete(doc(db, 'saved', docItem.id));
+    });
+
+    await batch.commit();
+    console.log(`✅ Removed recipe from ${snapshot.size} user(s) saved recipes`);
+
+    return { success: true, count: snapshot.size };
   } catch (error) {
-    console.error('Error deleting recipe:', error);
-    throw new Error('Error deleting recipe. Please try again.');
+    console.error('❌ Error removing recipe from saved collection:', error);
+    return { success: false, error, count: 0 };
+  }
+};
+
+export const deleteRecipe = async (
+  recipeId: string
+): Promise<{ success: boolean; msg: string; count?: number }> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      return { success: false, msg: 'User not authenticated' };
+    }
+
+    // Step 1: Clean up saved recipe references
+    console.log('🧹 Step 1: Cleaning up saved recipe references...');
+    const cleanupResult = await removeFromAllSavedRecipes(recipeId);
+
+    if (!cleanupResult.success) {
+      console.warn('⚠️ Cleanup had issues, but continuing with deletion');
+    }
+
+    // Step 2: Verify recipe exists and check ownership
+    console.log('🔍 Step 2: Verifying recipe ownership...');
+    const recipeRef = doc(db, 'recipes', recipeId);
+    const recipeDoc = await getDoc(recipeRef);
+
+    if (!recipeDoc.exists()) {
+      return { success: false, msg: 'Recipe not found' };
+    }
+
+    const recipeData = recipeDoc.data();
+
+    if (recipeData.userId !== user.uid) {
+      return { success: false, msg: 'You can only delete your own recipes' };
+    }
+
+    // Step 3: Delete the recipe
+    console.log('🗑️ Step 3: Deleting the recipe...');
+    await deleteDoc(recipeRef);
+
+    const message = cleanupResult.count > 0
+      ? `Recipe deleted successfully! Removed from ${cleanupResult.count} saved collection(s).`
+      : 'Recipe deleted successfully!';
+
+    console.log('✅', message);
+
+    return {
+      success: true,
+      msg: message,
+      count: cleanupResult.count
+    };
+
+  } catch (error: any) {
+    console.error('❌ Error deleting recipe:', error);
+    return {
+      success: false,
+      msg: error.message || 'Error deleting recipe. Please try again.'
+    };
   }
 };
 

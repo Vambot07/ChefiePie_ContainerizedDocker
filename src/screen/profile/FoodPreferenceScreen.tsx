@@ -352,7 +352,7 @@ const FoodPreferenceScreen = () => {
     );
 
     return (
-        <View className="flex-1" style={{ backgroundColor: colors.white }}>
+        <View className="flex-1" style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="My Food Preferences"
                 showBackButton={true}
@@ -363,7 +363,7 @@ const FoodPreferenceScreen = () => {
                 {/* General Preferences */}
                 <View
                     className="rounded-2xl p-6 mb-6"
-                    style={{ backgroundColor: colors.creamWhite }}
+                    style={{ backgroundColor: colors.lightPeach }}
                 >
                     <Text className="text-xl font-bold text-gray-800 mb-4">General Preferences</Text>
 
@@ -389,7 +389,7 @@ const FoodPreferenceScreen = () => {
                 {/* Meal Plan Preferences */}
                 <View
                     className="rounded-2xl p-6 mb-6"
-                    style={{ backgroundColor: colors.creamWhite }}
+                    style={{ backgroundColor: colors.lightPeach }}
                 >
                     <Text className="text-xl font-bold text-gray-800 mb-4">Meal Plan Preferences</Text>
 

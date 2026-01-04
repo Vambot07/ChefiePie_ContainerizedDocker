@@ -19,6 +19,7 @@
     "@expo/vector-icons": "^14.1.0",
     "@google/generative-ai": "^0.24.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-google-signin/google-signin": "^16.1.1",
     "@react-native-picker/picker": "2.11.1",
     "@react-native-vector-icons/ant-design": "^12.4.0",
     "@react-navigation/bottom-tabs": "^7.3.14",
@@ -28,7 +29,9 @@
     "crypto-js": "^4.2.0",
     "expo": "~53.0.23",
     "expo-asset": "~11.1.7",
+    "expo-auth-session": "~6.2.1",
     "expo-camera": "~16.1.8",
+    "expo-crypto": "~14.1.5",
     "expo-dev-client": "~5.2.4",
     "expo-file-system": "~18.1.10",
     "expo-font": "~13.3.2",
@@ -54,9 +57,8 @@
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-native-svg": "15.11.2",
-    "react-native-worklets": "^0.6.1",
-    "react-native-worklets-core": "^1.6.2"
+    "react-native-scroll-into-view": "^2.0.2",
+    "react-native-svg": "15.11.2"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
@@ -68,7 +70,7 @@
     "eslint-config-prettier": "^10.1.2",
     "prettier": "^3.2.5",
     "prettier-plugin-tailwindcss": "^0.5.11",
-    "react-native-svg-transformer": "^1.5.1",
+    "react-native-svg-transformer": "^1.5.2",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.18",
     "typescript": "~5.8.3"
