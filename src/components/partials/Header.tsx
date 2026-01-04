@@ -1,7 +1,6 @@
 import { View, Text, TouchableOpacity, } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFonts, RobotoSlab_400Regular, RobotoSlab_800ExtraBold } from '@expo-google-fonts/roboto-slab'
 import colors from '../../utils/color';
 
 interface HeaderProps {
@@ -24,14 +23,9 @@ const Header: React.FC<HeaderProps> = ({
     rightIcon,
     onRightAction,
     rightComponent,
-    backgroundColor = "white",
+    backgroundColor = colors.secondary,
     textColor = "#374151",
 }) => {
-    // Load Roboto Slab font (must be at top of component!)
-    const [fontsLoaded] = useFonts({
-        RobotoSlab_800ExtraBold,
-    });
-
     return (
 
 
@@ -73,7 +67,7 @@ const Header: React.FC<HeaderProps> = ({
                                 onPress={onRightAction}
                                 className="w-11 h-11 items-center justify-center rounded-full"
                                 style={{
-                                    backgroundColor: '#FFF4E0',
+                                    backgroundColor: colors.lightPeach,
                                     shadowColor: '#000',
                                     shadowOffset: { width: 0, height: 2 },
                                     shadowOpacity: 0.1,

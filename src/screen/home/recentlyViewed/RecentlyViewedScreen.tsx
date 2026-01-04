@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '~/components/partials/Header';
 import { useAuth } from '~/context/AuthContext';
+import { getRecipeById } from '~/controller/recipe';
 import { fetchRecipeById } from '~/api/spoonacular';
 import colors from '~/utils/color';
 
@@ -19,6 +20,7 @@ interface Recipe {
     title: string;
     image: string;
     time: string;
+    source?: 'created' | 'api';  // Track if recipe is created or from API
     viewedAt: string;
 }
 
@@ -31,7 +33,10 @@ export default function RecentlyViewedScreen() {
     const userId = user?.uid || user?.userId;
 
     const loadRecentlyViewed = useCallback(async () => {
+        console.log('🔄 Loading recently viewed for userId:', userId);
+
         if (!userId) {
+            console.log('❌ No userId, skipping load');
             setRecentlyViewed([]);
             setLoading(false);
             return;
@@ -41,14 +46,51 @@ export default function RecentlyViewedScreen() {
             setLoading(true);
             const key = `recentlyViewed_${userId}`;
             const stored = await AsyncStorage.getItem(key);
+
+            console.log('📦 AsyncStorage key:', key);
+            console.log('📦 Stored data exists:', !!stored);
+
             if (stored) {
-                const recipes = JSON.parse(stored);
-                setRecentlyViewed(recipes); // Show ALL recipes
+                let recipes = JSON.parse(stored);
+                let needsMigration = false;
+
+                // Migrate old recipes without source field
+                recipes = recipes.map((r: any) => {
+                    if (!r.source) {
+                        needsMigration = true;
+                        // Detect recipe type by ID format
+                        // API recipes have numeric IDs (like "654959")
+                        // Created recipes have alphanumeric IDs (like "ArW06T5M49Z5U0cJKkIJ")
+                        const isNumericId = /^\d+$/.test(r.id);
+                        const detectedSource = isNumericId ? 'api' : 'created';
+
+                        console.log(`🔧 Migrating: ${r.title} → ${detectedSource} (ID: ${r.id})`);
+
+                        return {
+                            ...r,
+                            source: detectedSource
+                        };
+                    }
+                    return r;
+                });
+
+                // Save migrated data back to AsyncStorage
+                if (needsMigration) {
+                    await AsyncStorage.setItem(key, JSON.stringify(recipes));
+                    console.log('✅ Migrated recently viewed recipes with source field');
+                }
+
+                console.log('✅ Loaded recently viewed recipes:', recipes.length);
+                recipes.forEach((r: any, i: number) => {
+                    console.log(`   ${i + 1}. ${r.title} (source: ${r.source})`);
+                });
+                setRecentlyViewed(recipes);
             } else {
+                console.log('ℹ️ No recently viewed recipes found');
                 setRecentlyViewed([]);
             }
         } catch (error) {
-            console.error('Error loading recently viewed:', error);
+            console.error('❌ Error loading recently viewed:', error);
             setRecentlyViewed([]);
         } finally {
             setLoading(false);
@@ -118,38 +160,58 @@ export default function RecentlyViewedScreen() {
     };
 
     const handleRecipePress = async (recipe: Recipe) => {
-        console.log('Fetching full details for recipe:', recipe.id);
+        console.log('Fetching full details for recipe:', recipe.id, 'Source:', recipe.source);
 
         setLoadingRecipe(true);
 
         try {
-            const fullRecipe = await fetchRecipeById(recipe.id);
+            // Check if it's a created recipe or API recipe
+            if (recipe.source === 'created') {
+                // Fetch from Firestore (user-created recipes)
+                const fullRecipe = await getRecipeById(recipe.id);
 
-            if (!fullRecipe) {
-                throw new Error('Failed to fetch recipe details');
+                if (!fullRecipe) {
+                    throw new Error('Recipe not found');
+                }
+
+                console.log('✅ Created recipe loaded:', fullRecipe.title);
+                navigation.navigate('ViewRecipe', {
+                    recipe: fullRecipe,
+                    viewMode: 'recentlyViewed'
+                });
+            } else {
+                // Fetch from Spoonacular API
+                const fullRecipe = await fetchRecipeById(recipe.id);
+
+                if (!fullRecipe) {
+                    throw new Error('Failed to fetch recipe details');
+                }
+
+                const completeRecipe = {
+                    id: fullRecipe.id?.toString() || recipe.id,
+                    title: fullRecipe.title || recipe.title,
+                    image: fullRecipe.image || recipe.image,
+                    totalTime: fullRecipe.readyInMinutes?.toString() || '30',
+                    difficulty: '',
+                    source: 'api' as const,
+                    servings: fullRecipe.servings || 4,
+                    ingredients: fullRecipe.extendedIngredients?.map((ing: any) => ing.original) || [],
+                    instructions: fullRecipe.instructions ||
+                        fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) =>
+                            `${idx + 1}. ${step.step}`
+                        ).join('\n\n') || 'No instructions available',
+                    summary: fullRecipe.summary || '',
+                    cuisines: fullRecipe.cuisines || [],
+                    dishTypes: fullRecipe.dishTypes || [],
+                    diets: fullRecipe.diets || [],
+                };
+
+                console.log('✅ API recipe loaded:', completeRecipe.title);
+                navigation.navigate('ViewRecipe', {
+                    recipe: completeRecipe,
+                    viewMode: 'recentlyViewed'
+                });
             }
-
-            const completeRecipe = {
-                id: fullRecipe.id?.toString() || recipe.id,
-                title: fullRecipe.title || recipe.title,
-                image: fullRecipe.image || recipe.image,
-                totalTime: fullRecipe.readyInMinutes?.toString() || '30',
-                difficulty: '',
-                source: 'api' as const,
-                servings: fullRecipe.servings || 4,
-                ingredients: fullRecipe.extendedIngredients?.map((ing: any) => ing.original) || [],
-                instructions: fullRecipe.instructions ||
-                    fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) =>
-                        `${idx + 1}. ${step.step}`
-                    ).join('\n\n') || 'No instructions available',
-                summary: fullRecipe.summary || '',
-                cuisines: fullRecipe.cuisines || [],
-                dishTypes: fullRecipe.dishTypes || [],
-                diets: fullRecipe.diets || [],
-            };
-
-            console.log('✅ Complete recipe ready:', completeRecipe.title);
-            navigation.navigate('ViewRecipe', { recipe: completeRecipe, viewMode: 'recentlyViewed' });
         } catch (error) {
             console.error('❌ Error fetching recipe details:', error);
             Alert.alert('Error', 'Failed to load recipe details. Please try again.');
@@ -215,7 +277,8 @@ export default function RecentlyViewedScreen() {
     ), []);
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1 bg-gray-50"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Recently Viewed"
                 showBackButton={true}

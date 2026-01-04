@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from 'react';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { sendChatMessage } from '~/api/gemini/chatService';
 import Markdown from 'react-native-markdown-display';
-import { useFonts, ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
 import UnsplashImage from './UnsplashImage';
 
 interface Message {
@@ -14,11 +13,6 @@ interface Message {
 }
 
 const GeminiChatbot = () => {
-    // Load Archivo Black font
-    const [fontsLoaded] = useFonts({
-        ArchivoBlack_400Regular,
-    });
-
     // Custom markdown rules to properly render images
     const markdownRules = {
         image: (node: any, children: any, parent: any, styles: any) => {

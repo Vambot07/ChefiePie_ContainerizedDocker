@@ -11,6 +11,7 @@ import { useAuth } from '~/context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../../firebaseConfig';
+import colors from '~/utils/color';
 
 const auth: Auth = getAuth();
 
@@ -145,12 +146,25 @@ const ViewRecipeScreen = () => {
     // Save to recently viewed
     const saveRecentlyViewed = useCallback(async (recipeData: any) => {
         const userId = currentUserId;
-        if (!userId || !recipeData?.id) return;
+
+        console.log('🔍 saveRecentlyViewed called with:', {
+            userId,
+            recipeId: recipeData?.id,
+            recipeTitle: recipeData?.title,
+            recipeSource: recipeData?.source
+        });
+
+        if (!userId || !recipeData?.id) {
+            console.log('❌ Skipping save - missing userId or recipeId');
+            return;
+        }
 
         try {
             const key = `recentlyViewed_${userId}`;
             const stored = await AsyncStorage.getItem(key);
             let recipes = stored ? JSON.parse(stored) : [];
+
+            console.log(`📦 Current recently viewed count: ${recipes.length}`);
 
             // Remove if already exists (to move to top)
             recipes = recipes.filter((r: any) => r.id !== recipeData.id.toString());
@@ -165,19 +179,24 @@ const ViewRecipeScreen = () => {
             }
 
             // Add to top
-            recipes.unshift({
+            const newEntry = {
                 id: recipeData.id.toString(),
                 title: recipeData.title,
                 image: recipeData.image,
                 time: formattedTime,
+                source: recipeData.source || 'api',  // Save the source type
                 viewedAt: new Date().toISOString()
-            });
+            };
+
+            recipes.unshift(newEntry);
 
             // Keep only last 20
             recipes = recipes.slice(0, 20);
             await AsyncStorage.setItem(key, JSON.stringify(recipes));
 
-            console.log('✅ Added to recently viewed:', recipeData.title);
+            console.log('✅ Saved to recently viewed:', recipeData.title);
+            console.log('   Source:', newEntry.source);
+            console.log('   New count:', recipes.length);
         } catch (error) {
             console.error('❌ Error saving to recently viewed:', error);
         }
@@ -449,12 +468,13 @@ const ViewRecipeScreen = () => {
     // Show loading while fetching API details
     if (isApiRecipe && loadingApiDetails) {
         return (
-            <View className="flex-1 bg-[#FFF6F0]">
+            <View className="flex-1"
+                style={{ backgroundColor: colors.secondary }}>
                 <Header
                     title="Loading..."
                     showBackButton={true}
                     onBack={() => navigation.goBack()}
-                    backgroundColor="#FFF6F0"
+                    backgroundColor={colors.secondary}
                     textColor="#222"
                 />
                 <View className="flex-1 justify-center items-center">
@@ -470,14 +490,15 @@ const ViewRecipeScreen = () => {
     }
 
     return (
-        <View className="flex-1 bg-[#FFF6F0]">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title={title}
                 showBackButton={true}
                 onBack={() => navigation.goBack()}
                 rightIcon={canManageRecipe ? ("menu-sharp") : undefined}
                 onRightAction={handleShowModalVisible}
-                backgroundColor="#FFF6F0"
+                backgroundColor={colors.secondary}
                 textColor="#222"
             />
 

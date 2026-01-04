@@ -16,6 +16,7 @@ import {
 } from '~/controller/planner';
 import { getSavedRecipes } from '~/controller/recipe';
 import { RootStackParamList } from '~/navigation/AppStack';
+import colors from '~/utils/color';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -78,11 +79,10 @@ const RecipeCard = ({ recipe, navigation, onDelete, onSwap, deleteMode, isSelect
                 {deleteMode && (
                     <View className="absolute top-2 left-2">
                         <View
-                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-                                isSelected
-                                    ? 'border-red-500 bg-red-500'
-                                    : 'border-white bg-white/30'
-                            }`}
+                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected
+                                ? 'border-red-500 bg-red-500'
+                                : 'border-white bg-white/30'
+                                }`}
                         >
                             {isSelected && (
                                 <Ionicons name="checkmark" size={16} color="white" />
@@ -921,7 +921,8 @@ export default function PlannerScreen() {
     });
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Meal Planner"
                 showBackButton={false}
@@ -935,7 +936,7 @@ export default function PlannerScreen() {
                 </View>
             ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 150 }}>
-                    <View style={{ backgroundColor: '#FFF7F0' }} className="m-6 mt-4 p-5 rounded-2xl">
+                    <View style={{ backgroundColor: colors.lightPeach }} className="m-6 mt-4 p-5 rounded-2xl">
                         <View className="flex-row justify-between items-center mb-2">
                             <TouchableOpacity onPress={goToPreviousWeek} disabled={weekOffset === 0} style={{ opacity: weekOffset === 0 ? 0.3 : 1 }}>
                                 <Ionicons name="chevron-back" size={24} color="black" />
@@ -965,7 +966,7 @@ export default function PlannerScreen() {
                                                 <TouchableOpacity
                                                     onPress={() => toggleDay(index)}
                                                     style={{
-                                                        backgroundColor: isSelected ? '#F9A826' : '#E5E7EB',
+                                                        backgroundColor: isSelected ? colors.primary : colors.white,
                                                         borderWidth: isSelected ? 2 : 0,
                                                         borderColor: isSelected ? '#D97706' : 'transparent'
                                                     }}
@@ -980,12 +981,12 @@ export default function PlannerScreen() {
                                 </View>
 
                                 <TouchableOpacity
-                                    style={{ backgroundColor: selectedDays.length > 0 ? '#F9A826' : '#D1D5DB', opacity: selectedDays.length > 0 ? 1 : 0.6 }}
+                                    style={{ backgroundColor: selectedDays.length > 0 ? '#F9A826' : colors.white, opacity: selectedDays.length > 0 ? 1 : 0.6 }}
                                     className="w-full py-4 rounded-xl"
                                     onPress={handleStartPlan}
                                     disabled={selectedDays.length === 0}
                                 >
-                                    <Text className="text-white text-center font-bold text-base">START MY PLAN</Text>
+                                    <Text className="text-black text-center font-bold text-base">START MY PLAN</Text>
                                 </TouchableOpacity>
                             </>
                         )}
@@ -1059,7 +1060,8 @@ export default function PlannerScreen() {
                                             collapsable={false}
                                         >
                                             <TouchableOpacity
-                                                className="flex-row items-center bg-gray-100 px-3 py-2 rounded-lg"
+                                                className="flex-row items-center px-3 py-2 rounded-lg"
+                                                style={{ backgroundColor: colors.white }}
                                                 disabled={!isSelected && selectedDays.length > 0}
                                                 onPress={() => handleAddPress(day, index, buttonRefs.current[day])}
                                             >

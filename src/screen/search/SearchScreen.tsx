@@ -11,6 +11,7 @@ import Header from '../../components/partials/Header';
 import GeminiTestModal from '~/components/modal/GeminiTestModal';
 import RecipeComparisonModal from '~/components/modal/RecipeComparisonModal';
 import { useAuth } from '~/context/AuthContext';
+import colors from '~/utils/color';
 
 // Navigation types
 type RootStackParamList = {
@@ -519,7 +520,7 @@ export default function SearchScreen() {
                 recipeData: recipe // Full recipe data for navigation
             }));
 
-            // ✅ ADD THIS DEBUG LOG
+            // ADD THIS DEBUG LOG
             console.log('🎨 Missing Ingredients Summary:', JSON.stringify(missingIngredientsSummary, null, 2));
 
             setComparisonData({
@@ -630,17 +631,19 @@ export default function SearchScreen() {
     };
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Search Recipes"
                 showBackButton={false}
                 onBack={() => navigation.goBack()}
             />
 
-            <View className="bg-white border-b border-gray-100 pb-2">
+            <View className="border-b border-white pb-2"
+                style={{ backgroundColor: colors.secondary }}>
                 <View className="flex-row items-center px-4 pt-2">
-                    <View className="flex-row items-center bg-gray-100 rounded-xl px-3 py-2 flex-1 mr-3">
-                        <Ionicons name="search" size={18} color="#FF9966" />
+                    <View className="flex-row items-center bg-white rounded-xl px-3 py-2 flex-1 mr-3">
+                        <Ionicons name="search" size={18} color={colors.primary} />
                         <TextInput
                             className="flex-1 ml-2 py-2"
                             placeholder={
@@ -655,7 +658,7 @@ export default function SearchScreen() {
                         />
                         {searchQuery.length > 0 ? (
                             <TouchableOpacity onPress={clearSearch}>
-                                <Ionicons name="close" size={18} color="#FF9966" />
+                                <Ionicons name="close" size={18} color={colors.primary} />
                             </TouchableOpacity>
                         ) : (
                             <View className='flex-row gap-4'>
@@ -667,46 +670,56 @@ export default function SearchScreen() {
                     </View>
 
                     <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center rounded-xl bg-gray-100"
+                        className="w-10 h-10 items-center justify-center rounded-xl bg-white"
                         onPress={() => navigation.navigate('AddRecipe')}
                     >
-                        <AntDesign name="plussquareo" size={24} color="#FF9966" />
+                        <AntDesign name="plussquareo" size={24} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
 
                 <View className="flex-row justify-around mt-3 mx-4 px-2">
                     <TouchableOpacity
-                        className={`flex-1 py-2.5 rounded-xl ${tab === 'createdRecipe' ? 'bg-[#FF9966]' : 'bg-gray-100'}`}
+                        className='flex-1 py-2.5 rounded-xl'
+                        style={{
+                            backgroundColor: tab === 'createdRecipe' ? colors.primary : '#fff'
+                        }}
+
                         onPress={() => {
                             setSearchQuery('');
                             setTab('createdRecipe');
                         }}
                     >
-                        <Text className={`text-center font-semibold text-sm ${tab === 'createdRecipe' ? 'text-white' : 'text-gray-600'}`}>
+                        <Text className={`text-center font-semibold text-sm ${tab === 'createdRecipe' ? 'text-white' : 'text-black'}`}>
                             Created Recipes
                         </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        className={`flex-1 py-2.5 rounded-xl mx-2 ${tab === 'apiRecipe' ? 'bg-[#FF9966]' : 'bg-gray-100'}`}
+                        className='flex-1 py-2.5 rounded-xl mx-2'
+                        style={{
+                            backgroundColor: tab === 'apiRecipe' ? colors.primary : '#fff'
+                        }}
                         onPress={() => {
                             setSearchQuery('');
                             setTab('apiRecipe');
                         }}
                     >
-                        <Text className={`text-center font-semibold text-sm ${tab === 'apiRecipe' ? 'text-white' : 'text-gray-600'}`}>
+                        <Text className={`text-center font-semibold text-sm ${tab === 'apiRecipe' ? 'text-white' : 'text-black'}`}>
                             Discover
                         </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        className={`flex-1 py-2.5 rounded-xl ${tab === 'all' ? 'bg-[#FF9966]' : 'bg-gray-100'}`}
+                        className='flex-1 py-2.5 rounded-xl'
+                        style={{
+                            backgroundColor: tab === 'all' ? colors.primary : '#fff'
+                        }}
                         onPress={() => {
                             setSearchQuery('');
                             setTab('all');
                         }}
                     >
-                        <Text className={`text-center font-semibold text-sm ${tab === 'all' ? 'text-white' : 'text-gray-600'}`}>
+                        <Text className={`text-center font-semibold text-sm ${tab === 'all' ? 'text-white' : 'text-black'}`}>
                             All
                         </Text>
                     </TouchableOpacity>
@@ -714,7 +727,8 @@ export default function SearchScreen() {
             </View>
 
             {loading ? (
-                <View className='flex-1 bg-gray-50 justify-center items-center'>
+                <View className='flex-1 justify-center items-center'
+                    style={{ backgroundColor: colors.secondary }}>
                     <ActivityIndicator size='large' color="#FF9966" />
                     <Text className="text-gray-500 mt-3">
                         {searchQuery
@@ -727,7 +741,8 @@ export default function SearchScreen() {
             ) : (
                 <ScrollView
                     ref={scrollViewRef}
-                    className="flex-1 bg-gray-50 px-4 pt-4"
+                    className="flex-1 px-4 pt-4"
+                    style={{ backgroundColor: colors.secondary }}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }

@@ -12,6 +12,7 @@ import {
     ExpoSpeechRecognitionModule,
     useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
+import colors from '~/utils/color';
 
 // Create enhanced ScrollView with scroll-into-view functionality
 const EnhancedScrollView = wrapScrollView(ScrollView);
@@ -906,7 +907,8 @@ const ViewSavedRecipeScreen = () => {
 
     if (loading) {
         return (
-            <SafeAreaView className="flex-1 bg-[#FFF6F0]">
+            <SafeAreaView className="flex-1"
+                style={{ backgroundColor: colors.secondary }}>
                 <View className="flex-1 justify-center items-center">
                     <ActivityIndicator size="large" color="#FFB47B" />
                     <Text className="mt-2 text-gray-600">Loading Recipe...</Text>
@@ -917,7 +919,8 @@ const ViewSavedRecipeScreen = () => {
 
     if (!recipe) {
         return (
-            <SafeAreaView className="flex-1 bg-[#FFF6F0]">
+            <SafeAreaView className="flex-1"
+                style={{ backgroundColor: colors.secondary }}>
                 <Header title="Error" showBackButton={true} onBack={() => navigation.goBack()} />
                 <View className="flex-1 justify-center items-center">
                     <Text className="text-lg text-gray-600">Recipe not found.</Text>
@@ -930,13 +933,14 @@ const ViewSavedRecipeScreen = () => {
     }
 
     return (
-        <View className="flex-1 bg-[#FFF6F0]">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <View className="flex-1">
                 <Header
                     title={recipe.title}
                     showBackButton={true}
                     onBack={() => navigation.goBack()}
-                    backgroundColor="#FFF6F0"
+                    backgroundColor={colors.secondary}
                     textColor="#222"
                 />
 
@@ -1256,18 +1260,18 @@ const ViewSavedRecipeScreen = () => {
                                                 className={`mb-6 rounded-xl p-4 ${isCurrentStep ? 'bg-green-50 border-2 border-green-500' : 'bg-white'}`}
                                                 style={!isCurrentStep ? shadowStyle : undefined}
                                             >
-                                            <View className="flex-row items-center mb-2">
-                                                <Text className={`font-bold mr-3 text-lg ${isCurrentStep ? 'text-green-600' : 'text-[#FFB47B]'}`}>
-                                                    {idx + 1}
-                                                </Text>
-                                                <Text className="font-semibold text-gray-800 flex-1">
-                                                    {step.title || `Step ${idx + 1}`}
-                                                </Text>
-                                                {isCurrentStep && (
-                                                    <Ionicons name="volume-high" size={20} color="#22C55E" />
-                                                )}
-                                            </View>
-                                            <Text className="text-gray-700 ml-8">{step.details}</Text>
+                                                <View className="flex-row items-center mb-2">
+                                                    <Text className={`font-bold mr-3 text-lg ${isCurrentStep ? 'text-green-600' : 'text-[#FFB47B]'}`}>
+                                                        {idx + 1}
+                                                    </Text>
+                                                    <Text className="font-semibold text-gray-800 flex-1">
+                                                        {step.title || `Step ${idx + 1}`}
+                                                    </Text>
+                                                    {isCurrentStep && (
+                                                        <Ionicons name="volume-high" size={20} color="#22C55E" />
+                                                    )}
+                                                </View>
+                                                <Text className="text-gray-700 ml-8">{step.details}</Text>
                                             </View>
                                         </ScrollIntoView>
                                     );

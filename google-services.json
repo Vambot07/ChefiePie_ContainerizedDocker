@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "188127507644-brjedbiv4dfovt923stoue1vsvai00un.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.anonymous.chefiePie",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
           "client_id": "188127507644-umtqm70rfg0a6c4ia00phrr0o196hfb6.apps.googleusercontent.com",
           "client_type": 3
         }

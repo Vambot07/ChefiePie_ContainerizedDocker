@@ -6,6 +6,7 @@ import { getSavedRecipes } from '~/controller/recipe'
 import Header from '../../components/partials/Header'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '~/context/AuthContext'
+import colors from '~/utils/color'
 
 // Add navigation type
 type RootStackParamList = {
@@ -117,14 +118,16 @@ export default function SavedScreen() {
     ), []);
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className="flex-1"
+            style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Saved Recipes"
                 showBackButton={false}
             />
 
             {loading ? (
-                <View className="flex-1 bg-gray-150 justify-center items-center">
+                <View className="flex-1 justify-center items-center"
+                    style={{ backgroundColor: colors.secondary }}>
                     <ActivityIndicator size="large" color="#FFB47B" />
                     <Text className="mt-4 text-gray-600">Loading Saved Recipe...</Text>
                 </View>

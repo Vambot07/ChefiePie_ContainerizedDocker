@@ -138,10 +138,6 @@ const SignUpScreen = () => {
         }
     };
 
-    const handleFacebookSignUp = () => {
-        Alert.alert('Coming Soon', 'Facebook Sign-Up will be implemented soon!');
-    };
-
     return (
         <SafeAreaView className="flex-1 bg-secondary">
             <StatusBar style="dark" />
@@ -379,22 +375,6 @@ const SignUpScreen = () => {
                                     }}
                                 >
                                     <AntDesign name="google" size={28} color="#DB4437" />
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    className="w-16 h-16 bg-white rounded-2xl items-center justify-center"
-                                    onPress={handleFacebookSignUp}
-                                    disabled={loading}
-                                    activeOpacity={0.7}
-                                    style={{
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.08,
-                                        shadowRadius: 4,
-                                        elevation: 3
-                                    }}
-                                >
-                                    <AntDesign name="facebook-square" size={28} color="#1877F2" />
                                 </TouchableOpacity>
                             </View>
 

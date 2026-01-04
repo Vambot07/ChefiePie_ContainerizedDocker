@@ -14,8 +14,6 @@ import { saveApiRecipe, unsaveRecipe, getSavedRecipes, getRecipeByUser, getRecip
 import { loadMealPlanWithDetails } from '~/controller/planner';
 import colors from '~/utils/color';
 import GeminiChatbot from '~/components/partials/GeminiChatBot';
-import { useFonts, Oswald_400Regular } from '@expo-google-fonts/oswald';
-import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
 
 const categories = ['All', 'Asian', 'Italian', 'Indian', 'Chinese', 'Mexican'];
 const baseIngredients = ['Chicken', 'Tomato', 'Curry', 'Salad', 'Chilli', 'Onion'];
@@ -34,7 +32,7 @@ const FeaturedRecipeCard = ({
 }) => (
     <TouchableOpacity onPress={onPress}>
         <View className="w-36 h-56 mr-4">
-            <View className="rounded-2xl p-4 h-full relative" style={{ backgroundColor: colors.lightPeach }}>
+            <View className="rounded-2xl bg-gray-100 p-4 h-full relative">
                 {/* Recipe Image */}
                 <View className="absolute left-1/2 -ml-12">
                     <Image
@@ -94,12 +92,6 @@ const LoadingModal = ({ visible, message }: { visible: boolean; message?: string
 
 // --- HOME SCREEN ---
 export const HomeScreen = () => {
-    // Load Oswald font
-    const [fontsLoaded] = useFonts({
-        Oswald_400Regular,
-        ArchivoBlack_400Regular
-    });
-
     const [activeCategory, setActiveCategory] = useState('All');
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
     const [tempSelectedIngredients, setTempSelectedIngredients] = useState<string[]>([]);
@@ -601,7 +593,7 @@ export const HomeScreen = () => {
     };
 
     return (
-        <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.white }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.secondary }}>
             <View style={{ flex: 1, overflow: 'visible' }}>
                 {initialLoading ? (
                     <View className="flex-1 justify-center items-center">
@@ -655,7 +647,7 @@ export const HomeScreen = () => {
                                 <TouchableOpacity
                                     className="w-11 h-11 rounded-full items-center justify-center"
                                     style={{
-                                        backgroundColor: '#FFF4E0',
+                                        backgroundColor: colors.lightPeach,
                                         shadowColor: '#000',
                                         shadowOffset: { width: 0, height: 2 },
                                         shadowOpacity: 0.1,
@@ -695,7 +687,7 @@ export const HomeScreen = () => {
                             <View
                                 className="mx-2 mt-6 rounded-3xl p-5"
                                 style={{
-                                    backgroundColor: 'white',
+                                    backgroundColor: colors.lightPeach,
                                     shadowColor: '#FF9966',
                                     shadowOffset: { width: 0, height: 4 },
                                     shadowOpacity: 0.15,
@@ -769,7 +761,7 @@ export const HomeScreen = () => {
                         <View
                             className="mx-2 mt-6 rounded-3xl overflow-hidden"
                             style={{
-                                backgroundColor: 'white',
+                                backgroundColor: colors.lightPeach,
                                 shadowColor: '#000',
                                 shadowOffset: { width: 0, height: 2 },
                                 shadowOpacity: 0.1,
@@ -898,7 +890,7 @@ export const HomeScreen = () => {
                             )}
                         </View>
 
-                        {/* MODERN SEARCH BY INGREDIENTS */}
+                        {/* SEARCH BY INGREDIENTS */}
                         <View
                             className="rounded-3xl mx-2 mt-6 mb-4 overflow-hidden"
                             style={{
@@ -910,7 +902,8 @@ export const HomeScreen = () => {
                                 elevation: 3,
                             }}
                         >
-                            <View className="flex-row justify-between items-center px-5 pt-5 pb-3">
+                            <View className="flex-row justify-between items-center px-5 pt-5 pb-3"
+                                style={{ backgroundColor: colors.lightPeach }}>
                                 <View className="flex-row items-center">
                                     <View className="w-10 h-10 rounded-full items-center justify-center mr-2" style={{ backgroundColor: '#FFF4E0' }}>
                                         <Ionicons name="leaf" size={20} color="#FF9966" />
@@ -932,6 +925,7 @@ export const HomeScreen = () => {
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
                                 contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12 }}
+                                style={{ backgroundColor: colors.lightPeach }}
                             >
                                 {ingredients.map((ingredient, idx) => {
                                     const isSelected = tempSelectedIngredients.includes(ingredient);
@@ -958,7 +952,7 @@ export const HomeScreen = () => {
                             </ScrollView>
 
                             {/* INGREDIENTS RECIPES SECTION */}
-                            <View style={{ position: 'relative', minHeight: 280 }}>
+                            <View style={{ position: 'relative', minHeight: 280, backgroundColor: colors.lightPeach }}>
                                 {selectedIngredients.length > 0 && (
                                     <>
                                         <Text className="text-lg font-bold text-gray-700 mb-2 px-4">
@@ -1066,7 +1060,7 @@ export const HomeScreen = () => {
                             </View>
                         </View>
 
-                        {/* MODERN CATEGORIES */}
+                        {/* CATEGORIES */}
                         <View
                             className="rounded-3xl mx-2 mt-6 mb-4"
                             style={{
@@ -1078,7 +1072,8 @@ export const HomeScreen = () => {
                                 elevation: 3,
                             }}
                         >
-                            <View className="flex-row items-center px-5 pt-5 pb-3">
+                            <View className="flex-row items-center px-5 pt-5 pb-3"
+                                style={{ backgroundColor: colors.lightPeach }}>
                                 <View className="w-10 h-10 rounded-full items-center justify-center mr-2" style={{ backgroundColor: '#FFF4E0' }}>
                                     <Ionicons name="grid" size={20} color="#FF9966" />
                                 </View>
@@ -1088,6 +1083,7 @@ export const HomeScreen = () => {
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
                                 contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12 }}
+                                style={{ backgroundColor: colors.lightPeach }}
                             >
                                 {categories.map(category => (
                                     <TouchableOpacity
@@ -1110,7 +1106,8 @@ export const HomeScreen = () => {
                                 ))}
                             </ScrollView>
 
-                            <View className="pt-4 pb-4 rounded-3xl p-2">
+                            <View className="pt-4 pb-4 rounded-3xl p-2"
+                                style={{ backgroundColor: colors.lightPeach }}>
                                 <Text className="text-lg font-bold text-gray-700 mb-4 px-4">
                                     {activeCategory === 'All' ? 'Featured Recipes' : `${activeCategory} Recipes`}
                                 </Text>
@@ -1173,12 +1170,12 @@ export const HomeScreen = () => {
                             </View>
                         </View>
 
-                        {/* MODERN RECENTLY VIEWED */}
+                        {/* RECENTLY VIEWED */}
                         {recentlyViewed.length > 0 && (
                             <View
                                 className="rounded-3xl mx-2 mt-6 mb-4"
                                 style={{
-                                    backgroundColor: 'white',
+                                    backgroundColor: colors.lightPeach,
                                     shadowColor: '#000',
                                     shadowOffset: { width: 0, height: 2 },
                                     shadowOpacity: 0.08,

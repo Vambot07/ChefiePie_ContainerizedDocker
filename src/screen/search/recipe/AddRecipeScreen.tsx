@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Alert, KeyboardAvoidingView, Platform , ActivityIndicator , Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Switch } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { addRecipe } from '../../../controller/recipe';
@@ -12,6 +12,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '~/context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { addRecipeToDay, loadMealPlanWithDetails } from '~/controller/planner';
+import colors from '~/utils/color';
 
 
 
@@ -252,22 +253,27 @@ export default function AddRecipeScreen() {
                     <Text>Saving your recipe...</Text>
                 </View>
             ) : (
-                <ScrollView className="flex-1 bg-gradient-to-b from-orange-50 to-white px-4 pt-2" showsVerticalScrollIndicator={false}>
+                <ScrollView className="flex-1 px-4 pt-2" showsVerticalScrollIndicator={false}
+                    style={{ backgroundColor: colors.secondary }}>
                     <Header
                         title="Create New Recipe"
                         showBackButton={true}
                         onBack={() => navigation.goBack()}
                     />
-                    <View className="bg-white rounded-3xl shadow-lg p-6 mb-8" style={{
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.1,
-                        shadowRadius: 12,
-                        elevation: 8,
-                    }}>
+                    <View className="rounded-3xl shadow-lg p-6 mb-8"
+                        style={{
+                            backgroundColor: colors.secondary,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 12,
+                            elevation: 8,
+                        }}>
                         {/* Image Picker */}
                         <View className="items-center mb-8">
-                            <Text className="text-sm font-semibold text-gray-500 mb-3">RECIPE PHOTO</Text>
+                            <Text className="text-sm font-semibold text-gray-700 mb-3">
+                                Recipe Photo
+                            </Text>
                             <TouchableOpacity
                                 onPress={pickImage}
                                 activeOpacity={0.8}
@@ -366,15 +372,15 @@ export default function AddRecipeScreen() {
                             <View className="flex-row">
                                 <View className="flex-1">
                                     <Text className="text-gray-700 mb-1">Prep Time</Text>
-                                    <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Prep Time" value={prepTime} onChangeText={setPrepTime} />
+                                    <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-white" placeholder="Prep Time" value={prepTime} onChangeText={setPrepTime} />
                                 </View>
                                 <View className="flex-1">
                                     <Text className="text-gray-700 mb-1">Cook Time</Text>
-                                    <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Cook Time" value={cookTime} onChangeText={setCookTime} />
+                                    <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-white" placeholder="Cook Time" value={cookTime} onChangeText={setCookTime} />
                                 </View>
                                 <View className="flex-1">
                                     <Text className="text-gray-700 mb-1">Total Time</Text>
-                                    <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Total Time" value={totalTime} editable={false} />
+                                    <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-200" placeholder="Total Time" value={totalTime} editable={false} />
                                 </View>
                             </View>
                         </View>
@@ -387,7 +393,7 @@ export default function AddRecipeScreen() {
                             </Text>
                             <View className="flex-row space-x-2">
                                 {difficulties.map((d) => (
-                                    <TouchableOpacity key={d} className={`px-3 py-1 rounded-full border ${difficulty === d ? 'bg-[#FFB47B] border-[#FFB47B]' : 'border-gray-300 bg-gray-50'}`} onPress={() => setDifficulty(d)}>
+                                    <TouchableOpacity key={d} className={`px-3 py-1 rounded-full border ${difficulty === d ? 'bg-[#FFB47B] border-[#FFB47B]' : 'border-gray-300 bg-white'}`} onPress={() => setDifficulty(d)}>
                                         <Text className={difficulty === d ? 'text-white' : 'text-gray-700'}>{d}</Text>
                                     </TouchableOpacity>
                                 ))}
@@ -401,8 +407,8 @@ export default function AddRecipeScreen() {
                         </Text>
                         {ingredients.map((ing, idx) => (
                             <View key={idx} className="flex-row space-x-2 mb-2">
-                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 flex-1 bg-gray-50" placeholder="Name" value={ing.name} onChangeText={(v) => handleIngredientChange(idx, 'name', v)} />
-                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 w-14 bg-gray-50" placeholder="Amt" value={ing.amount} onChangeText={(v) => handleIngredientChange(idx, 'amount', v)} />
+                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 flex-1 bg-white" placeholder="Name" value={ing.name} onChangeText={(v) => handleIngredientChange(idx, 'name', v)} />
+                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 w-14 bg-white" placeholder="Amt" value={ing.amount} onChangeText={(v) => handleIngredientChange(idx, 'amount', v)} />
                                 <TouchableOpacity
                                     className="bg-orange-50 border-2 border-orange-200 rounded-xl px-2 py-2 w-24 justify-center items-center"
                                     onPress={() => {
@@ -418,7 +424,7 @@ export default function AddRecipeScreen() {
                                         <Ionicons name="chevron-down" size={12} color="#EA580C" />
                                     </View>
                                 </TouchableOpacity>
-                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 flex-1 bg-gray-50" placeholder="Notes" value={ing.notes} onChangeText={(v) => handleIngredientChange(idx, 'notes', v)} />
+                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 flex-1 bg-white" placeholder="Notes" value={ing.notes} onChangeText={(v) => handleIngredientChange(idx, 'notes', v)} />
                             </View>
                         ))}
                         <TouchableOpacity className="mb-4" onPress={addIngredient}>
@@ -432,9 +438,9 @@ export default function AddRecipeScreen() {
                         </Text>
                         {steps.map((step, idx) => (
                             <View key={idx} className="mb-2">
-                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 mb-1 bg-gray-50" placeholder="Step Title" value={step.title} onChangeText={(v) => handleStepChange(idx, 'title', v)} />
-                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 mb-1 bg-gray-50" placeholder="Details" value={step.details} onChangeText={(v) => handleStepChange(idx, 'details', v)} />
-                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 bg-gray-50" placeholder="Time" value={step.time} onChangeText={(v) => handleStepChange(idx, 'time', v)} />
+                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 mb-1 bg-white" placeholder="Step Title" value={step.title} onChangeText={(v) => handleStepChange(idx, 'title', v)} />
+                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 mb-1 bg-white" placeholder="Details" value={step.details} onChangeText={(v) => handleStepChange(idx, 'details', v)} />
+                                <TextInput className="border border-gray-200 rounded-lg px-2 py-1 bg-white" placeholder="Time" value={step.time} onChangeText={(v) => handleStepChange(idx, 'time', v)} />
                             </View>
                         ))}
                         <TouchableOpacity className="mb-4" onPress={addStep}>
@@ -445,21 +451,21 @@ export default function AddRecipeScreen() {
                         <View className="mb-4">
                             <Text className="font-semibold text-gray-700 mb-1">
                                 <MaterialIcons name="tips-and-updates" size={18} color="#FFB47B" /> Tips and Tricks</Text>
-                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Tips and Tricks" value={tips} onChangeText={setTips} />
+                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-white" placeholder="Tips and Tricks" value={tips} onChangeText={setTips} />
                         </View>
 
                         {/* Serving Suggestions */}
                         <View className="mb-4">
                             <Text className="font-semibold text-gray-700 mb-1">
                                 <MaterialCommunityIcons name="room-service-outline" size={18} color="#FFB47B" /> Serving Suggestions</Text>
-                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Serving Suggestions" value={serving} onChangeText={setServing} />
+                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-white" placeholder="Serving Suggestions" value={serving} onChangeText={setServing} />
                         </View>
 
                         {/* Nutrition Facts */}
                         <View className="mb-4">
                             <Text className="font-semibold text-gray-700 mb-1">
                                 <MaterialCommunityIcons name="nutrition" size={18} color="#FFB47B" /> Nutrition Facts</Text>
-                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Nutrition Facts" value={nutrition} onChangeText={setNutrition} />
+                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-white" placeholder="Nutrition Facts" value={nutrition} onChangeText={setNutrition} />
                         </View>
 
                         {/* YouTube Link */}
@@ -467,7 +473,7 @@ export default function AddRecipeScreen() {
                             <Text className="font-semibold text-gray-700 mb-1 flex-row items-center">
                                 <Ionicons name="logo-youtube" size={18} color="#FFB47B" /> YouTube Link
                             </Text>
-                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="YouTube Video Link" value={youtube} onChangeText={setYoutube} />
+                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-white" placeholder="YouTube Video Link" value={youtube} onChangeText={setYoutube} />
                         </View>
 
                         {/* Source URL */}
@@ -475,7 +481,7 @@ export default function AddRecipeScreen() {
                             <Text className="font-semibold text-gray-700 mb-1 flex-row items-center">
                                 <MaterialCommunityIcons name="link-variant" size={18} color="#FFB47B" /> Source URL
                             </Text>
-                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-gray-50" placeholder="Source URL" value={sourceUrl} onChangeText={setSourceUrl} />
+                            <TextInput className="border border-gray-200 rounded-lg px-3 py-2 bg-white" placeholder="Source URL" value={sourceUrl} onChangeText={setSourceUrl} />
                         </View>
 
                         {/* Privacy Toggle - ADD THIS */}
@@ -564,8 +570,8 @@ export default function AddRecipeScreen() {
                                         <TouchableOpacity
                                             key={unit}
                                             className={`px-4 py-3 rounded-xl border-2 ${isSelected
-                                                    ? 'bg-orange-500 border-orange-500'
-                                                    : 'bg-white border-gray-200'
+                                                ? 'bg-orange-500 border-orange-500'
+                                                : 'bg-white border-gray-200'
                                                 }`}
                                             onPress={() => {
                                                 handleIngredientChange(selectedIngredientIndex, 'unit', unit);

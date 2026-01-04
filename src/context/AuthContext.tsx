@@ -11,6 +11,7 @@ import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import CryptoJS from "crypto-js";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { signOutFromGoogle } from '../utils/socialAuth';
 
 // --- Types ---
 
@@ -284,7 +285,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     const logout = async () => {
         try {
+            // Sign out from Firebase
             await signOut(auth);
+
+            // Sign out from Google (if signed in with Google)
+            await signOutFromGoogle();
 
             // Clear AsyncStorage on logout
             try {
