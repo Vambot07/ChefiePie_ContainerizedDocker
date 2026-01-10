@@ -6,10 +6,11 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchRecipes } from '~/controller/recipe';
 import { fetchRandomRecipes, fetchRecipesByCategory, fetchRecipesByIngredients, HARAM_INGREDIENTS } from '~/api/spoonacular';
-import { detectIngredientsFromImage, formatIngredientsForSearch } from '~/api/roboflow';
 import Header from '../../components/partials/Header';
 import GeminiTestModal from '~/components/modal/GeminiTestModal';
 import RecipeComparisonModal from '~/components/modal/RecipeComparisonModal';
+import CalorieCountModal from '~/components/modal/CalorieCountModal';
+import CameraOptionsModal from '~/components/modal/CameraOptionsModal';
 import { useAuth } from '~/context/AuthContext';
 import colors from '~/utils/color';
 
@@ -107,6 +108,8 @@ export default function SearchScreen() {
     const [showGeminiModal, setShowGeminiModal] = useState(false);
     const [showComparisonModal, setShowComparisonModal] = useState(false);
     const [comparisonData, setComparisonData] = useState<any>(null);
+    const [showCameraOptionsModal, setShowCameraOptionsModal] = useState(false);
+    const [showCalorieModal, setShowCalorieModal] = useState(false);
 
     const [isPrivate, setIsPrivate] = useState<boolean>(false);
 
@@ -662,7 +665,7 @@ export default function SearchScreen() {
                             </TouchableOpacity>
                         ) : (
                             <View className='flex-row gap-4'>
-                                <TouchableOpacity onPress={() => setShowGeminiModal(true)}>
+                                <TouchableOpacity onPress={() => setShowCameraOptionsModal(true)}>
                                     <Entypo name="camera" size={18} color="#FF9966" />
                                 </TouchableOpacity>
                             </View>
@@ -810,6 +813,20 @@ export default function SearchScreen() {
                     missingIngredientsSummary={comparisonData.missingIngredientsSummary}
                 />
             )}
+
+            {/* Camera Options Modal */}
+            <CameraOptionsModal
+                visible={showCameraOptionsModal}
+                onClose={() => setShowCameraOptionsModal(false)}
+                onSuggestRecipe={() => setShowGeminiModal(true)}
+                onCountCalories={() => setShowCalorieModal(true)}
+            />
+
+            {/* Calorie Count Modal */}
+            <CalorieCountModal
+                visible={showCalorieModal}
+                onClose={() => setShowCalorieModal(false)}
+            />
         </View>
     )
 }

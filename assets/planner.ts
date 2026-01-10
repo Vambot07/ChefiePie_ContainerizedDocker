@@ -188,7 +188,7 @@ export const fetchRecipeDetails = async (
 
     return recipes;
   } catch (error) {
-    console.error('❌ Error fetching recipe details:', error);
+    console.log('❌ Error fetching recipe details:', error);
     return [];
   }
 };

@@ -1,18 +1,20 @@
 // components/RecipeSearchModal.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-    View, 
-    Text, 
-    TouchableOpacity, 
-    ScrollView, 
-    ActivityIndicator, 
-    Image, 
-    Alert, 
-    Pressable, 
-    TextInput 
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    ScrollView,
+    ActivityIndicator,
+    Image,
+    Alert,
+    Pressable,
+    TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { searchRecipes } from '~/controller/recipe';
+import { fetchRandomRecipes, HARAM_INGREDIENTS } from '~/api/spoonacular';
+import { useAuth } from '~/context/AuthContext';
 
 interface Recipe {
     id: string;
@@ -31,13 +33,14 @@ interface RecipeSearchModalProps {
     alreadyAddedIds?: string[];
 }
 
-export default function RecipeSearchModal({ 
-    visible, 
-    onClose, 
+export default function RecipeSearchModal({
+    visible,
+    onClose,
     onSelectRecipes,
     selectedRecipeIds = [],
     alreadyAddedIds = []
 }: RecipeSearchModalProps) {
+    const { user } = useAuth();
     const [tab, setTab] = useState<'createdRecipe' | 'apiRecipe' | 'all'>('createdRecipe');
     const [searchQuery, setSearchQuery] = useState('');
     const [myRecipes, setMyRecipes] = useState<Recipe[]>([]);
@@ -66,26 +69,54 @@ export default function RecipeSearchModal({
         }
     };
 
-    // Fetch API recipes
+    // Fetch API recipes with food preference filters
     const fetchDiscoverRecipes = async (forceRandom = false) => {
         try {
             setLoading(true);
+
+            // Prepare user preference filters
+            const filters: {
+                diet?: string[];
+                excludeIngredients?: string[];
+            } = {};
+
+            if (user?.dietaryRestrictions && user.dietaryRestrictions.length > 0) {
+                filters.diet = user.dietaryRestrictions;
+                console.log('🥗 Applying dietary restrictions to recipe search:', user.dietaryRestrictions);
+            }
+
+            // Always exclude haram ingredients + user preferences
+            const userExclusions = user?.ingredientsToAvoid || [];
+            filters.excludeIngredients = [...HARAM_INGREDIENTS, ...userExclusions];
+            console.log('🚫 Excluding ingredients from recipe search:', filters.excludeIngredients);
+
             let results;
-            
+
             if (searchQuery.trim().length > 0 && !forceRandom) {
-                const response = await fetch(
-                    `https://api.spoonacular.com/recipes/complexSearch?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&query=${searchQuery}&number=20&addRecipeInformation=true`
-                );
+                // Build search URL with filters
+                let url = `https://api.spoonacular.com/recipes/complexSearch?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&query=${searchQuery}&number=20&addRecipeInformation=true`;
+
+                // Add dietary restrictions to search
+                if (filters.diet && filters.diet.length > 0) {
+                    const dietParam = filters.diet.map(d => d.toLowerCase()).join(',');
+                    url += `&diet=${encodeURIComponent(dietParam)}`;
+                }
+
+                // Add excluded ingredients to search
+                if (filters.excludeIngredients && filters.excludeIngredients.length > 0) {
+                    const excludeParam = filters.excludeIngredients.join(',');
+                    url += `&excludeIngredients=${encodeURIComponent(excludeParam)}`;
+                }
+
+                const response = await fetch(url);
                 const data = await response.json();
                 results = { results: data.results || [] };
             } else {
-                const response = await fetch(
-                    `https://api.spoonacular.com/recipes/random?apiKey=${process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY}&number=20`
-                );
-                const data = await response.json();
-                results = { results: data.recipes || [] };
+                // Use fetchRandomRecipes for random results (includes all filters)
+                const randomRecipes = await fetchRandomRecipes(20, filters);
+                results = { results: randomRecipes };
             }
-            
+
             const recipesData = results.results || [];
             const transformedRecipes = recipesData.map((recipe: any) => ({
                 id: recipe.id?.toString() || '',
@@ -95,7 +126,7 @@ export default function RecipeSearchModal({
                 difficulty: '',
                 source: 'api' as const
             }));
-            
+
             setDiscoverRecipes(transformedRecipes);
         } catch (error) {
             console.error('Error fetching discover recipes:', error);
@@ -128,7 +159,7 @@ export default function RecipeSearchModal({
                 fetchDiscoverRecipes(false);
             }
         }, 1000);
-        
+
         return () => clearTimeout(timeout);
     }, [searchQuery, tab]);
 
@@ -169,12 +200,12 @@ export default function RecipeSearchModal({
 
     // Handle add recipes
     const handleAddRecipes = async () => {
-        const recipesToAdd = displayedRecipes.filter(recipe => 
+        const recipesToAdd = displayedRecipes.filter(recipe =>
             selectedRecipes.includes(recipe.id)
         );
-        
+
         setAddingRecipes(true); // ✅ Start loading
-        
+
         try {
             await onSelectRecipes(recipesToAdd); // Make it await
             setSelectedRecipes([]);
@@ -198,28 +229,28 @@ export default function RecipeSearchModal({
     if (!visible) return null;
 
     return (
-        <View style={{ 
-            position: 'absolute', 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0, 
-            backgroundColor: 'rgba(0,0,0,0.5)', 
-            justifyContent: 'center', 
+        <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
             alignItems: 'center',
             zIndex: 1000
         }}>
-            <Pressable 
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
-                onPress={onClose} 
+            <Pressable
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                onPress={onClose}
             />
-            
-            <View style={{ 
-                width: '90%', 
-                maxHeight: '80%', 
-                backgroundColor: 'white', 
-                borderRadius: 20, 
-                overflow: 'hidden' 
+
+            <View style={{
+                width: '90%',
+                maxHeight: '80%',
+                backgroundColor: 'white',
+                borderRadius: 20,
+                overflow: 'hidden'
             }}>
                 {/* Header */}
                 <View className="bg-orange-500 px-5 py-4 flex-row justify-between items-center">
@@ -257,7 +288,7 @@ export default function RecipeSearchModal({
                             Created
                         </Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity
                         className={`flex-1 py-2 rounded-xl mx-2 ${tab === 'apiRecipe' ? 'bg-orange-500' : 'bg-gray-100'}`}
                         onPress={() => { setSearchQuery(''); setTab('apiRecipe'); }}
@@ -266,7 +297,7 @@ export default function RecipeSearchModal({
                             Discover
                         </Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity
                         className={`flex-1 py-2 rounded-xl ${tab === 'all' ? 'bg-orange-500' : 'bg-gray-100'}`}
                         onPress={() => { setSearchQuery(''); setTab('all'); }}
@@ -278,7 +309,7 @@ export default function RecipeSearchModal({
                 </View>
 
                 {/* Recipes List */}
-                <ScrollView 
+                <ScrollView
                     ref={scrollViewRef}
                     className="px-5 py-4"
                     showsVerticalScrollIndicator={false}
@@ -302,7 +333,7 @@ export default function RecipeSearchModal({
                         displayedRecipes.map((recipe) => {
                             const isSelected = selectedRecipes.includes(recipe.id);
                             const alreadyInPlan = alreadyAddedIds.includes(recipe.id);
-                            
+
                             return (
                                 <TouchableOpacity
                                     key={recipe.id}
@@ -336,18 +367,17 @@ export default function RecipeSearchModal({
                                             )}
                                         </View>
                                     </View>
-                                    
+
                                     {alreadyInPlan ? (
                                         <View className="w-6 h-6 rounded-full bg-green-500 items-center justify-center">
                                             <Ionicons name="checkmark" size={16} color="white" />
                                         </View>
                                     ) : (
                                         <View
-                                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-                                                isSelected
+                                            className={`w-6 h-6 rounded-full border-2 items-center justify-center ${isSelected
                                                     ? 'border-orange-500 bg-orange-500'
                                                     : 'border-gray-300'
-                                            }`}
+                                                }`}
                                         >
                                             {isSelected && (
                                                 <Ionicons name="checkmark" size={16} color="white" />
@@ -362,30 +392,30 @@ export default function RecipeSearchModal({
 
                 {/* Footer with Add Button */}
                 {!loading && displayedRecipes.length > 0 && (
-                <View className="px-5 py-4 border-t border-gray-200">
-                    <TouchableOpacity
-                        style={{
-                            backgroundColor: selectedRecipes.length > 0 && !addingRecipes ? '#F97316' : '#D1D5DB',
-                        }}
-                        className="py-3 rounded-xl"
-                        onPress={handleAddRecipes}
-                        disabled={selectedRecipes.length === 0 || addingRecipes} // ✅ Disable when adding
-                    >
-                        {addingRecipes ? ( // ✅ Show loading indicator
-                            <View className="flex-row items-center justify-center">
-                                <ActivityIndicator size="small" color="white" />
-                                <Text className="text-white text-center font-bold ml-2">
-                                    Adding recipes...
+                    <View className="px-5 py-4 border-t border-gray-200">
+                        <TouchableOpacity
+                            style={{
+                                backgroundColor: selectedRecipes.length > 0 && !addingRecipes ? '#F97316' : '#D1D5DB',
+                            }}
+                            className="py-3 rounded-xl"
+                            onPress={handleAddRecipes}
+                            disabled={selectedRecipes.length === 0 || addingRecipes} // ✅ Disable when adding
+                        >
+                            {addingRecipes ? ( // ✅ Show loading indicator
+                                <View className="flex-row items-center justify-center">
+                                    <ActivityIndicator size="small" color="white" />
+                                    <Text className="text-white text-center font-bold ml-2">
+                                        Adding recipes...
+                                    </Text>
+                                </View>
+                            ) : (
+                                <Text className="text-white text-center font-bold">
+                                    Add {selectedRecipes.length > 0 ? `(${selectedRecipes.length})` : ''} Recipe{selectedRecipes.length !== 1 ? 's' : ''}
                                 </Text>
-                            </View>
-                        ) : (
-                            <Text className="text-white text-center font-bold">
-                                Add {selectedRecipes.length > 0 ? `(${selectedRecipes.length})` : ''} Recipe{selectedRecipes.length !== 1 ? 's' : ''}
-                            </Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
-            )}
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
         </View>
     );

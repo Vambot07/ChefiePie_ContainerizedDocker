@@ -178,16 +178,17 @@ export default function PlannerScreen() {
         const CACHE_DURATION = 180000;
         const now = Date.now();
 
-        // Check if we have valid cache for this week
-        const weekCache = mealPlanCache[weekOffset];
-        if (!forceRefresh && weekCache && (now - weekCache.timestamp) < CACHE_DURATION) {
+        // Check cache directly without setState wrapper
+        const currentCache = mealPlanCache[weekOffset];
+        if (!forceRefresh && currentCache && (now - currentCache.timestamp) < CACHE_DURATION) {
             console.log(`✅ Using cached meal plan for week ${weekOffset}`);
-            setRecipesByDay(weekCache.data.recipesByDay);
-            setPlannedWeeks(weekCache.data.plannedWeeks);
+            setRecipesByDay(currentCache.data.recipesByDay);
+            setPlannedWeeks(currentCache.data.plannedWeeks);
             setLoadingWeek(false);
             return;
         }
 
+        // Load fresh data
         setLoadingWeek(true);
         try {
             const savedRecipes = await loadMealPlanWithDetails(userId, weekOffset);
@@ -202,7 +203,7 @@ export default function PlannerScreen() {
                     [weekOffset]: {
                         data: {
                             recipesByDay: savedRecipes,
-                            plannedWeeks: { ...plannedWeeks, [weekOffset]: true }
+                            plannedWeeks: { [weekOffset]: true }
                         },
                         timestamp: now
                     }
@@ -242,34 +243,34 @@ export default function PlannerScreen() {
         } finally {
             setLoadingWeek(false);
         }
-    }, [userId, weekOffset, mealPlanCache, plannedWeeks]);
-
-    // Cleanup weeks that have completely passed
-    const runWeeklyCleanup = useCallback(async () => {
-        if (!userId) return;
-
-        try {
-            console.log('🗑️ Running weekly cleanup...');
-            const result = await cleanupPastWeeks(userId);
-
-            if (result.success && result.deletedCount && result.deletedCount > 0) {
-                console.log(`✅ Cleaned up ${result.deletedCount} past week(s)`);
-                // Force refresh after cleanup
-                loadSavedPlan(true);
-            }
-        } catch (error) {
-            console.error('❌ Error during weekly cleanup:', error);
-        }
-    }, [userId, loadSavedPlan]);
+    }, [userId, weekOffset, mealPlanCache]);
 
     useEffect(() => {
         loadSavedPlan();
-    }, [weekOffset, userId]);
+    }, [weekOffset, userId, loadSavedPlan]);
 
-    // Run weekly cleanup when screen first loads
+    // Run weekly cleanup ONCE on mount only
     useEffect(() => {
-        runWeeklyCleanup();
-    }, [runWeeklyCleanup]);
+        if (!userId) return;
+
+        const runCleanup = async () => {
+            try {
+                console.log('🗑️ Running weekly cleanup on mount...');
+                const result = await cleanupPastWeeks(userId);
+
+                if (result.success && result.deletedCount && result.deletedCount > 0) {
+                    console.log(`✅ Cleaned up ${result.deletedCount} past week(s)`);
+                    // Force refresh after cleanup
+                    loadSavedPlan(true);
+                }
+            } catch (error) {
+                console.error('❌ Error during weekly cleanup:', error);
+            }
+        };
+
+        runCleanup();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Empty deps - runs only on mount
 
     // OPTIMIZED: Use cache when screen is focused
     useFocusEffect(
@@ -279,29 +280,17 @@ export default function PlannerScreen() {
         }, [loadSavedPlan])
     );
 
-    useEffect(() => {
-        const loadSavedRecipes = async () => {
-            try {
-                const savedRecipes = await getSavedRecipes();
-                setSavedRecipesToShow(savedRecipes);
-                console.log('✅ Loaded saved recipes:', savedRecipes.length);
-            } catch (error) {
-                console.error('❌ Error loading saved recipes:', error);
-            }
-        };
-        loadSavedRecipes();
-    }, []);
-
+    // Load saved recipes when screen is focused (removes duplicate useEffect)
     useFocusEffect(
         useCallback(() => {
             const loadSavedRecipes = async () => {
-                console.log('🔄 Screen focused - reloading saved recipes');
+                console.log('🔄 Screen focused - loading saved recipes');
                 try {
                     const savedRecipes = await getSavedRecipes();
                     setSavedRecipesToShow(savedRecipes);
-                    console.log('✅ Reloaded saved recipes:', savedRecipes.length);
+                    console.log('✅ Loaded saved recipes:', savedRecipes.length);
                 } catch (error) {
-                    console.error('❌ Error reloading saved recipes:', error);
+                    console.error('❌ Error loading saved recipes:', error);
                 }
             };
             loadSavedRecipes();
@@ -992,49 +981,59 @@ export default function PlannerScreen() {
                         )}
                     </View>
 
-                    {/* Interactive Delete Mode Toggle - Below Week Selector */}
+                    {/* Compact Delete Mode Toggle - Below Week Selector */}
                     {hasAnyRecipes && (
-                        <View className="mx-6 mt-4">
-                            <TouchableOpacity
-                                onPress={toggleDeleteMode}
-                                activeOpacity={0.7}
-                                style={{
-                                    backgroundColor: deleteMode ? '#FEE2E2' : '#FFFFFF',
-                                    borderWidth: 2,
-                                    borderColor: deleteMode ? '#EF4444' : '#E5E7EB',
-                                    shadowColor: deleteMode ? '#EF4444' : '#000',
-                                    shadowOffset: { width: 0, height: 2 },
-                                    shadowOpacity: deleteMode ? 0.3 : 0.1,
-                                    shadowRadius: 4,
-                                    elevation: deleteMode ? 4 : 2,
-                                }}
-                                className="flex-row items-center justify-center py-3 px-4 rounded-xl"
-                            >
-                                <View className={`mr-3 ${deleteMode ? 'bg-red-500' : 'bg-gray-100'} w-10 h-10 rounded-full items-center justify-center`}>
-                                    <Ionicons
-                                        name={deleteMode ? "close-circle" : "trash-outline"}
-                                        size={22}
-                                        color={deleteMode ? "white" : "#EF4444"}
-                                    />
-                                </View>
-                                <View className="flex-1">
-                                    <Text className={`font-bold text-base ${deleteMode ? 'text-red-600' : 'text-gray-800'}`}>
-                                        {deleteMode ? 'Cancel Delete Mode' : 'Delete Recipes'}
+                        <View className="items-end mx-6 mt-3">
+                        <TouchableOpacity
+                            onPress={toggleDeleteMode}
+                            activeOpacity={0.7}
+                            style={{
+                                backgroundColor: deleteMode ? '#FEE2E2' : '#F9FAFB',
+                                borderWidth: 1,
+                                borderColor: deleteMode ? '#FECACA' : '#E5E7EB',
+                            }}
+                            className="flex-row items-center justify-between py-2 px-3 rounded-lg"
+                        >
+                            <View className="flex-row items-center">
+                                <Ionicons
+                                    name={deleteMode ? "close-circle" : "trash-outline"}
+                                    size={18}
+                                    color={deleteMode ? "#EF4444" : "#9CA3AF"}
+                                />
+                    
+                                <View className="ml-2">
+                                    <Text
+                                        className={`font-medium text-sm ${
+                                            deleteMode ? 'text-red-600' : 'text-gray-600'
+                                        }`}
+                                    >
+                                        {deleteMode ? 'Cancel Delete' : 'Delete Recipes'}
                                     </Text>
-                                    <Text className={`text-xs mt-0.5 ${deleteMode ? 'text-red-500' : 'text-gray-500'}`}>
-                                        {deleteMode
-                                            ? `${getSelectedRecipesCount()} recipe${getSelectedRecipesCount() !== 1 ? 's' : ''} selected`
-                                            : 'Select multiple recipes to remove'
-                                        }
+
+                                    {deleteMode ? 
+                                    (
+                                        <Text className="text-xs text-red-400 mt-1">
+                                            Tap recipes 
+                                        </Text>
+                                    ) :
+                                    <Text className="text-xs text-gray-400">
+                                        Multiple Select
+                                    </Text>
+                                    }
+                                </View>
+                            </View>
+
+                    
+                            {deleteMode && getSelectedRecipesCount() > 0 && (
+                                <View className="bg-red-500 px-2 py-0.5 rounded-full">
+                                    <Text className="text-white font-bold text-xs">
+                                        {getSelectedRecipesCount()}
                                     </Text>
                                 </View>
-                                {deleteMode && (
-                                    <View className="bg-red-500 px-3 py-1 rounded-full">
-                                        <Text className="text-white font-bold text-xs">ACTIVE</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                    
                     )}
 
                     <View className="px-6 mt-2">
@@ -1055,20 +1054,63 @@ export default function PlannerScreen() {
                                             {isSelected && <View className="ml-2 bg-orange-500 rounded-full w-2 h-2" />}
                                         </View>
 
-                                        <View
-                                            ref={(ref) => { if (ref) buttonRefs.current[day] = ref; }}
-                                            collapsable={false}
-                                        >
+                                        {deleteMode && recipesByDay[index]?.length > 0 ? (
                                             <TouchableOpacity
-                                                className="flex-row items-center px-3 py-2 rounded-lg"
-                                                style={{ backgroundColor: colors.white }}
-                                                disabled={!isSelected && selectedDays.length > 0}
-                                                onPress={() => handleAddPress(day, index, buttonRefs.current[day])}
+                                                onPress={() => {
+                                                    const allRecipeIds = recipesByDay[index].map(r => r.id);
+                                                    const allSelected = allRecipeIds.every(id =>
+                                                        selectedRecipesToDelete[index]?.includes(id)
+                                                    );
+
+                                                    setSelectedRecipesToDelete(prev => {
+                                                        const updated = { ...prev };
+                                                        if (allSelected) {
+                                                            delete updated[index]; // Deselect all
+                                                        } else {
+                                                            updated[index] = allRecipeIds; // Select all
+                                                        }
+                                                        return updated;
+                                                    });
+                                                }}
+                                                className="flex-row items-center px-3 py-2 rounded-lg border-2"
+                                                style={{
+                                                    backgroundColor: selectedRecipesToDelete[index]?.length > 0
+                                                        ? '#FEE2E2'
+                                                        : 'white',
+                                                    borderColor: '#FECACA'
+                                                }}
                                             >
-                                                <Feather name="plus" size={16} color="black" />
-                                                <Text className="ml-2 font-bold text-sm">ADD</Text>
+                                                <Ionicons
+                                                    name={selectedRecipesToDelete[index]?.length === recipesByDay[index]?.length
+                                                        ? "checkbox"
+                                                        : "square-outline"
+                                                    }
+                                                    size={18}
+                                                    color="#EF4444"
+                                                />
+                                                <Text className="ml-1 text-red-600 font-medium text-sm">
+                                                    {selectedRecipesToDelete[index]?.length === recipesByDay[index]?.length
+                                                        ? 'Deselect'
+                                                        : 'Select All'
+                                                    }
+                                                </Text>
                                             </TouchableOpacity>
-                                        </View>
+                                        ) : (
+                                            <View
+                                                ref={(ref) => { if (ref) buttonRefs.current[day] = ref; }}
+                                                collapsable={false}
+                                            >
+                                                <TouchableOpacity
+                                                    className="flex-row items-center px-3 py-2 rounded-lg"
+                                                    style={{ backgroundColor: colors.white }}
+                                                    disabled={!isSelected && selectedDays.length > 0}
+                                                    onPress={() => handleAddPress(day, index, buttonRefs.current[day])}
+                                                >
+                                                    <Feather name="plus" size={16} color="black" />
+                                                    <Text className="ml-2 font-bold text-sm">ADD</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
                                     </View>
 
                                     {loadingRecipes && isSelected ? (
@@ -1301,44 +1343,65 @@ export default function PlannerScreen() {
                 alreadyAddedIds={selectedDayIndex !== null ? (recipesByDay[selectedDayIndex] || []).map(r => r.id) : []}
             />
 
-            {deleteMode && (
-                <View style={{
-                    position: 'absolute',
-                    bottom: 20,
-                    left: 20,
-                    right: 20,
-                    backgroundColor: 'white',
-                    borderRadius: 16,
-                    padding: 16,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    elevation: 8,
-                }}>
+            {/* Floating Action Button (FAB) for Delete Actions */}
+            {deleteMode && getSelectedRecipesCount() > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 24,
+                        left: 24,
+                        right: 24,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 20,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 8,
+                        elevation: 8,
+                        padding: 16,
+                    }}
+                >
                     <View className="flex-row items-center justify-between mb-3">
-                        <Text className="text-gray-700 font-semibold">
-                            {getSelectedRecipesCount()} recipe{getSelectedRecipesCount() !== 1 ? 's' : ''} selected
-                        </Text>
+                        <View className="flex-row items-center">
+                            <View className="w-10 h-10 bg-red-100 rounded-full items-center justify-center mr-3">
+                                <Text className="text-red-600 font-bold text-lg">
+                                    {getSelectedRecipesCount()}
+                                </Text>
+                            </View>
+                            <View>
+                                <Text className="font-bold text-gray-800">
+                                    {getSelectedRecipesCount()} Recipe{getSelectedRecipesCount() !== 1 ? 's' : ''}
+                                </Text>
+                                <Text className="text-xs text-gray-500">Ready to delete</Text>
+                            </View>
+                        </View>
+
                         <TouchableOpacity
                             onPress={() => setSelectedRecipesToDelete({})}
-                            disabled={getSelectedRecipesCount() === 0}
+                            className="px-3 py-1 bg-gray-100 rounded-full"
                         >
-                            <Text className="text-blue-500 font-medium">Clear All</Text>
+                            <Text className="text-gray-600 font-medium text-sm">Clear</Text>
                         </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                        onPress={handleBulkDelete}
-                        disabled={getSelectedRecipesCount() === 0}
-                        style={{
-                            backgroundColor: getSelectedRecipesCount() > 0 ? '#EF4444' : '#D1D5DB',
-                        }}
-                        className="py-3 rounded-xl"
-                    >
-                        <Text className="text-white text-center font-bold text-base">
-                            Delete Selected
-                        </Text>
-                    </TouchableOpacity>
+
+                    <View className="flex-row gap-2" style={{ gap: 8 }}>
+                        <TouchableOpacity
+                            onPress={toggleDeleteMode}
+                            className="flex-1 py-3 bg-gray-100 rounded-xl"
+                        >
+                            <Text className="text-gray-700 text-center font-bold">Cancel</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={handleBulkDelete}
+                            className="flex-1 py-3 bg-red-500 rounded-xl"
+                        >
+                            <View className="flex-row items-center justify-center">
+                                <Ionicons name="trash" size={18} color="white" />
+                                <Text className="text-white text-center font-bold ml-1">Delete</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
         </View>

@@ -90,7 +90,7 @@ export const fetchRecipesByCategory = async (cuisine: string = 'All', number: nu
       return { results: randomSubset };
     }
   } catch (error) {
-    console.error('Error fetching recipes:', error);
+    console.log('Error fetching recipes:', error);
     throw error;
   }
 };
@@ -132,7 +132,7 @@ export const fetchRecipesByIngredients = async (
 
     return shuffledResults;
   } catch (error) {
-    console.error('Error fetching recipes by ingredients:', error);
+    console.log('Error fetching recipes by ingredients:', error);
     throw error;
   }
 };
@@ -151,7 +151,7 @@ export const fetchRecipeApiById = async (recipeId: string | number) => {
     // Return the recipe data
     return response.data;
   } catch (error) {
-    console.error(`Error fetching recipe by ID (${recipeId}):`, error);
+    console.log(`Error fetching recipe by ID (${recipeId}):`, error);
     throw error;
   }
 };
@@ -208,7 +208,7 @@ export const fetchRandomRecipes = async (
 
     return response.data.recipes || [];
   } catch (error) {
-    console.error('Error fetching random recipes:', error);
+    console.log('Error fetching random recipes:', error);
     throw error;
   }
 };
@@ -225,7 +225,7 @@ export const fetchRecipeById = async (recipeId: string) => {
     console.log('✅ Recipe fetched by ID:', data.title);
     return data;
   } catch (error) {
-    console.error('❌ Error fetching recipe by ID:', error);
+    console.log('❌ Error fetching recipe by ID:', error);
     return null;
   }
 };

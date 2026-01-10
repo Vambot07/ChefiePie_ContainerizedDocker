@@ -1,6 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import colors from '~/utils/color';
 
 
 export default function LandingScreen() {
@@ -46,7 +47,7 @@ export default function LandingScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFE0C4',
+        backgroundColor: colors.secondary,
     },
     content: {
         flex: 1,

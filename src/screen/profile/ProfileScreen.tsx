@@ -236,11 +236,6 @@ export default function ProfileScreen() {
         }, [userId, currentUserId])
     );
 
-    // Scroll to top when tab changes
-    useEffect(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    }, [tab]);
-
     // Handle opening modal
     const handleOpenImageViewer = () => {
         if (profileImage) {
@@ -276,12 +271,11 @@ export default function ProfileScreen() {
                         onRightAction={handleSetting}
                     />
 
-                    {/* Main Content with Sticky Tabs and Pull-to-Refresh */}
+                    {/* Main Content with Single Scroll */}
                     <View className="flex-1">
                         <ScrollView
                             ref={scrollViewRef}
                             showsVerticalScrollIndicator={false}
-                            stickyHeaderIndices={[1]}
                             refreshControl={
                                 <RefreshControl
                                     refreshing={refreshing}
@@ -292,8 +286,9 @@ export default function ProfileScreen() {
                                     titleColor="#666" // iOS
                                 />
                             }
+                            contentContainerStyle={{ paddingBottom: 100 }}
                         >
-                            {/* Profile Header Section - This will scroll away */}
+                            {/* Profile Header Section */}
                             <View>
                                 {/* Profile Card with Solid Background */}
                                 <View
@@ -444,16 +439,9 @@ export default function ProfileScreen() {
                                 )}
                             </View>
 
-                            {/* Sticky Tabs Section */}
-                            <View
-                                className="pt-6 pb-2"
-                                style={{
-                                    zIndex: 100,
-                                    elevation: 10,
-                                    backgroundColor: colors.secondary
-                                }}
-                            >
-                                <View className="flex-row justify-around mx-4" style={{ gap: 8 }}>
+                            {/* Inline Tabs Section - Part of scroll content */}
+                            <View className="pt-6 pb-4 px-4">
+                                <View className="flex-row justify-around" style={{ gap: 8 }}>
                                     <TouchableOpacity
                                         className="flex-1 py-3 rounded-2xl relative"
                                         style={{
@@ -548,8 +536,8 @@ export default function ProfileScreen() {
                                 </View>
                             </View>
 
-                            {/* Recipe Cards Section - This scrolls under sticky tabs */}
-                            <View className="px-4" style={{ minHeight: 600 }}>
+                            {/* Recipe Cards Section */}
+                            <View className="px-4">
                                 {isLoading ? (
                                     <View className="items-center justify-center py-20">
                                         <ActivityIndicator size="large" color="#FF914D" />

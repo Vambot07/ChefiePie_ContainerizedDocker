@@ -240,7 +240,7 @@ const SpoonacularChatbot = () => {
                 viewMode: 'discover'
             });
         } catch (error) {
-            console.error('❌ Error fetching recipe details:', error);
+            console.log('❌ Error fetching recipe details:', error);
 
             Alert.alert(
                 'Error',

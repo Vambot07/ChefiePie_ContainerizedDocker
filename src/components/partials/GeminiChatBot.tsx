@@ -66,15 +66,6 @@ const GeminiChatbot = () => {
     const [loading, setLoading] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // Wait for fonts to load
-    if (!fontsLoaded) {
-        return (
-            <View className="flex-1 items-center justify-center bg-[#FF9966]">
-                <ActivityIndicator size="large" color="white" />
-            </View>
-        );
-    }
-
     const sendMessage = async () => {
         if (!inputText.trim() || loading) return;
 
@@ -114,7 +105,7 @@ const GeminiChatbot = () => {
                 throw new Error(response.error || 'Failed to get response');
             }
         } catch (error) {
-            console.error('Error sending message:', error);
+            console.log('Error sending message:', error);
 
             const errorMessage: Message = {
                 id: (Date.now() + 1).toString(),

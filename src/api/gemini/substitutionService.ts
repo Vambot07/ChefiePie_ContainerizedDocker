@@ -14,7 +14,7 @@ export interface SubstitutionResult {
     ingredient: string;
     isEssential: boolean;
     substitutions: string[];
-    impact?: string; // Impact if no substitution
+    impact?: string; 
 }
 
 const MODELS_TO_TRY = [
@@ -121,12 +121,12 @@ export const analyzeIngredientSubstitutions = async (
         }
 
         // All models failed
-        console.error('❌ All models failed. Last error:', lastError);
-        console.error(`Tried ${MODELS_TO_TRY.length} different models`);
+        console.log('❌ All models failed. Last error:', lastError);
+        console.log(`Tried ${MODELS_TO_TRY.length} different models`);
         throw new Error(`Failed to analyze substitutions: ${lastError?.message || 'Unknown error'}`);
 
     } catch (error: any) {
-        console.error('❌ Substitution analysis error:', error);
+        console.log('❌ Substitution analysis error:', error);
         throw new Error('Failed to analyze ingredient substitutions. Please try again.');
     }
 };

@@ -13,6 +13,7 @@ import { useAuth } from '~/context/AuthContext';
 import { Picker } from '@react-native-picker/picker';
 import { addRecipeToDay, loadMealPlanWithDetails } from '~/controller/planner';
 import colors from '~/utils/color';
+import ImagePickerModal from '~/components/modal/ImagePickerModal';
 
 
 
@@ -56,6 +57,7 @@ export default function AddRecipeScreen() {
     const [showUnitModal, setShowUnitModal] = useState(false);
     const [selectedIngredientIndex, setSelectedIngredientIndex] = useState(0);
     const [isPrivate, setIsPrivate] = useState(false);
+    const [showImagePicker, setShowImagePicker] = useState(false);
 
     const { viewMode, selectedDayIndex, weekOffset } = (route.params as any) || { viewMode: 'search' };
     const userId = user?.uid;
@@ -98,19 +100,64 @@ export default function AddRecipeScreen() {
 
     // Pick image from gallery
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            quality: 0.8,
-            aspect: [4, 3],
-        });
+        try {
+            console.log('🖼️ Opening gallery...');
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            setImage(result.assets[0].uri);
-            console.log('✅ Image selected:', result.assets[0].uri);
-            console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
+            // Request permission
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Gallery permission is required');
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                quality: 0.8,
+                aspect: [4, 3],
+                legacy: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setImage(result.assets[0].uri);
+                console.log('✅ Image selected:', result.assets[0].uri);
+                console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
+            }
+        } catch (error: any) {
+            console.error('❌ Gallery error:', error);
+            Alert.alert('Gallery Error', 'Failed to open gallery: ' + (error.message || 'Unknown error'));
         }
     };
+
+    // Take photo with camera
+    const takePhoto = async () => {
+        try {
+            console.log('📷 Opening camera...');
+
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Camera permission is required');
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                quality: 0.8,
+                aspect: [4, 3],
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setImage(result.assets[0].uri);
+                console.log('✅ Photo captured:', result.assets[0].uri);
+                console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
+            }
+        } catch (error: any) {
+            console.error('❌ Camera error:', error);
+            Alert.alert('Camera Error', 'Failed to open camera: ' + (error.message || 'Unknown error'));
+        }
+    };
+
 
     // Add new ingredient
     const addIngredient = () => setIngredients([...ingredients, { name: '', amount: '', unit: '', notes: '' }]);
@@ -275,7 +322,7 @@ export default function AddRecipeScreen() {
                                 Recipe Photo
                             </Text>
                             <TouchableOpacity
-                                onPress={pickImage}
+                                onPress={() => setShowImagePicker(true)}
                                 activeOpacity={0.8}
                                 className="relative"
                                 style={{
@@ -608,6 +655,16 @@ export default function AddRecipeScreen() {
                     </View>
                 </View>
             )}
+
+            {/* Image Picker Modal */}
+            <ImagePickerModal
+                visible={showImagePicker}
+                onClose={() => setShowImagePicker(false)}
+                onCamera={takePhoto}
+                onGallery={pickImage}
+                title="Choose Recipe Photo"
+                subtitle="Select where to get your recipe photo from"
+            />
         </KeyboardAvoidingView >
     );
 }

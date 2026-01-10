@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileToFirebase, updateProfileImage } from '~/utils/uploadImage';
 import Header from '~/components/partials/Header';
 import EditModal from '~/components/modal/EditModal';
+import ImagePickerModal from '~/components/modal/ImagePickerModal';
 
 const EditProfileScreen = () => {
     const navigation = useNavigation();
@@ -42,6 +43,7 @@ const EditProfileScreen = () => {
     const [showEditInstagram, setShowEditInstagram] = useState(false);
     const [showEditYoutube, setShowEditYoutube] = useState(false);
     const [showEditTiktok, setShowEditTiktok] = useState(false);
+    const [showImagePicker, setShowImagePicker] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const maxBioLength = 255;
@@ -49,7 +51,7 @@ const EditProfileScreen = () => {
     // Pick Image from Gallery
     const pickImage = async () => {
         try {
-            console.log('📸 Opening image picker...');
+            console.log('🖼️ Opening gallery...');
 
             // Request permission
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -61,27 +63,64 @@ const EditProfileScreen = () => {
 
             // Launch image picker
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
+                mediaTypes: 'images',
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.7,
                 base64: false,
                 exif: false,
+                legacy: true,
             });
 
-            console.log('📸 Image picker result:', result);
+            console.log('Gallery result:', result.canceled ? 'Cancelled' : 'Success');
 
             if (!result.canceled && result.assets[0]) {
                 console.log('✅ Image selected:', result.assets[0].uri);
                 setSelectedImage(result.assets[0].uri);
             } else {
-                console.log('❌ Image picker cancelled');
+                console.log('❌ Gallery cancelled');
             }
-        } catch (error) {
-            console.error('❌ Error picking image:', error);
-            Alert.alert('Error', 'Failed to pick image. Please try again.');
+        } catch (error: any) {
+            console.error('❌ Gallery error:', error);
+            Alert.alert('Gallery Error', 'Failed to open gallery: ' + (error.message || 'Unknown error'));
         }
     };
+
+    // Take Photo with Camera
+    const takePhoto = async () => {
+        try {
+            console.log('📷 Opening camera...');
+
+            // Request permission
+            const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+            if (permissionResult.granted === false) {
+                Alert.alert('Permission Required', 'You need to allow camera access to take a profile picture.');
+                return;
+            }
+
+            // Launch camera
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.7,
+            });
+
+            console.log('Camera result:', result.canceled ? 'Cancelled' : 'Success');
+
+            if (!result.canceled && result.assets[0]) {
+                console.log('✅ Photo captured:', result.assets[0].uri);
+                setSelectedImage(result.assets[0].uri);
+            } else {
+                console.log('❌ Camera cancelled');
+            }
+        } catch (error: any) {
+            console.error('❌ Camera error:', error);
+            Alert.alert('Camera Error', 'Failed to open camera: ' + (error.message || 'Unknown error'));
+        }
+    };
+
 
     // Validate Social Media Links
     const isValidSocialLink = (link: string, platform: 'instagram' | 'youtube' | 'tiktok'): boolean => {
@@ -294,7 +333,7 @@ const EditProfileScreen = () => {
                     <View className="px-4 py-6">
                         {/* Profile Picture Section */}
                         <View className="items-center mb-8">
-                            <TouchableOpacity onPress={pickImage} disabled={uploading}>
+                            <TouchableOpacity onPress={() => setShowImagePicker(true)} disabled={uploading}>
                                 <View className="relative">
                                     <View
                                         className="w-32 h-32 rounded-full items-center justify-center"
@@ -573,6 +612,16 @@ const EditProfileScreen = () => {
                         </Text>
                     </View>
                 </EditModal>
+
+                {/* Image Picker Modal */}
+                <ImagePickerModal
+                    visible={showImagePicker}
+                    onClose={() => setShowImagePicker(false)}
+                    onCamera={takePhoto}
+                    onGallery={pickImage}
+                    title="Change Profile Photo"
+                    subtitle="Select where to get your profile photo from"
+                />
             </KeyboardAvoidingView>
 
             {/* Save Button */}

@@ -159,6 +159,26 @@ export default function RecentlyViewedScreen() {
         );
     };
 
+    // Helper function to remove a recipe from recently viewed
+    const removeFromRecentlyViewed = async (recipeId: string) => {
+        try {
+            const storageKey = `recentlyViewed_${userId}`;
+            const stored = await AsyncStorage.getItem(storageKey);
+
+            if (stored) {
+                const recentRecipes: Recipe[] = JSON.parse(stored);
+                const updated = recentRecipes.filter(r => r.id !== recipeId);
+                await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
+
+                // Update local state to remove from UI immediately
+                setRecentlyViewed(updated);
+                console.log(`✅ Removed recipe ${recipeId} from recently viewed`);
+            }
+        } catch (error) {
+            console.error('❌ Error removing from recently viewed:', error);
+        }
+    };
+
     const handleRecipePress = async (recipe: Recipe) => {
         console.log('Fetching full details for recipe:', recipe.id, 'Source:', recipe.source);
 
@@ -171,7 +191,18 @@ export default function RecentlyViewedScreen() {
                 const fullRecipe = await getRecipeById(recipe.id);
 
                 if (!fullRecipe) {
-                    throw new Error('Recipe not found');
+                    // Auto-cleanup: Remove this deleted recipe from recently viewed
+                    console.log(`🧹 Recipe ${recipe.id} was deleted, removing from recently viewed`);
+                    await removeFromRecentlyViewed(recipe.id);
+
+                    // Show user-friendly message
+                    Alert.alert(
+                        'Recipe Unavailable',
+                        'This recipe has been deleted by its creator.',
+                        [{ text: 'OK' }]
+                    );
+                    setLoadingRecipe(false);
+                    return; // Don't navigate
                 }
 
                 console.log('✅ Created recipe loaded:', fullRecipe.title);

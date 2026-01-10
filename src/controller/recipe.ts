@@ -317,16 +317,8 @@ export const deleteRecipe = async (
       return { success: false, msg: 'User not authenticated' };
     }
 
-    // Step 1: Clean up saved recipe references
-    console.log('🧹 Step 1: Cleaning up saved recipe references...');
-    const cleanupResult = await removeFromAllSavedRecipes(recipeId);
-
-    if (!cleanupResult.success) {
-      console.warn('⚠️ Cleanup had issues, but continuing with deletion');
-    }
-
-    // Step 2: Verify recipe exists and check ownership
-    console.log('🔍 Step 2: Verifying recipe ownership...');
+    // Step 1: Verify recipe exists and check ownership
+    console.log('🔍 Step 1: Verifying recipe ownership...');
     const recipeRef = doc(db, 'recipes', recipeId);
     const recipeDoc = await getDoc(recipeRef);
 
@@ -340,20 +332,35 @@ export const deleteRecipe = async (
       return { success: false, msg: 'You can only delete your own recipes' };
     }
 
+    // Step 2: Clean up YOUR OWN saved reference only (if you saved your own recipe)
+    console.log('🧹 Step 2: Cleaning up your saved reference...');
+    try {
+      const savedRef = collection(db, 'saved');
+      const q = query(
+        savedRef,
+        where('recipeId', '==', recipeId.toString()),
+        where('userId', '==', user.uid)
+      );
+      const snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        await deleteDoc(snapshot.docs[0].ref);
+        console.log('✅ Removed your saved reference');
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not remove saved reference, continuing with deletion');
+    }
+
     // Step 3: Delete the recipe
     console.log('🗑️ Step 3: Deleting the recipe...');
     await deleteDoc(recipeRef);
 
-    const message = cleanupResult.count > 0
-      ? `Recipe deleted successfully! Removed from ${cleanupResult.count} saved collection(s).`
-      : 'Recipe deleted successfully!';
-
-    console.log('✅', message);
+    console.log('✅ Recipe deleted successfully!');
 
     return {
       success: true,
-      msg: message,
-      count: cleanupResult.count
+      msg: 'Recipe deleted successfully!',
+      count: 0
     };
 
   } catch (error: any) {
@@ -492,7 +499,7 @@ export const isRecipeSaved = async (recipeId: string): Promise<boolean> => {
   }
 };
 
-export const getRecipeById = async (recipeId: string): Promise<Recipe> => {
+export const getRecipeById = async (recipeId: string): Promise<Recipe | null> => {
   try {
     const currentUserId = auth.currentUser?.uid;
     const recipeRef = doc(db, 'recipes', recipeId);
@@ -527,30 +534,42 @@ export const getRecipeById = async (recipeId: string): Promise<Recipe> => {
       }
     }
 
-    // Try API if not found in Firestore
-    console.log(`Recipe ID ${recipeId} not found in Firestore, trying API...`);
-    const apiRecipe = await fetchRecipeApiById(recipeId);
+    // Recipe not found in Firestore
+    console.log(`⚠️ Recipe ${recipeId} not found in Firestore`);
 
-    if (apiRecipe) {
-      return {
-        id: apiRecipe.id,
-        title: apiRecipe.title,
-        image: apiRecipe.image,
-        intro: apiRecipe.summary,
-        totalTime: apiRecipe.readyInMinutes ? `${apiRecipe.readyInMinutes}` : 'N/A',
-        ingredients: apiRecipe.extendedIngredients.map((ing: any) => ({
-          name: ing.name,
-          amount: ing.amount,
-          unit: ing.unit,
-        })),
-        steps:
-          apiRecipe.analyzedInstructions?.[0]?.steps.map((s: any, index: number) => ({
-            title: `Step ${index + 1}`,
-            details: s.step,
-          })) || [],
-        sourceUrl: apiRecipe.sourceUrl || null,
-        source: 'api',
-      } as Recipe;
+    // Don't fallback to API for created recipe IDs (they're never in API)
+    // Created recipe IDs are typically Firestore document IDs (20+ chars alphanumeric)
+    // API IDs are purely numeric strings
+    const isApiId = /^\d+$/.test(recipeId);
+
+    if (isApiId) {
+      console.log('Attempting API fallback for numeric ID...');
+      const apiRecipe = await fetchRecipeApiById(recipeId);
+
+      if (apiRecipe) {
+        return {
+          id: apiRecipe.id,
+          title: apiRecipe.title,
+          image: apiRecipe.image,
+          intro: apiRecipe.summary,
+          totalTime: apiRecipe.readyInMinutes ? `${apiRecipe.readyInMinutes}` : 'N/A',
+          ingredients: apiRecipe.extendedIngredients.map((ing: any) => ({
+            name: ing.name,
+            amount: ing.amount,
+            unit: ing.unit,
+          })),
+          steps:
+            apiRecipe.analyzedInstructions?.[0]?.steps.map((s: any, index: number) => ({
+              title: `Step ${index + 1}`,
+              details: s.step,
+            })) || [],
+          sourceUrl: apiRecipe.sourceUrl || null,
+          source: 'api',
+        } as Recipe;
+      }
+    } else {
+      console.log('Created recipe not found, skipping API fallback');
+      return null; // Return null for deleted created recipes
     }
 
     throw new Error('Recipe not found');
@@ -585,7 +604,16 @@ export const getSavedRecipes = async (userId?: string): Promise<Recipe[]> => {
           const recipeRef = doc(db, 'recipes', data.recipeId);
           const recipeDoc = await getDoc(recipeRef);
 
-          if (!recipeDoc.exists()) return null;
+          // If recipe was deleted, clean up this orphaned saved reference
+          if (!recipeDoc.exists()) {
+            console.log(`🧹 Recipe ${data.recipeId} was deleted, cleaning up saved reference`);
+            try {
+              await deleteDoc(doc(db, 'saved', docSnap.id));
+            } catch (error) {
+              console.warn('⚠️ Could not delete orphaned saved reference:', error);
+            }
+            return null;
+          }
 
           const recipeData = recipeDoc.data();
 
@@ -667,9 +695,15 @@ export const getRecipeByUser = async (userId?: string): Promise<Recipe[]> => {
   }
 };
 
-export const getRandomRecipes = async (number: number): Promise<any[]> => {
+export const getRandomRecipes = async (
+  number: number,
+  filters?: {
+    diet?: string[];
+    excludeIngredients?: string[];
+  }
+): Promise<any[]> => {
   try {
-    const recipes = await fetchRandomRecipes(number);
+    const recipes = await fetchRandomRecipes(number, filters);
     console.log(recipes);
     return recipes;
   } catch (error) {

@@ -49,7 +49,7 @@ export const sendChatMessage = async (
                 message: text,
             };
         } catch (error: any) {
-            console.error(`❌ Error with model ${modelName}:`, error.message);
+            console.info(`❌ Error with model ${modelName}:`, error.message);
             lastError = error;
             // Continue to next model
             continue;
@@ -57,7 +57,7 @@ export const sendChatMessage = async (
     }
 
     // All models failed
-    console.error('❌ All Gemini models failed:', lastError);
+    console.info('❌ All Gemini models failed:', lastError);
     return {
         success: false,
         message: 'Sorry, I encountered an error. Please try again later.',
@@ -90,7 +90,7 @@ Your response:`;
             message: text,
         };
     } catch (error) {
-        console.error('Quick chat error:', error);
+        console.info('Quick chat error:', error);
         return {
             success: false,
             message: 'Sorry, I encountered an error. Please try again.',
