@@ -50,12 +50,14 @@ const ViewSavedRecipeScreen = () => {
     const [wakeWordListening, setWakeWordListening] = useState<boolean>(false); // NEW: Wake word detection mode
     const [isProcessingAI, setIsProcessingAI] = useState<boolean>(false); // NEW: AI processing state
     const [showWakeWordModal, setShowWakeWordModal] = useState<boolean>(false); // NEW: Modal for wake word indicator
+    const [activationStage, setActivationStage] = useState<'idle' | 'ready' | 'command'>('idle'); // NEW: Activation flow stage
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
     const voiceModeRef = useRef<boolean>(false);
     const isSpeakingRef = useRef<boolean>(false); // NEW: Ref for immediate synchronous check
     const lastSpeechEndTime = useRef<number>(0); // NEW: Timestamp of last speech end for cooldown
+    const lastSpeechLength = useRef<number>(0); // NEW: Length of last speech for dynamic cooldown
     const recentAppSpeech = useRef<string[]>([]); // NEW: Track recent app speech for echo detection
 
     const shadowStyle = Platform.select({
@@ -183,10 +185,16 @@ const ViewSavedRecipeScreen = () => {
             return;
         }
 
-        // COOLDOWN PERIOD: Ignore any recognition within 3 seconds of last speech ending
+        // DYNAMIC COOLDOWN: Longer cooldown for longer speeches to prevent echo
+        // Base cooldown: 3 seconds
+        // Add 50ms per character of last speech (up to max 10 seconds)
+        const baseCooldown = 3000;
+        const additionalCooldown = Math.min(lastSpeechLength.current * 50, 7000);
+        const dynamicCooldown = baseCooldown + additionalCooldown;
+
         const timeSinceLastSpeech = Date.now() - lastSpeechEndTime.current;
-        if (timeSinceLastSpeech < 3000) {
-            console.log('🔇 Ignoring recognition - cooldown period (', timeSinceLastSpeech, 'ms since last speech)');
+        if (timeSinceLastSpeech < dynamicCooldown) {
+            console.log(`🔇 Ignoring recognition - cooldown period (${timeSinceLastSpeech}ms / ${dynamicCooldown}ms since last speech)`);
             return;
         }
 
@@ -209,15 +217,50 @@ const ViewSavedRecipeScreen = () => {
 
             // Check for wake word if in wake word listening mode
             if (wakeWordListening && !voiceMode) {
-                if (transcript.includes('chef') || transcript.includes('chefiepie') || transcript.includes('chef pie') || transcript.includes('chef pie') || transcript.includes('chefie pie')
+                if (transcript.includes('chef') || transcript.includes('chefiepie') || transcript.includes('chef pie') || transcript.includes('chefie pie')
                     || transcript.includes('hi') || transcript.includes('hello') || transcript.includes('hey')) {
-                    console.log('🎯 Wake word detected! Starting voice assistant...');
+                    console.log('🎯 Wake word detected! Starting activation flow...');
                     Vibration.vibrate([100, 50, 100]); // Double vibration for wake word
                     setWakeWordListening(false); // Stop wake word listening
                     stopListening(); // Stop current listening session
+                    setActivationStage('ready'); // Set to ready stage
                     setTimeout(() => {
-                        startVoiceAssistant(); // Start the voice assistant
+                        startActivationFlow(); // Start the activation flow
                     }, 500);
+                    return;
+                }
+            }
+
+            // Handle activation flow stages
+            if (activationStage === 'ready') {
+                // Waiting for user to say "ready"
+                if (transcript.includes('ready') || transcript.includes('start') || transcript.includes('begin')) {
+                    console.log('✅ User confirmed ready');
+                    Vibration.vibrate(100);
+                    setActivationStage('command');
+                    stopListening();
+                    setTimeout(() => {
+                        askForCommand(); // Ask user for first step or question
+                    }, 500);
+                    return;
+                }
+            } else if (activationStage === 'command') {
+                // Waiting for "first step" or a question
+                if (transcript.includes('first step') || transcript.includes('start step') || transcript.includes('begin step')) {
+                    console.log('✅ User requested first step');
+                    Vibration.vibrate([100, 50, 100]);
+                    setActivationStage('idle');
+                    stopListening();
+                    setTimeout(() => {
+                        startVoiceAssistant(); // Start normal cooking flow
+                    }, 500);
+                    return;
+                } else {
+                    // User asked a question - send to Gemini
+                    console.log('🤖 User asked question before steps:', transcript);
+                    setActivationStage('idle');
+                    setVoiceMode(true); // Enable voice mode for continuing conversation
+                    handleInitialQuestion(transcript);
                     return;
                 }
             }
@@ -398,15 +441,21 @@ const ViewSavedRecipeScreen = () => {
     };
 
     // Enhanced speak function with echo prevention and adjustable rate
-    const speak = (text: string) => {
+    const speak = (text: string, skipEchoTracking = false) => {
         console.log('🔊 Speaking:', text.substring(0, 50) + '...');
 
+        // Track speech length for dynamic cooldown
+        lastSpeechLength.current = text.length;
+
         // Track what the app is saying to filter echoes later
-        const lowerText = text.toLowerCase();
-        recentAppSpeech.current.push(lowerText);
-        // Keep only last 5 utterances to prevent memory bloat
-        if (recentAppSpeech.current.length > 5) {
-            recentAppSpeech.current.shift();
+        // Skip tracking for prompts where we expect user to repeat keywords
+        if (!skipEchoTracking) {
+            const lowerText = text.toLowerCase();
+            recentAppSpeech.current.push(lowerText);
+            // Keep only last 5 utterances to prevent memory bloat
+            if (recentAppSpeech.current.length > 5) {
+                recentAppSpeech.current.shift();
+            }
         }
 
         // IMMEDIATELY set ref to prevent ANY recognition during speech
@@ -470,6 +519,186 @@ const ViewSavedRecipeScreen = () => {
         }, 200); // 200ms delay to ensure microphone stops
     };
 
+    // Start activation flow - ask user to say "ready"
+    const startActivationFlow = () => {
+        const greeting = "Voice assistant on. Say ready to start.";
+
+        console.log('🔊 Starting activation flow...');
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
+
+        // Track speech length and add to echo filter
+        lastSpeechLength.current = greeting.length;
+        recentAppSpeech.current.push(greeting.toLowerCase());
+        if (recentAppSpeech.current.length > 5) {
+            recentAppSpeech.current.shift();
+        }
+
+        Speech.speak(greeting, {
+            language: 'en-US',
+            pitch: 1.0,
+            rate: speechRate,
+            onStart: () => {
+                isSpeakingRef.current = true;
+                setIsSpeaking(true);
+            },
+            onDone: () => {
+                console.log('✅ Greeting finished, waiting for ready');
+                lastSpeechEndTime.current = Date.now();
+                setTimeout(() => {
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+                }, 500);
+
+                // Start listening for "ready"
+                setTimeout(() => {
+                    console.log('🎤 Listening for ready...');
+                    startListening();
+                }, 1500);
+            },
+            onError: (error) => {
+                console.error('❌ Activation greeting error:', error);
+                isSpeakingRef.current = false;
+                setIsSpeaking(false);
+                setTimeout(() => startListening(), 1000);
+            }
+        });
+    };
+
+    // Ask for command - first step or question
+    const askForCommand = () => {
+        // First say "Okay", then ask for command
+        const okayMessage = "Okay";
+        const prompt = "Say first step or ask me anything related to cooking";
+
+        console.log('🔊 Saying okay and asking for command...');
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
+
+        // Track "Okay" in echo filter and length
+        lastSpeechLength.current = okayMessage.length;
+        recentAppSpeech.current.push(okayMessage.toLowerCase());
+        if (recentAppSpeech.current.length > 5) {
+            recentAppSpeech.current.shift();
+        }
+
+        // Say "Okay" first
+        Speech.speak(okayMessage, {
+            language: 'en-US',
+            pitch: 1.0,
+            rate: speechRate,
+            onStart: () => {
+                isSpeakingRef.current = true;
+                setIsSpeaking(true);
+            },
+            onDone: () => {
+                console.log('✅ Okay said, now asking for command');
+
+                // Small pause, then say the prompt
+                // DO NOT track the prompt in echo filter since we expect "first step" response
+                setTimeout(() => {
+                    // Track length for cooldown but not content for echo detection
+                    lastSpeechLength.current = prompt.length;
+
+                    Speech.speak(prompt, {
+                        language: 'en-US',
+                        pitch: 1.0,
+                        rate: speechRate,
+                        onStart: () => {
+                            isSpeakingRef.current = true;
+                            setIsSpeaking(true);
+                        },
+                        onDone: () => {
+                            console.log('✅ Command prompt finished');
+                            lastSpeechEndTime.current = Date.now();
+                            setTimeout(() => {
+                                isSpeakingRef.current = false;
+                                setIsSpeaking(false);
+                            }, 500);
+
+                            // Start listening for command
+                            setTimeout(() => {
+                                console.log('🎤 Listening for first step or question...');
+                                startListening();
+                            }, 1500);
+                        },
+                        onError: (error) => {
+                            console.error('❌ Command prompt error:', error);
+                            isSpeakingRef.current = false;
+                            setIsSpeaking(false);
+                            setTimeout(() => startListening(), 1000);
+                        }
+                    });
+                }, 500); // 500ms pause between "Okay" and the prompt
+            },
+            onError: (error) => {
+                console.error('❌ Okay speech error:', error);
+                isSpeakingRef.current = false;
+                setIsSpeaking(false);
+                setTimeout(() => startListening(), 1000);
+            }
+        });
+    };
+
+    // Handle initial question before starting steps
+    const handleInitialQuestion = async (question: string) => {
+        console.log('🤖 Processing initial question:', question);
+        setIsProcessingAI(true);
+        speak('Let me help you with that');
+
+        try {
+            // Build recipe context for Gemini
+            const recipeContext = {
+                recipeName: recipe?.title || 'Unknown Recipe',
+                currentStepNumber: 0,
+                totalSteps: recipe?.steps?.length || 0,
+                currentStepDetails: 'Not started yet',
+                ingredients: recipe?.ingredients?.map((ing: any) => ing.name) || [],
+                difficulty: recipe?.difficulty || 'N/A'
+            };
+
+            const aiResponse = await getVoiceResponse(question, recipeContext);
+            console.log('✅ Gemini response:', aiResponse);
+
+            setIsProcessingAI(false);
+
+            // Speak the AI response, then ask if user wants to start
+            Speech.speak(aiResponse, {
+                language: 'en-US',
+                pitch: 1.0,
+                rate: speechRate,
+                onStart: () => {
+                    isSpeakingRef.current = true;
+                    setIsSpeaking(true);
+                },
+                onDone: () => {
+                    lastSpeechEndTime.current = Date.now();
+                    setTimeout(() => {
+                        isSpeakingRef.current = false;
+                        setIsSpeaking(false);
+                    }, 500);
+
+                    // After answer, ask if they want to continue
+                    setTimeout(() => {
+                        speak("Say first step or ask me anything related to cooking", true); // Skip echo tracking
+                        setActivationStage('command'); // Go back to command stage
+                    }, 1500);
+                },
+                onError: (error) => {
+                    console.error('❌ AI response speech error:', error);
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+                    setIsProcessingAI(false);
+                }
+            });
+        } catch (error) {
+            console.error('❌ Error getting AI response:', error);
+            setIsProcessingAI(false);
+            speak('Sorry, I could not process your question. Say first step to begin cooking');
+            setActivationStage('command');
+        }
+    };
+
     const startVoiceAssistant = () => {
         if (!recipe?.steps || recipe.steps.length === 0) {
             Alert.alert('No Steps', 'This recipe does not have cooking steps');
@@ -481,7 +710,7 @@ const ViewSavedRecipeScreen = () => {
         setCurrentStep(0);
 
         setTimeout(() => {
-            const greeting = `Hello Im ChefiePie. Starting cooking assistant for ${recipe.title}. You have ${recipe.steps.length} steps. You can say next, previous, repeat steps or wait for certain minutes for the recipe, or ask me any questions about the recipe. Let's begin`;
+            const greeting = `Starting cooking assistant for ${recipe.title}. You have ${recipe.steps.length} steps. You can say next, previous, repeat steps or wait for certain minutes for the recipe, or ask me any questions about the recipe. Let's begin`;
 
             console.log('🔊 Speaking greeting:', greeting.substring(0, 50) + '...');
 
@@ -543,6 +772,7 @@ const ViewSavedRecipeScreen = () => {
         // Set voiceMode to false FIRST to prevent speak() from restarting listening
         setVoiceMode(false);
         setIsPaused(false);
+        setActivationStage('idle'); // Reset activation stage
         stopListening();
         Speech.stop();
         setCurrentStep(0);

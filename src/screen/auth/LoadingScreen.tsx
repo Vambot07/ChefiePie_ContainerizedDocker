@@ -5,7 +5,8 @@ import colors from '~/utils/color';
 
 export default function LoadingScreen() {
     return (
-        <View className="flex-1 bg-white items-center justify-center">
+        <View className="flex-1 items-center justify-center"
+            style={{ backgroundColor: colors.secondary }}>
             {/* Logo */}
             <Image
                 source={require('assets/ChefiePieSplashIcon.png')}

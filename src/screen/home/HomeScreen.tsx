@@ -196,7 +196,7 @@ export const HomeScreen = () => {
             });
 
         } catch (error) {
-            console.error('❌ Error loading stats:', error);
+            console.log('❌ Error loading stats:', error);
         } finally {
             setLoadingStats(false);
         }
@@ -283,7 +283,7 @@ export const HomeScreen = () => {
 
             setCategoryRecipes(transformedRecipes);
         } catch (error) {
-            console.error('Error fetching recipes:', error);
+            console.log('Error fetching recipes:', error);
             Alert.alert('Error', 'Failed to fetch recipes');
         } finally {
             setInitialLoading(false);
@@ -306,7 +306,7 @@ export const HomeScreen = () => {
 
             setIngredientRecipes(transformedRecipes);
         } catch (error) {
-            console.error('Error fetching recipes by ingredients:', error);
+            console.log('Error fetching recipes by ingredients:', error);
             Alert.alert('Error', 'Failed to fetch recipes');
         } finally {
             setInitialLoading(false);
@@ -450,7 +450,7 @@ export const HomeScreen = () => {
                 setRecentlyViewed([]);
             }
         } catch (error) {
-            console.error('Error loading recently viewed:', error);
+            console.log('Error loading recently viewed:', error);
             setRecentlyViewed([]);
         } finally {
             setLoadingRecent(false);
@@ -492,7 +492,7 @@ export const HomeScreen = () => {
             await AsyncStorage.setItem(key, JSON.stringify(recipes));
             setRecentlyViewed(recipes.slice(0, 10)); // Update state
         } catch (error) {
-            console.error('Error saving recently viewed:', error);
+            console.log('Error saving recently viewed:', error);
         }
     };
 
@@ -551,7 +551,7 @@ export const HomeScreen = () => {
 
             navigation.navigate('ViewRecipe', { recipe: completeRecipe, viewMode: 'discover' });
         } catch (error) {
-            console.error('❌ Error fetching recipe details:', error);
+            console.log('❌ Error fetching recipe details:', error);
             Alert.alert('Error', 'Failed to load recipe details. Please try again.');
         } finally {
             setShowLoadingModal(false);
@@ -697,8 +697,8 @@ export const HomeScreen = () => {
                             >
                                 <View className="flex-row items-center justify-between mb-4">
                                     <Text className="text-xl font-bold text-gray-800">Your Activity</Text>
-                                    <View className="bg-orange-50 px-3 py-1 rounded-full">
-                                        <Text className="text-orange-600 text-xs font-semibold">This Week</Text>
+                                    <View className="px-3 py-1 rounded-full">
+                                        <Text className="text-orange-600 text-sm font-semibold">This Week</Text>
                                     </View>
                                 </View>
                                 <View className="flex-row justify-around">
@@ -1064,7 +1064,7 @@ export const HomeScreen = () => {
                         <View
                             className="rounded-3xl mx-2 mt-6 mb-4"
                             style={{
-                                backgroundColor: 'white',
+                                backgroundColor: colors.lightPeach,
                                 shadowColor: '#000',
                                 shadowOffset: { width: 0, height: 2 },
                                 shadowOpacity: 0.08,

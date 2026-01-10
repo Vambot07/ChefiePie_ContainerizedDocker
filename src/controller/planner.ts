@@ -193,7 +193,7 @@ export const fetchRecipeDetails = async (
   }
 };
 
-/// Load meal plan WITH full recipe details
+/// Load meal plan WITH full recipe details (OPTIMIZED - Parallel)
 export const loadMealPlanWithDetails = async (
   userId: string,
   weekOffset: number
@@ -208,25 +208,22 @@ export const loadMealPlanWithDetails = async (
       const data = weekDoc.data();
       const savedDays = data.days || {};
 
-      //console.log('✅ Meal plan loaded (IDs only):', savedDays);
+      console.log(`⏱️ Loading meal plan with ${Object.keys(savedDays).length} days...`);
+      const startTime = Date.now();
 
-      const recipesByDay: { [key: number]: Recipe[] } = {};
-
-      for (const dayIndex in savedDays) {
+      // ✅ OPTIMIZE: Process all days in parallel
+      const dayPromises = Object.entries(savedDays).map(async ([dayIndex, recipesData]: [string, any]) => {
         const dayNum = Number(dayIndex);
-        const recipesData = savedDays[dayNum];
 
-        // Handle both old format (string[]) and new format (object[])
-        const recipes: Recipe[] = [];
-
-        for (const recipeData of recipesData) {
+        // ✅ OPTIMIZE: Process all recipes in a day in parallel
+        const recipePromises = recipesData.map(async (recipeData: any) => {
           let recipeId: string;
           let source: 'created' | 'api';
 
           // Handle both old format (string) and new format (object)
           if (typeof recipeData === 'string') {
             recipeId = recipeData;
-            source = 'api'; // Default for old data
+            source = 'api';
           } else {
             recipeId = recipeData.id;
             source = recipeData.source || 'api';
@@ -236,26 +233,41 @@ export const loadMealPlanWithDetails = async (
           const [recipeDetails] = await fetchRecipeDetails(userId, [recipeId], source);
 
           if (recipeDetails) {
-            // If it's a created recipe and username is missing, fetch it
+            // ✅ OPTIMIZE: Fetch username and profile image in parallel if needed
             if (source === 'created' && recipeDetails.userId && !recipeDetails.username) {
-              const username = await getUsernameById(recipeDetails.userId);
+              const [username, profileImage] = await Promise.all([
+                getUsernameById(recipeDetails.userId),
+                getProfileImageById(recipeDetails.userId)
+              ]);
               recipeDetails.username = username;
-              const profileImage = await getProfileImageById(recipeDetails.userId);
               recipeDetails.profileImage = profileImage || '';
-              //console.log(`✅ Fetched username for recipe ${recipeId}: ${username}`);
             }
 
-            recipes.push(recipeDetails);
+            return recipeDetails;
           }
-        }
+          return null;
+        });
 
+        // Wait for all recipes in this day to load
+        const recipes = (await Promise.all(recipePromises)).filter(Boolean) as Recipe[];
+        return { dayNum, recipes };
+      });
+
+      // Wait for all days to load in parallel
+      const dayResults = await Promise.all(dayPromises);
+
+      // Convert array back to object format
+      const recipesByDay: { [key: number]: Recipe[] } = {};
+      dayResults.forEach(({ dayNum, recipes }) => {
         recipesByDay[dayNum] = recipes;
-      }
+      });
 
-      //console.log('✅ Full recipes loaded:', recipesByDay);
+      const endTime = Date.now();
+      console.log(`✅ Meal plan loaded in ${endTime - startTime}ms`);
+
       return recipesByDay;
     } else {
-      //console.log('ℹ️ No meal plan found for this week');
+      console.log('ℹ️ No meal plan found for this week');
       return null;
     }
   } catch (error) {

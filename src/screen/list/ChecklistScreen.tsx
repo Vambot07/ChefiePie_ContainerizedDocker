@@ -12,6 +12,7 @@ import {
     moveItemsToHistoryList,
 } from '../../controller/checklist';
 import Header from '../../components/partials/Header';
+import ConfirmationModal from '~/components/modal/ConfirmationModal';
 import colors from '~/utils/color';
 
 // Interfaces
@@ -39,6 +40,16 @@ const ChecklistScreen = () => {
     const [newItemUnit, setNewItemUnit] = useState('Unit');
 
     const [showUnitModal, setShowUnitModal] = useState(false);
+
+    // Confirmation modals state
+    const [confirmationModal, setConfirmationModal] = useState<{
+        visible: boolean;
+        type: 'clearPurchased' | 'clearHistory' | 'deleteItem' | null;
+        itemToDelete?: ChecklistItem;
+    }>({
+        visible: false,
+        type: null,
+    });
 
     // Units matching AddRecipeScreen
     const units = ['cup', 'piece', 'clove', 'tablespoon', 'teaspoon', 'ml', 'gram', 'kg', 'ounce', 'pound', 'pinch', 'slice', 'bunch', 'can', 'jar'];
@@ -98,27 +109,22 @@ const ChecklistScreen = () => {
         const checkedShoppingItems = items.filter(item => item.status === 'shopping' && item.checked);
         if (checkedShoppingItems.length === 0) return;
 
-        Alert.alert(
-            "Clear Purchased Items",
-            "Are you sure you want to remove all purchased items from the shopping list?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Clear",
-                    onPress: async () => {
-                        setActionLoading('move');
-                        try {
-                            await moveItemsToHistoryList();
-                            await fetchItems(); // Refresh the list
-                        } catch (error) {
-                            Alert.alert("Error", "Failed to move items to food list.");
-                        } finally {
-                            setActionLoading(null);
-                        }
-                    },
-                },
-            ]
-        );
+        setConfirmationModal({
+            visible: true,
+            type: 'clearPurchased',
+        });
+    };
+
+    const executeMoveToPurchased = async () => {
+        setActionLoading('move');
+        try {
+            await moveItemsToHistoryList();
+            await fetchItems(); // Refresh the list
+        } catch (error) {
+            Alert.alert("Error", "Failed to move items to food list.");
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     const handleClearHistoryList = async () => {
@@ -126,64 +132,59 @@ const ChecklistScreen = () => {
         const historyItems = items.filter(item => item.status === 'history' && !item.checked);
         if (historyItems.length === 0) return;
 
-        Alert.alert(
-            "Clear History Items",
-            "Are you sure you want to remove all history items?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Clear",
-                    style: "destructive",
-                    onPress: async () => {
-                        setActionLoading('clear');
-                        const originalItems = [...items];
-                        setItems(items.filter(i => !(i.status === 'history' && i.checked))); // Optimistic UI update
-                        try {
-                            await clearHistoryListItems();
-                            await fetchItems();
-                        } catch (error) {
-                            Alert.alert("Error", "Failed to clear items.");
-                            setItems(originalItems); // Revert
-                        } finally {
-                            setActionLoading(null);
-                        }
-                    },
-                },
-            ]
-        );
+        setConfirmationModal({
+            visible: true,
+            type: 'clearHistory',
+        });
+    };
+
+    const executeClearHistory = async () => {
+        setActionLoading('clear');
+        const originalItems = [...items];
+        setItems(items.filter(i => !(i.status === 'history' && i.checked))); // Optimistic UI update
+        try {
+            await clearHistoryListItems();
+            await fetchItems();
+        } catch (error) {
+            Alert.alert("Error", "Failed to clear items.");
+            setItems(originalItems); // Revert
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     const handleDeleteFoodItem = async (item: ChecklistItem) => {
-        Alert.alert(
-            "Delete Item",
-            `Are you sure you want to delete "${item.name}" from your food list?`,
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        setActionLoading(`delete-${item.id}`);
-                        const originalItems = [...items];
-                        setItems(items.filter(i => i.id !== item.id)); // Optimistic UI update
-                        try {
-                            await deleteChecklistItem(item.id);
-                        } catch (error) {
-                            Alert.alert("Error", "Failed to delete item.");
-                            setItems(originalItems); // Revert
-                        } finally {
-                            setActionLoading(null);
-                        }
-                    },
-                },
-            ]
-        );
+        setConfirmationModal({
+            visible: true,
+            type: 'deleteItem',
+            itemToDelete: item,
+        });
+    };
+
+    const executeDeleteItem = async (item: ChecklistItem) => {
+        setActionLoading(`delete-${item.id}`);
+        const originalItems = [...items];
+        setItems(items.filter(i => i.id !== item.id)); // Optimistic UI update
+        try {
+            await deleteChecklistItem(item.id);
+        } catch (error) {
+            Alert.alert("Error", "Failed to delete item.");
+            setItems(originalItems); // Revert
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     const handleAddItem = async () => {
         const trimmedName = newItemName.trim();
         if (!trimmedName) {
             Alert.alert('Error', 'Please enter an ingredient name.');
+            return;
+        }
+
+        // Check if unit is selected
+        if (newItemUnit === 'Unit') {
+            Alert.alert('Error', 'Please select a unit for the ingredient.');
             return;
         }
 
@@ -273,9 +274,14 @@ const ChecklistScreen = () => {
                 </TouchableOpacity>
             </View>
             <TouchableOpacity
-                className="bg-orange-400 rounded-xl py-3"
+                className="rounded-xl py-3"
+                style={{
+                    backgroundColor: (!!actionLoading || !newItemName.trim() || newItemUnit === 'Unit')
+                        ? '#D1D5DB'
+                        : '#FB923C'
+                }}
                 onPress={handleAddItem}
-                disabled={!!actionLoading || !newItemName.trim()}
+                disabled={!!actionLoading || !newItemName.trim() || newItemUnit === 'Unit'}
             >
                 {actionLoading === 'add' ? (
                     <ActivityIndicator color="white" />
@@ -342,7 +348,8 @@ const ChecklistScreen = () => {
     );
 
     const renderHistoryList = () => (
-        <View className="bg-white rounded-2xl p-4 mt-4">
+        <View className="rounded-2xl p-4 mt-4"
+        style={{backgroundColor: colors.secondary}}>
             <View className="flex-row items-center justify-between mb-2">
                 <Text className="text-xl font-bold text-gray-800 mb-2">My History Items</Text>
                 {historyItems.length > 0 && (
@@ -530,6 +537,50 @@ const ChecklistScreen = () => {
                         </ScrollView>
                     </View>
                 </View>
+            )}
+
+            {/* Confirmation Modals */}
+            {confirmationModal.type === 'clearPurchased' && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={executeMoveToPurchased}
+                    title="Clear Purchased Items"
+                    message="Are you sure you want to remove all purchased items from the shopping list?"
+                    confirmText="Clear"
+                    cancelText="Cancel"
+                    icon="checkmark-done-circle"
+                    iconColor={colors.primary}
+                    confirmColor={colors.primary}
+                />
+            )}
+
+            {confirmationModal.type === 'clearHistory' && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={executeClearHistory}
+                    title="Clear History Items"
+                    message="Are you sure you want to remove all history items? This action cannot be undone."
+                    confirmText="Clear All"
+                    cancelText="Cancel"
+                    icon="trash"
+                    isDestructive={true}
+                />
+            )}
+
+            {confirmationModal.type === 'deleteItem' && confirmationModal.itemToDelete && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={() => executeDeleteItem(confirmationModal.itemToDelete!)}
+                    title="Delete Item"
+                    message={`Are you sure you want to delete "${confirmationModal.itemToDelete.name}" from your food list?`}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    icon="trash-bin"
+                    isDestructive={true}
+                />
             )}
         </View>
     );
