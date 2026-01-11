@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { updateProfileImage } from '~/utils/uploadImage';
 import { Ionicons, Feather, AntDesign, MaterialIcons } from '@expo/vector-icons';
 import { signInWithGoogle } from '~/utils/socialAuth';
+import ImagePickerModal from '~/components/modal/ImagePickerModal';
 
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
@@ -23,19 +24,59 @@ const SignUpScreen = () => {
     const [loadingStatus, setLoadingStatus] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [showImagePicker, setShowImagePicker] = useState(false);
 
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true as boolean,
-            quality: 0.8,
-            aspect: [4, 3],
-        });
+        try {
+            console.log('🖼️ Opening gallery...');
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Gallery permission is required');
+                return;
+            }
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            setProfileImage(result.assets[0].uri);
-            console.log('✅ Profile Image selected:', result.assets[0].uri);
-            console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                quality: 0.8,
+                aspect: [1, 1],
+                legacy: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setProfileImage(result.assets[0].uri);
+                console.log('✅ Profile Image selected:', result.assets[0].uri);
+                console.log('📦 Image dimensions:', result.assets[0].width, 'x', result.assets[0].height);
+            }
+        } catch (error: any) {
+            console.error('❌ Gallery error:', error);
+            Alert.alert('Gallery Error', 'Failed to open gallery');
+        }
+    };
+
+    const takePhoto = async () => {
+        try {
+            console.log('📷 Opening camera...');
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Camera permission is required');
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                quality: 0.8,
+                aspect: [1, 1],
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setProfileImage(result.assets[0].uri);
+                console.log('✅ Photo captured:', result.assets[0].uri);
+            }
+        } catch (error: any) {
+            console.error('❌ Camera error:', error);
+            Alert.alert('Camera Error', 'Failed to open camera');
         }
     }
 
@@ -151,14 +192,7 @@ const SignUpScreen = () => {
                 >
                     <View className="items-center pt-10 px-6">
                         {/* Logo Container with Enhanced Design */}
-                        <View className="bg-white rounded-3xl p-3 mb-3"
-                            style={{
-                                shadowColor: '#FF914D',
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.15,
-                                shadowRadius: 12,
-                                elevation: 8
-                            }}
+                        <View className="rounded-3xl p-3 mb-3"
                         >
                             <Image
                                 source={require('../../../assets/ChefiePieLogo.png')}
@@ -174,7 +208,7 @@ const SignUpScreen = () => {
                             {/* Profile Image Picker */}
                             <TouchableOpacity
                                 className="items-center mb-1"
-                                onPress={pickImage}
+                                onPress={() => setShowImagePicker(true)}
                                 activeOpacity={0.7}
                             >
                                 {profileImage ? (
@@ -187,7 +221,6 @@ const SignUpScreen = () => {
                                                 shadowOffset: { width: 0, height: 2 },
                                                 shadowOpacity: 0.2,
                                                 shadowRadius: 4,
-                                                elevation: 4
                                             }}
                                         />
                                         <View className="absolute bottom-0 right-0 bg-primary rounded-full p-1.5"
@@ -412,6 +445,16 @@ const SignUpScreen = () => {
                     </View>
                 </View>
             )}
+
+            {/* Image Picker Modal */}
+            <ImagePickerModal
+                visible={showImagePicker}
+                onClose={() => setShowImagePicker(false)}
+                onCamera={takePhoto}
+                onGallery={pickImage}
+                title="Choose Profile Photo"
+                subtitle="Select where to get your profile photo from"
+            />
         </SafeAreaView>
     );
 };

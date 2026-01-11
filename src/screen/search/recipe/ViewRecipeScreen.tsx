@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../../firebaseConfig';
 import colors from '~/utils/color';
+import ConfirmationModal from '~/components/modal/ConfirmationModal';
 
 const auth: Auth = getAuth();
 
@@ -35,6 +36,15 @@ const ViewRecipeScreen = () => {
     // API Recipe state
     const [apiRecipeDetails, setApiRecipeDetails] = useState<any>(null);
     const [loadingApiDetails, setLoadingApiDetails] = useState(false);
+
+    const [confirmationModal, setConfirmationModal] = useState<{
+        visible: boolean;
+        type: 'delete' | null;
+        itemToDelete?: any;
+    }>({
+        visible: false,
+        type: null,
+    })
 
     // Get recipe and viewMode from params
     const {
@@ -447,22 +457,29 @@ const ViewRecipeScreen = () => {
     };
 
     const showDeleteConfirmation = () => {
-        Alert.alert(
-            'Delete Recipe',
-            'Are you sure you want to delete this recipe?',
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel',
-                    onPress: () => setModalVisible(false),
-                },
-                {
-                    text: loadingAction === 'deleting' ? 'Deleting...' : 'Delete',
-                    style: 'destructive',
-                    onPress: handleDelete,
-                },
-            ]
-        );
+
+        setConfirmationModal({
+            visible: true,
+            type: 'delete',
+            itemToDelete: recipe,
+        });
+
+        // Alert.alert(
+        //     'Delete Recipe',
+        //     'Are you sure you want to delete this recipe?',
+        //     [
+        //         {
+        //             text: 'Cancel',
+        //             style: 'cancel',
+        //             onPress: () => setModalVisible(false),
+        //         },
+        //         {
+        //             text: loadingAction === 'deleting' ? 'Deleting...' : 'Delete',
+        //             style: 'destructive',
+        //             onPress: handleDelete,
+        //         },
+        //     ]
+        // );
     };
 
     // Show loading while fetching API details
@@ -921,6 +938,24 @@ const ViewRecipeScreen = () => {
                     </Pressable>
                 </Pressable>
             </Modal>
+
+            {/* Delete Confirmation Modal */}
+            {confirmationModal.type === 'delete' && confirmationModal.itemToDelete && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => {
+                        setConfirmationModal({ visible: false, type: null });
+                        setModalVisible(false);
+                    }}
+                    onConfirm={handleDelete}
+                    title="Delete Recipe"
+                    message={`Are you sure you want to delete "${confirmationModal.itemToDelete.title}"? This action cannot be undone.`}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    icon="trash-bin"
+                    isDestructive={true}
+                />
+            )}
         </View>
     );
 };
