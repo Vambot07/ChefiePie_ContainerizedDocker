@@ -28,6 +28,8 @@ import {
 import Item from '~/components/partials/Item';
 import EditModal from '~/components/modal/EditModal';
 import CryptoJS from "crypto-js";
+import ConfirmationModal from '~/components/modal/ConfirmationModal';
+import SuccessModal from '~/components/modal/SuccessModal';
 
 const SettingScreen = () => {
     const navigation = useNavigation();
@@ -48,6 +50,11 @@ const SettingScreen = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const [loading, setLoading] = useState(false);
+
+    const [showLogoutConfirmation, setShowLogoutConfirmation] = useState<boolean>(false);
+    const [showLogoutSuccessModal, setShowLogoutSuccessModal] = useState<boolean>(false);
+
+
 
     const profileImage = user?.profileImage;
     const userId = user?.userId;
@@ -325,23 +332,7 @@ const SettingScreen = () => {
                         <Item
                             title="Sign Out"
                             subtitle="Sign out of your account"
-                            onPress={() => {
-                                Alert.alert(
-                                    'Sign Out',
-                                    'Are you sure you want to sign out?',
-                                    [
-                                        { text: 'Cancel', style: 'cancel' },
-                                        {
-                                            text: 'Sign Out',
-                                            style: 'destructive',
-                                            onPress: () => {
-                                                handleLogout()
-                                                Alert.alert('You succesfully logout!');
-                                            }
-                                        }
-                                    ]
-                                );
-                            }}
+                            onPress={() => setShowLogoutConfirmation(true)}
                             icon="log-out-outline"
                             danger={true}
                         />
@@ -500,6 +491,33 @@ const SettingScreen = () => {
                     </View>
                 </View>
             </EditModal>
+
+            <SuccessModal
+                visible={showLogoutSuccessModal}
+                title="Success"
+                message="You successfully logged out!"
+                onClose={async () => {
+                    setShowLogoutSuccessModal(false);
+                    await handleLogout();
+                }}
+            />
+
+            <ConfirmationModal
+                visible={showLogoutConfirmation}
+                onClose={() => setShowLogoutConfirmation(false)}
+                onConfirm={() => {
+                    setShowLogoutConfirmation(false);
+                    setShowLogoutSuccessModal(true);
+                }}
+                title="Sign Out"
+                message="Are you sure you want to sign out of your account?"
+                confirmText="Sign Out"
+                cancelText="Cancel"
+                icon="log-out-outline"
+                iconColor="#EF4444"
+                confirmColor="#EF4444"
+                isDestructive={true}
+            />
         </View>
     );
 };

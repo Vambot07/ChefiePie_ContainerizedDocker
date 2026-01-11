@@ -1,322 +1,272 @@
-import { View, Text, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    FlatList,
+    Image,
+    ActivityIndicator,
+    Alert,
+    RefreshControl,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+
 import Header from '~/components/partials/Header';
+import ConfirmationModal from '~/components/modal/ConfirmationModal';
 import { useAuth } from '~/context/AuthContext';
 import { getRecipeById } from '~/controller/recipe';
 import { fetchRecipeById } from '~/api/spoonacular';
 import colors from '~/utils/color';
 
-type RootStackParamList = {
-    ViewRecipe: { recipe: any; viewMode: string };
-};
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+/* ------------------------------- Interfaces ------------------------------- */
 
 interface Recipe {
     id: string;
     title: string;
     image: string;
     time: string;
-    source?: 'created' | 'api';  // Track if recipe is created or from API
     viewedAt: string;
+    source?: 'created' | 'api';
 }
 
-export default function RecentlyViewedScreen() {
-    const [recentlyViewed, setRecentlyViewed] = useState<Recipe[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [loadingRecipe, setLoadingRecipe] = useState(false);
+type RootStackParamList = {
+    ViewRecipe: { recipe: any; viewMode: string };
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+/* ------------------------------ Main Screen ------------------------------ */
+
+const RecentlyViewedScreen = () => {
     const navigation = useNavigation<NavigationProp>();
     const { user } = useAuth();
     const userId = user?.uid || user?.userId;
 
-    const loadRecentlyViewed = useCallback(async () => {
-        console.log('🔄 Loading recently viewed for userId:', userId);
+    const [recipes, setRecipes] = useState<Recipe[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+    const [confirmationModal, setConfirmationModal] = useState<{
+        visible: boolean;
+        type: 'delete' | 'clearAll' | null;
+        recipe?: Recipe;
+    }>({
+        visible: false,
+        type: null,
+    });
+
+    /* ------------------------------ Fetching ------------------------------ */
+
+    const fetchRecentlyViewed = useCallback(async () => {
         if (!userId) {
-            console.log('❌ No userId, skipping load');
-            setRecentlyViewed([]);
+            setRecipes([]);
             setLoading(false);
             return;
         }
 
         try {
-            setLoading(true);
+            if (!refreshing) setLoading(true);
+
             const key = `recentlyViewed_${userId}`;
             const stored = await AsyncStorage.getItem(key);
 
-            console.log('📦 AsyncStorage key:', key);
-            console.log('📦 Stored data exists:', !!stored);
-
             if (stored) {
-                let recipes = JSON.parse(stored);
+                let parsed = JSON.parse(stored);
                 let needsMigration = false;
 
-                // Migrate old recipes without source field
-                recipes = recipes.map((r: any) => {
+                parsed = parsed.map((r: any) => {
                     if (!r.source) {
                         needsMigration = true;
-                        // Detect recipe type by ID format
-                        // API recipes have numeric IDs (like "654959")
-                        // Created recipes have alphanumeric IDs (like "ArW06T5M49Z5U0cJKkIJ")
                         const isNumericId = /^\d+$/.test(r.id);
-                        const detectedSource = isNumericId ? 'api' : 'created';
-
-                        console.log(`🔧 Migrating: ${r.title} → ${detectedSource} (ID: ${r.id})`);
-
-                        return {
-                            ...r,
-                            source: detectedSource
-                        };
+                        return { ...r, source: isNumericId ? 'api' : 'created' };
                     }
                     return r;
                 });
 
-                // Save migrated data back to AsyncStorage
                 if (needsMigration) {
-                    await AsyncStorage.setItem(key, JSON.stringify(recipes));
-                    console.log('✅ Migrated recently viewed recipes with source field');
+                    await AsyncStorage.setItem(key, JSON.stringify(parsed));
                 }
 
-                console.log('✅ Loaded recently viewed recipes:', recipes.length);
-                recipes.forEach((r: any, i: number) => {
-                    console.log(`   ${i + 1}. ${r.title} (source: ${r.source})`);
-                });
-                setRecentlyViewed(recipes);
+                setRecipes(parsed);
             } else {
-                console.log('ℹ️ No recently viewed recipes found');
-                setRecentlyViewed([]);
+                setRecipes([]);
             }
         } catch (error) {
-            console.error('❌ Error loading recently viewed:', error);
-            setRecentlyViewed([]);
+            Alert.alert('Error', 'Failed to load recently viewed recipes.');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
-    }, [userId]);
+    }, [userId, refreshing]);
 
     useFocusEffect(
         useCallback(() => {
-            loadRecentlyViewed();
-        }, [loadRecentlyViewed])
+            fetchRecentlyViewed();
+        }, [fetchRecentlyViewed])
     );
 
-    const handleDeleteRecipe = async (recipeId: string) => {
-        Alert.alert(
-            'Delete Recipe',
-            'Remove this recipe from recently viewed?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            if (!userId) return;
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchRecentlyViewed();
+    }, [fetchRecentlyViewed]);
 
-                            const key = `recentlyViewed_${userId}`;
-                            const stored = await AsyncStorage.getItem(key);
-                            if (stored) {
-                                let recipes = JSON.parse(stored);
-                                recipes = recipes.filter((r: Recipe) => r.id !== recipeId);
-                                await AsyncStorage.setItem(key, JSON.stringify(recipes));
-                                setRecentlyViewed(recipes);
-                            }
-                        } catch (error) {
-                            console.error('Error deleting recipe:', error);
-                            Alert.alert('Error', 'Failed to delete recipe');
-                        }
-                    }
-                }
-            ]
-        );
+    /* ----------------------------- Confirmation ---------------------------- */
+
+    const showDeleteConfirmation = (recipe: Recipe) => {
+        setConfirmationModal({
+            visible: true,
+            type: 'delete',
+            recipe,
+        });
     };
 
-    const handleClearAll = async () => {
-        Alert.alert(
-            'Clear All',
-            'Delete all recently viewed recipes?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Clear All',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            if (!userId) return;
-                            const key = `recentlyViewed_${userId}`;
-                            await AsyncStorage.removeItem(key);
-                            setRecentlyViewed([]);
-                        } catch (error) {
-                            console.error('Error clearing all:', error);
-                            Alert.alert('Error', 'Failed to clear history');
-                        }
-                    }
-                }
-            ]
-        );
+    const showClearAllConfirmation = () => {
+        setConfirmationModal({
+            visible: true,
+            type: 'clearAll',
+        });
     };
 
-    // Helper function to remove a recipe from recently viewed
-    const removeFromRecentlyViewed = async (recipeId: string) => {
+    const closeModal = () => {
+        setConfirmationModal({ visible: false, type: null });
+    };
+
+    const executeDeleteRecipe = async (recipe: Recipe) => {
+        if (!userId) return;
+
+        setActionLoading(`delete-${recipe.id}`);
+        const original = [...recipes];
+        setRecipes(recipes.filter(r => r.id !== recipe.id));
+
         try {
-            const storageKey = `recentlyViewed_${userId}`;
-            const stored = await AsyncStorage.getItem(storageKey);
-
-            if (stored) {
-                const recentRecipes: Recipe[] = JSON.parse(stored);
-                const updated = recentRecipes.filter(r => r.id !== recipeId);
-                await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
-
-                // Update local state to remove from UI immediately
-                setRecentlyViewed(updated);
-                console.log(`✅ Removed recipe ${recipeId} from recently viewed`);
-            }
-        } catch (error) {
-            console.error('❌ Error removing from recently viewed:', error);
+            const key = `recentlyViewed_${userId}`;
+            await AsyncStorage.setItem(
+                key,
+                JSON.stringify(original.filter(r => r.id !== recipe.id))
+            );
+        } catch {
+            setRecipes(original);
+            Alert.alert('Error', 'Failed to delete recipe.');
+        } finally {
+            setActionLoading(null);
         }
     };
 
-    const handleRecipePress = async (recipe: Recipe) => {
-        console.log('Fetching full details for recipe:', recipe.id, 'Source:', recipe.source);
+    const executeClearAll = async () => {
+        if (!userId) return;
 
-        setLoadingRecipe(true);
+        setActionLoading('clear');
+        try {
+            const key = `recentlyViewed_${userId}`;
+            await AsyncStorage.removeItem(key);
+            setRecipes([]);
+        } catch {
+            Alert.alert('Error', 'Failed to clear history.');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    /* ----------------------------- Navigation ------------------------------ */
+
+    const handleRecipePress = async (recipe: Recipe) => {
+        setActionLoading('open');
 
         try {
-            // Check if it's a created recipe or API recipe
             if (recipe.source === 'created') {
-                // Fetch from Firestore (user-created recipes)
                 const fullRecipe = await getRecipeById(recipe.id);
 
                 if (!fullRecipe) {
-                    // Auto-cleanup: Remove this deleted recipe from recently viewed
-                    console.log(`🧹 Recipe ${recipe.id} was deleted, removing from recently viewed`);
-                    await removeFromRecentlyViewed(recipe.id);
-
-                    // Show user-friendly message
-                    Alert.alert(
-                        'Recipe Unavailable',
-                        'This recipe has been deleted by its creator.',
-                        [{ text: 'OK' }]
-                    );
-                    setLoadingRecipe(false);
-                    return; // Don't navigate
+                    executeDeleteRecipe(recipe);
+                    Alert.alert('Recipe Deleted', 'This recipe no longer exists.');
+                    return;
                 }
 
-                console.log('✅ Created recipe loaded:', fullRecipe.title);
                 navigation.navigate('ViewRecipe', {
                     recipe: fullRecipe,
-                    viewMode: 'recentlyViewed'
+                    viewMode: 'recentlyViewed',
                 });
             } else {
-                // Fetch from Spoonacular API
                 const fullRecipe = await fetchRecipeById(recipe.id);
 
-                if (!fullRecipe) {
-                    throw new Error('Failed to fetch recipe details');
-                }
-
-                const completeRecipe = {
-                    id: fullRecipe.id?.toString() || recipe.id,
-                    title: fullRecipe.title || recipe.title,
-                    image: fullRecipe.image || recipe.image,
-                    totalTime: fullRecipe.readyInMinutes?.toString() || '30',
-                    difficulty: '',
-                    source: 'api' as const,
-                    servings: fullRecipe.servings || 4,
-                    ingredients: fullRecipe.extendedIngredients?.map((ing: any) => ing.original) || [],
-                    instructions: fullRecipe.instructions ||
-                        fullRecipe.analyzedInstructions?.[0]?.steps?.map((step: any, idx: number) =>
-                            `${idx + 1}. ${step.step}`
-                        ).join('\n\n') || 'No instructions available',
-                    summary: fullRecipe.summary || '',
-                    cuisines: fullRecipe.cuisines || [],
-                    dishTypes: fullRecipe.dishTypes || [],
-                    diets: fullRecipe.diets || [],
-                };
-
-                console.log('✅ API recipe loaded:', completeRecipe.title);
                 navigation.navigate('ViewRecipe', {
-                    recipe: completeRecipe,
-                    viewMode: 'recentlyViewed'
+                    recipe: {
+                        id: fullRecipe.id.toString(),
+                        title: fullRecipe.title,
+                        image: fullRecipe.image,
+                        totalTime: fullRecipe.readyInMinutes,
+                        ingredients: fullRecipe.extendedIngredients?.map((i: any) => i.original) || [],
+                        instructions:
+                            fullRecipe.instructions ||
+                            fullRecipe.analyzedInstructions?.[0]?.steps
+                                ?.map((s: any, i: number) => `${i + 1}. ${s.step}`)
+                                .join('\n'),
+                        source: 'api',
+                    },
+                    viewMode: 'recentlyViewed',
                 });
             }
-        } catch (error) {
-            console.error('❌ Error fetching recipe details:', error);
-            Alert.alert('Error', 'Failed to load recipe details. Please try again.');
+        } catch {
+            Alert.alert('Error', 'Failed to load recipe.');
         } finally {
-            setLoadingRecipe(false);
+            setActionLoading(null);
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = now.getTime() - date.getTime();
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const days = Math.floor(hours / 24);
+    /* ------------------------------ Utilities ------------------------------ */
 
+    const formatDate = (dateString: string) => {
+        const diff = Date.now() - new Date(dateString).getTime();
+        const hours = Math.floor(diff / 36e5);
         if (hours < 1) return 'Just now';
         if (hours < 24) return `${hours}h ago`;
-        if (days < 7) return `${days}d ago`;
-        return date.toLocaleDateString();
+        return new Date(dateString).toLocaleDateString();
     };
 
-    const renderItem = useCallback(({ item }: { item: Recipe }) => (
+    /* ------------------------------ Renderers ------------------------------ */
+
+    const renderRecipeItem = ({ item }: { item: Recipe }) => (
         <TouchableOpacity
-            className="bg-white rounded-2xl mb-3 overflow-hidden flex-row shadow-sm"
             onPress={() => handleRecipePress(item)}
+            disabled={!!actionLoading}
+            className="bg-white rounded-2xl mb-3 flex-row overflow-hidden"
         >
-            <Image
-                source={{ uri: item.image }}
-                className="w-24 h-24"
-                style={{ resizeMode: 'cover' }}
-            />
+            <Image source={{ uri: item.image }} className="w-24 h-24" />
+
             <View className="flex-1 p-3 justify-between">
-                <View>
-                    <Text className="font-bold text-base text-gray-800" numberOfLines={1}>
-                        {item.title}
-                    </Text>
-                    <View className="flex-row items-center mt-1">
-                        <Ionicons name="time-outline" size={14} color="#FF9966" />
-                        <Text className="text-xs text-gray-500 ml-1">{item.time}</Text>
-                    </View>
-                </View>
-                <Text className="text-xs text-gray-400">{formatDate(item.viewedAt)}</Text>
+                <Text className="font-bold text-gray-800" numberOfLines={1}>
+                    {item.title}
+                </Text>
+                <Text className="text-xs text-gray-400">
+                    {formatDate(item.viewedAt)}
+                </Text>
             </View>
+
             <TouchableOpacity
+                onPress={() => showDeleteConfirmation(item)}
+                disabled={!!actionLoading}
                 className="p-3 justify-center"
-                onPress={() => handleDeleteRecipe(item.id)}
             >
                 <Ionicons name="trash-outline" size={20} color="#EF4444" />
             </TouchableOpacity>
         </TouchableOpacity>
-    ), []);
+    );
 
-    const keyExtractor = useCallback((item: Recipe) => item.id, []);
-
-    const ListEmptyComponent = useCallback(() => (
-        <View className="flex-1 justify-center items-center p-8 mt-20">
-            <Ionicons name="time-outline" size={64} color="#D1D5DB" />
-            <Text className="text-xl font-bold text-gray-700 mt-4">No Recently Viewed</Text>
-            <Text className="text-gray-500 text-center mt-2">
-                Recipes you view will appear here
-            </Text>
-        </View>
-    ), []);
+    /* --------------------------------- UI --------------------------------- */
 
     return (
-        <View className="flex-1 bg-gray-50"
-            style={{ backgroundColor: colors.secondary }}>
+        <View className="flex-1" style={{ backgroundColor: colors.secondary }}>
             <Header
                 title="Recently Viewed"
-                showBackButton={true}
+                showBackButton
                 onBack={() => navigation.goBack()}
                 rightComponent={
-                    recentlyViewed.length > 0 ? (
-                        <TouchableOpacity onPress={handleClearAll}>
+                    recipes.length > 0 ? (
+                        <TouchableOpacity onPress={showClearAllConfirmation}>
                             <Text className="text-orange-500 font-semibold">Clear All</Text>
                         </TouchableOpacity>
                     ) : undefined
@@ -325,42 +275,65 @@ export default function RecentlyViewedScreen() {
 
             {loading ? (
                 <View className="flex-1 justify-center items-center">
-                    <ActivityIndicator size="large" color="#FF9966" />
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text className="mt-4 text-gray-600">Loading history...</Text>
                 </View>
             ) : (
                 <FlatList
-                    data={recentlyViewed}
-                    renderItem={renderItem}
-                    keyExtractor={keyExtractor}
-                    contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, flexGrow: 1 }}
+                    data={recipes}
+                    renderItem={renderRecipeItem}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ padding: 16, flexGrow: 1 }}
                     showsVerticalScrollIndicator={false}
-                    ListEmptyComponent={ListEmptyComponent}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={[colors.primary]}
+                        />
+                    }
+                    ListEmptyComponent={
+                        <View className="items-center mt-20">
+                            <Ionicons name="time-outline" size={80} color="#D1D5DB" />
+                            <Text className="text-xl font-bold text-gray-700 mt-4">
+                                No Recently Viewed
+                            </Text>
+                            <Text className="text-gray-500 text-center mt-2">
+                                Recipes you view will appear here
+                            </Text>
+                        </View>
+                    }
                 />
             )}
 
-            {/* Loading Modal */}
-            {loadingRecipe && (
-                <View
-                    style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.7)',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        zIndex: 999,
-                    }}
-                >
-                    <View className="bg-white rounded-3xl p-8 items-center min-w-[200px]">
-                        <ActivityIndicator size="large" color="#FF9966" />
-                        <Text className="text-gray-800 font-semibold mt-4 text-center">
-                            Loading recipe details...
-                        </Text>
-                    </View>
-                </View>
+            {/* Confirmation Modals */}
+            {confirmationModal.type === 'delete' && confirmationModal.recipe && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={closeModal}
+                    onConfirm={() => executeDeleteRecipe(confirmationModal.recipe!)}
+                    title="Delete Recipe"
+                    message={`Delete "${confirmationModal.recipe.title}" from recently viewed?`}
+                    confirmText="Delete"
+                    icon="trash-bin"
+                    isDestructive={true}
+                />
+            )}
+
+            {confirmationModal.type === 'clearAll' && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={closeModal}
+                    onConfirm={executeClearAll}
+                    title="Clear Recently Viewed"
+                    message="This will remove all recently viewed recipes. This action cannot be undone."
+                    confirmText="Clear All"
+                    icon="trash"
+                    isDestructive={true}
+                />
             )}
         </View>
     );
-}
+};
+
+export default RecentlyViewedScreen;

@@ -14,6 +14,8 @@ import { saveApiRecipe, unsaveRecipe, getSavedRecipes, getRecipeByUser, getRecip
 import { loadMealPlanWithDetails } from '~/controller/planner';
 import colors from '~/utils/color';
 import GeminiChatbot from '~/components/partials/GeminiChatBot';
+import ConfirmationModal from '~/components/modal/ConfirmationModal';
+import SuccessModal from '~/components/modal/SuccessModal';
 
 const categories = ['All', 'Asian', 'Italian', 'Indian', 'Chinese', 'Mexican'];
 const baseIngredients = ['Chicken', 'Tomato', 'Curry', 'Salad', 'Chilli', 'Onion'];
@@ -117,6 +119,20 @@ export const HomeScreen = () => {
     const [loadingRecent, setLoadingRecent] = useState<boolean>(true);
     const [statsCache, setStatsCache] = useState<{ data: any; timestamp: number } | null>(null);
     const [refreshing, setRefreshing] = useState<boolean>(false);
+    const [addedIngredientName, setAddedIngredientName] = useState<string>('');
+    const [showSuccessAddModal, setShowSuccessAddModal] = useState<boolean>(false);
+    const [showSuccessRemoveModal, setShowSuccessRemoveModal] = useState<boolean>(false);
+    const [showSuccessAddedIngModal, setShowSuccessAddedIngModal] = useState<boolean>(false);
+    const [confirmationModal, setConfirmationModal] = useState<{
+        visible: boolean;
+        type: 'unsave' | 'removeIngredient' | null;
+        recipeId?: string;
+        recipeTitle?: string;
+        ingredientName?: string;
+    }>({
+        visible: false,
+        type: null,
+    });
 
     const navigation = useNavigation<NavigationProps>();
     const { user } = useAuth();
@@ -267,51 +283,66 @@ export const HomeScreen = () => {
 
     // --- LOAD RECIPES BY CATEGORY ---
     const loadRecipes = async () => {
-        try {
-            setLoadingCategories(true);
-            const results = await fetchRecipesByCategory(activeCategory, 30);
+        // ⚠️ SPOONACULAR API DISABLED - Uncomment below to re-enable
+        console.log('⚠️ Spoonacular API call skipped (loadRecipes)');
+        setLoadingCategories(false);
+        setInitialLoading(false);
+        setCategoryRecipes([]); // Set empty array instead of calling API
+        return;
 
-            const recipesData =
-                activeCategory === 'All' ? results.recipes || [] : results.results || [];
 
-            const transformedRecipes = recipesData.map((recipe: any, index: number) => ({
-                id: recipe.id?.toString() || index.toString(),
-                title: recipe.title || 'Untitled Recipe',
-                image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
-                time: recipe.readyInMinutes ? `${recipe.readyInMinutes} Mins` : 'N/A',
-            }));
+        // try {
+        //     setLoadingCategories(true);
+        //     const results = await fetchRecipesByCategory(activeCategory, 30);
 
-            setCategoryRecipes(transformedRecipes);
-        } catch (error) {
-            console.log('Error fetching recipes:', error);
-            Alert.alert('Error', 'Failed to fetch recipes');
-        } finally {
-            setInitialLoading(false);
-            setLoadingCategories(false);
-        }
+        //     const recipesData =
+        //         activeCategory === 'All' ? results.recipes || [] : results.results || [];
+
+        //     const transformedRecipes = recipesData.map((recipe: any, index: number) => ({
+        //         id: recipe.id?.toString() || index.toString(),
+        //         title: recipe.title || 'Untitled Recipe',
+        //         image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+        //         time: recipe.readyInMinutes ? `${recipe.readyInMinutes} Mins` : 'N/A',
+        //     }));
+
+        //     setCategoryRecipes(transformedRecipes);
+        // } catch (error) {
+        //     console.log('Error fetching recipes:', error);
+        //     Alert.alert('Error', 'Failed to fetch recipes');
+        // } finally {
+        //     setInitialLoading(false);
+        //     setLoadingCategories(false);
+        // }
     };
 
     // --- LOAD RECIPES BY INGREDIENTS ---
     const loadRecipesByIngredients = async (ingredientsList: string[]) => {
-        try {
-            setLoadingIngredients(true);
-            const results = await fetchRecipesByIngredients(ingredientsList, 30);
+        // ⚠️ SPOONACULAR API DISABLED - Uncomment below to re-enable
+        console.log('⚠️ Spoonacular API call skipped (loadRecipesByIngredients)');
+        setLoadingIngredients(false);
+        setInitialLoading(false);
+        setIngredientRecipes([]); // Set empty array instead of calling API
+        return;
 
-            const transformedRecipes = results.map((recipe: any, index: number) => ({
-                id: recipe.id?.toString() || index.toString(),
-                title: recipe.title || 'Untitled Recipe',
-                image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
-                time: 'See more',
-            }));
+        // try {
+        //     setLoadingIngredients(true);
+        //     const results = await fetchRecipesByIngredients(ingredientsList, 30);
 
-            setIngredientRecipes(transformedRecipes);
-        } catch (error) {
-            console.log('Error fetching recipes by ingredients:', error);
-            Alert.alert('Error', 'Failed to fetch recipes');
-        } finally {
-            setInitialLoading(false);
-            setLoadingIngredients(false);
-        }
+        //     const transformedRecipes = results.map((recipe: any, index: number) => ({
+        //         id: recipe.id?.toString() || index.toString(),
+        //         title: recipe.title || 'Untitled Recipe',
+        //         image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+        //         time: 'See more',
+        //     }));
+
+        //     setIngredientRecipes(transformedRecipes);
+        // } catch (error) {
+        //     console.log('Error fetching recipes by ingredients:', error);
+        //     Alert.alert('Error', 'Failed to fetch recipes');
+        // } finally {
+        //     setInitialLoading(false);
+        //     setLoadingIngredients(false);
+        // }
     };
 
     // --- HANDLE INGREDIENT SELECTION (TEMPORARY) ---
@@ -357,32 +388,30 @@ export const HomeScreen = () => {
         // Automatically select the new ingredient
         setModalSelectedIngredients(prev => [...prev, trimmed]);
 
+        setAddedIngredientName(trimmed);
+
         // Clear input
         setNewIngredient('');
 
-        Alert.alert('Success', `"${trimmed}" added and selected!`);
+        setShowSuccessAddedIngModal(true);
     };
 
-    // Remove ingredient
+    // Show remove ingredient confirmation
     const handleRemoveIngredient = (ingredient: string) => {
-        Alert.alert(
-            'Remove Ingredient',
-            `Remove "${ingredient}" from the list?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Remove',
-                    style: 'destructive',
-                    onPress: () => {
-                        // Remove from all lists
-                        setIngredients(prev => prev.filter(i => i !== ingredient));
-                        setModalSelectedIngredients(prev => prev.filter(i => i !== ingredient));
-                        setTempSelectedIngredients(prev => prev.filter(i => i !== ingredient));
-                        setSelectedIngredients(prev => prev.filter(i => i !== ingredient));
-                    }
-                }
-            ]
-        );
+        setConfirmationModal({
+            visible: true,
+            type: 'removeIngredient',
+            ingredientName: ingredient,
+        });
+    };
+
+    // Execute remove ingredient
+    const executeRemoveIngredient = (ingredient: string) => {
+        // Remove from all lists
+        setIngredients(prev => prev.filter(i => i !== ingredient));
+        setModalSelectedIngredients(prev => prev.filter(i => i !== ingredient));
+        setTempSelectedIngredients(prev => prev.filter(i => i !== ingredient));
+        setSelectedIngredients(prev => prev.filter(i => i !== ingredient));
     };
 
     // Open modal with current selections
@@ -566,7 +595,7 @@ export const HomeScreen = () => {
         try {
             await saveApiRecipe(recipe);
             setSavedRecipes(prev => ({ ...prev, [recipe.id]: true }));
-            Alert.alert("Success", `${recipe.title} saved successfully!`);
+            setShowSuccessAddModal(true);
         } catch (err) {
             console.error(err);
             Alert.alert("Error", "Failed to save recipe.");
@@ -575,15 +604,25 @@ export const HomeScreen = () => {
         }
     };
 
+    // --- SHOW UNSAVE CONFIRMATION ---
+    const showUnsaveConfirmation = (recipeId: string, recipeTitle: string) => {
+        setConfirmationModal({
+            visible: true,
+            type: 'unsave',
+            recipeId,
+            recipeTitle,
+        });
+    };
+
     // --- HANDLE UNSAVE RECIPE ---
-    const handleUnsaveRecipe = async (recipeId: string) => {
+    const executeUnsaveRecipe = async (recipeId: string) => {
         setLoadingMessage("Removing recipe...");
         setShowLoadingModal(true);
 
         try {
             await unsaveRecipe(recipeId);
             setSavedRecipes(prev => ({ ...prev, [recipeId]: false }));
-            Alert.alert("Success", "Recipe removed from saved list.");
+            setShowSuccessRemoveModal(true);
         } catch (err) {
             console.error(err);
             Alert.alert("Error", "Failed to unsave recipe.");
@@ -994,7 +1033,7 @@ export const HomeScreen = () => {
                                                         onPress={() => handleRecipePress(item)}
                                                         onSave={() => {
                                                             if (savedRecipes[item.id]) {
-                                                                handleUnsaveRecipe(item.id);
+                                                                showUnsaveConfirmation(item.id, item.title);
                                                             } else {
                                                                 handleSaveRecipe(item);
                                                             }
@@ -1156,7 +1195,7 @@ export const HomeScreen = () => {
                                                     onPress={() => handleRecipePress(item)}
                                                     onSave={() => {
                                                         if (savedRecipes[item.id]) {
-                                                            handleUnsaveRecipe(item.id);
+                                                            showUnsaveConfirmation(item.id, item.title);
                                                         } else {
                                                             handleSaveRecipe(item);
                                                         }
@@ -1233,7 +1272,7 @@ export const HomeScreen = () => {
                                                 onPress={() => handleRecipePress(item)}
                                                 onSave={() => {
                                                     if (savedRecipes[item.id]) {
-                                                        handleUnsaveRecipe(item.id);
+                                                        showUnsaveConfirmation(item.id, item.title);
                                                     } else {
                                                         handleSaveRecipe(item);
                                                     }
@@ -1425,6 +1464,28 @@ export const HomeScreen = () => {
                 </View>
             </Modal>
 
+            <SuccessModal
+                visible={showSuccessAddModal}
+                title="Success"
+                message="Recipe added to saved list"
+                onClose={() => setShowSuccessAddModal(false)}
+            />
+
+            <SuccessModal
+                visible={showSuccessRemoveModal}
+                title="Success"
+                message="Recipe removed from saved list"
+                onClose={() => setShowSuccessRemoveModal(false)}
+            />
+
+            <SuccessModal
+                visible={showSuccessAddedIngModal}
+                title="Success"
+                message={`"${addedIngredientName}" added and selected!`}
+                onClose={() => setShowSuccessAddedIngModal(false)}
+            />
+
+
             {/* AsyncStorage Size Check Button */}
             {/* <View className="mt-6 mb-2">
                 <TouchableOpacity
@@ -1499,6 +1560,37 @@ export const HomeScreen = () => {
                     </View>
                 </TouchableOpacity>
             )} */}
+
+            {/* Unsave Confirmation Modal */}
+            {confirmationModal.type === 'unsave' && confirmationModal.recipeId && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={() => executeUnsaveRecipe(confirmationModal.recipeId!)}
+                    title="Remove from Saved?"
+                    message={`Are you sure you want to remove "${confirmationModal.recipeTitle}" from your saved recipes?`}
+                    confirmText="Remove"
+                    cancelText="Cancel"
+                    icon="bookmark-outline"
+                    iconColor={colors.primary}
+                    confirmColor={colors.primary}
+                />
+            )}
+
+            {/* Remove Ingredient Confirmation Modal */}
+            {confirmationModal.type === 'removeIngredient' && confirmationModal.ingredientName && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={() => executeRemoveIngredient(confirmationModal.ingredientName!)}
+                    title="Remove Ingredient"
+                    message={`Are you sure you want to remove "${confirmationModal.ingredientName}" from the ingredient list?`}
+                    confirmText="Remove"
+                    cancelText="Cancel"
+                    icon="close-circle"
+                    isDestructive={true}
+                />
+            )}
         </SafeAreaView>
     );
 };

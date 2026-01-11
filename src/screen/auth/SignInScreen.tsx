@@ -63,14 +63,7 @@ const SignInScreen = () => {
             <StatusBar style="dark" />
             <View className="flex-1 items-center justify-center px-6">
                 {/* Logo Container with Enhanced Design */}
-                <View className="bg-white rounded-3xl p-5 mb-8"
-                    style={{
-                        shadowColor: '#FF914D',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 12,
-                        elevation: 8
-                    }}
+                <View className="rounded-3xl p-5 mb-8"
                 >
                     <Image
                         source={require('../../../assets/ChefiePieLogo.png')}

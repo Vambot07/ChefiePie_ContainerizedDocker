@@ -17,6 +17,7 @@ import {
 import { getSavedRecipes } from '~/controller/recipe';
 import { RootStackParamList } from '~/navigation/AppStack';
 import colors from '~/utils/color';
+import ConfirmationModal from '~/components/modal/ConfirmationModal';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -157,6 +158,23 @@ export default function PlannerScreen() {
     const [mealPlanCache, setMealPlanCache] = useState<{ [weekOffset: number]: { data: any; timestamp: number } }>({});
     const [deleteMode, setDeleteMode] = useState(false);
     const [selectedRecipesToDelete, setSelectedRecipesToDelete] = useState<{ [dayIndex: number]: string[] }>({});
+
+    const [confirmationModal, setConfirmationModal] = useState<{
+        visible: boolean;
+        type: 'delete' | null;
+        itemToDelete?: any;
+    }>({
+        visible: false,
+        type: null,
+    });
+
+    const handleShowConfirmationModal = (type: 'delete', itemToDelete?: any) => {
+        setConfirmationModal({
+            visible: true,
+            type: type,
+            itemToDelete: itemToDelete,
+        });
+    };
 
     const buttonRefs = useRef<{ [key: string]: View | null }>({});
     const userId = user?.userId;
@@ -984,56 +1002,55 @@ export default function PlannerScreen() {
                     {/* Compact Delete Mode Toggle - Below Week Selector */}
                     {hasAnyRecipes && (
                         <View className="items-end mx-6 mt-3">
-                        <TouchableOpacity
-                            onPress={toggleDeleteMode}
-                            activeOpacity={0.7}
-                            style={{
-                                backgroundColor: deleteMode ? '#FEE2E2' : '#F9FAFB',
-                                borderWidth: 1,
-                                borderColor: deleteMode ? '#FECACA' : '#E5E7EB',
-                            }}
-                            className="flex-row items-center justify-between py-2 px-3 rounded-lg"
-                        >
-                            <View className="flex-row items-center">
-                                <Ionicons
-                                    name={deleteMode ? "close-circle" : "trash-outline"}
-                                    size={18}
-                                    color={deleteMode ? "#EF4444" : "#9CA3AF"}
-                                />
-                    
-                                <View className="ml-2">
-                                    <Text
-                                        className={`font-medium text-sm ${
-                                            deleteMode ? 'text-red-600' : 'text-gray-600'
-                                        }`}
-                                    >
-                                        {deleteMode ? 'Cancel Delete' : 'Delete Recipes'}
-                                    </Text>
+                            <TouchableOpacity
+                                onPress={toggleDeleteMode}
+                                activeOpacity={0.7}
+                                style={{
+                                    backgroundColor: deleteMode ? '#FEE2E2' : '#F9FAFB',
+                                    borderWidth: 1,
+                                    borderColor: deleteMode ? '#FECACA' : '#E5E7EB',
+                                }}
+                                className="flex-row items-center justify-between py-2 px-3 rounded-lg"
+                            >
+                                <View className="flex-row items-center">
+                                    <Ionicons
+                                        name={deleteMode ? "close-circle" : "trash-outline"}
+                                        size={18}
+                                        color={deleteMode ? "#EF4444" : "#9CA3AF"}
+                                    />
 
-                                    {deleteMode ? 
-                                    (
-                                        <Text className="text-xs text-red-400 mt-1">
-                                            Tap recipes 
+                                    <View className="ml-2">
+                                        <Text
+                                            className={`font-medium text-sm ${deleteMode ? 'text-red-600' : 'text-gray-600'
+                                                }`}
+                                        >
+                                            {deleteMode ? 'Cancel Delete' : 'Delete Recipes'}
                                         </Text>
-                                    ) :
-                                    <Text className="text-xs text-gray-400">
-                                        Multiple Select
-                                    </Text>
-                                    }
-                                </View>
-                            </View>
 
-                    
-                            {deleteMode && getSelectedRecipesCount() > 0 && (
-                                <View className="bg-red-500 px-2 py-0.5 rounded-full">
-                                    <Text className="text-white font-bold text-xs">
-                                        {getSelectedRecipesCount()}
-                                    </Text>
+                                        {deleteMode ?
+                                            (
+                                                <Text className="text-xs text-red-400 mt-1">
+                                                    Tap recipes
+                                                </Text>
+                                            ) :
+                                            <Text className="text-xs text-gray-400">
+                                                Multiple Select
+                                            </Text>
+                                        }
+                                    </View>
                                 </View>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                    
+
+
+                                {deleteMode && getSelectedRecipesCount() > 0 && (
+                                    <View className="bg-red-500 px-2 py-0.5 rounded-full">
+                                        <Text className="text-white font-bold text-xs">
+                                            {getSelectedRecipesCount()}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+
                     )}
 
                     <View className="px-6 mt-2">
