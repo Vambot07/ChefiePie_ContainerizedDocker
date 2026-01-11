@@ -18,6 +18,7 @@ import { getSavedRecipes } from '~/controller/recipe';
 import { RootStackParamList } from '~/navigation/AppStack';
 import colors from '~/utils/color';
 import ConfirmationModal from '~/components/modal/ConfirmationModal';
+import SuccessModal from '~/components/modal/SuccessModal';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -161,20 +162,15 @@ export default function PlannerScreen() {
 
     const [confirmationModal, setConfirmationModal] = useState<{
         visible: boolean;
-        type: 'delete' | null;
-        itemToDelete?: any;
+        type: 'deleteRecipe' | 'bulkDelete' | null;
+        dayIndex?: number;
+        recipeId?: string;
+        recipeTitle?: string;
+        deleteCount?: number;
     }>({
         visible: false,
         type: null,
     });
-
-    const handleShowConfirmationModal = (type: 'delete', itemToDelete?: any) => {
-        setConfirmationModal({
-            visible: true,
-            type: type,
-            itemToDelete: itemToDelete,
-        });
-    };
 
     const buttonRefs = useRef<{ [key: string]: View | null }>({});
     const userId = user?.userId;
@@ -509,39 +505,36 @@ export default function PlannerScreen() {
     }
 
     const handleDeleteRecipe = (dayIndex: number, recipeId: string) => {
-        Alert.alert(
-            'Delete Recipe',
-            'Are you sure you want to remove this recipe from your meal plan?',
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel'
-                },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setRecipesByDay(prev => {
-                            const updated = { ...prev };
-                            if (updated[dayIndex]) {
-                                updated[dayIndex] = updated[dayIndex].filter(recipe => recipe.id !== recipeId);
+        // Find recipe title
+        const recipe = recipesByDay[dayIndex]?.find(r => r.id === recipeId);
 
-                                if (updated[dayIndex].length === 0) {
-                                    delete updated[dayIndex];
-                                }
-                            }
-                            return updated;
-                        });
+        setConfirmationModal({
+            visible: true,
+            type: 'deleteRecipe',
+            dayIndex,
+            recipeId,
+            recipeTitle: recipe?.title || 'this recipe',
+        });
+    };
 
-                        if (userId) {
-                            await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
-                            // Invalidate cache after deletion
-                            invalidateWeekCache();
-                        }
-                    }
+    const executeDeleteRecipe = async (dayIndex: number, recipeId: string) => {
+        setRecipesByDay(prev => {
+            const updated = { ...prev };
+            if (updated[dayIndex]) {
+                updated[dayIndex] = updated[dayIndex].filter(recipe => recipe.id !== recipeId);
+
+                if (updated[dayIndex].length === 0) {
+                    delete updated[dayIndex];
                 }
-            ]
-        );
+            }
+            return updated;
+        });
+
+        if (userId) {
+            await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
+            // Invalidate cache after deletion
+            invalidateWeekCache();
+        }
     };
 
     const toggleDeleteMode = () => {
@@ -580,68 +573,60 @@ export default function PlannerScreen() {
             return;
         }
 
-        Alert.alert(
-            'Delete Recipes',
-            `Are you sure you want to remove ${count} recipe${count > 1 ? 's' : ''} from your meal plan?`,
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel'
-                },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            // Delete from state
-                            setRecipesByDay(prev => {
-                                const updated = { ...prev };
+        setConfirmationModal({
+            visible: true,
+            type: 'bulkDelete',
+            deleteCount: count,
+        });
+    };
 
-                                Object.keys(selectedRecipesToDelete).forEach(dayIndexStr => {
-                                    const dayIndex = Number(dayIndexStr);
-                                    const recipeIdsToDelete = selectedRecipesToDelete[dayIndex];
+    const executeBulkDelete = async (count: number) => {
+        try {
+            // Delete from state
+            setRecipesByDay(prev => {
+                const updated = { ...prev };
 
-                                    if (updated[dayIndex]) {
-                                        updated[dayIndex] = updated[dayIndex].filter(
-                                            recipe => !recipeIdsToDelete.includes(recipe.id)
-                                        );
+                Object.keys(selectedRecipesToDelete).forEach(dayIndexStr => {
+                    const dayIndex = Number(dayIndexStr);
+                    const recipeIdsToDelete = selectedRecipesToDelete[dayIndex];
 
-                                        if (updated[dayIndex].length === 0) {
-                                            delete updated[dayIndex];
-                                        }
-                                    }
-                                });
+                    if (updated[dayIndex]) {
+                        updated[dayIndex] = updated[dayIndex].filter(
+                            recipe => !recipeIdsToDelete.includes(recipe.id)
+                        );
 
-                                return updated;
-                            });
-
-                            // Delete from Firebase
-                            if (userId) {
-                                for (const dayIndexStr of Object.keys(selectedRecipesToDelete)) {
-                                    const dayIndex = Number(dayIndexStr);
-                                    const recipeIds = selectedRecipesToDelete[dayIndex];
-
-                                    for (const recipeId of recipeIds) {
-                                        await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
-                                    }
-                                }
-
-                                invalidateWeekCache();
-                            }
-
-                            // Reset delete mode
-                            setDeleteMode(false);
-                            setSelectedRecipesToDelete({});
-
-                            console.log(`✅ Deleted ${count} recipe(s) from meal plan`);
-                        } catch (error) {
-                            console.error('❌ Error deleting recipes:', error);
-                            Alert.alert('Error', 'Failed to delete some recipes. Please try again.');
+                        if (updated[dayIndex].length === 0) {
+                            delete updated[dayIndex];
                         }
                     }
+                });
+
+                return updated;
+            });
+
+            // Delete from Firebase
+            if (userId) {
+                for (const dayIndexStr of Object.keys(selectedRecipesToDelete)) {
+                    const dayIndex = Number(dayIndexStr);
+                    const recipeIds = selectedRecipesToDelete[dayIndex];
+
+                    for (const recipeId of recipeIds) {
+                        await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
+                    }
                 }
-            ]
-        );
+
+                invalidateWeekCache();
+            }
+
+            // Reset delete mode
+            setDeleteMode(false);
+            setSelectedRecipesToDelete({});
+
+            console.log(`✅ Deleted ${count} recipe(s) from meal plan`);
+        } catch (error) {
+            console.error('❌ Error deleting recipes:', error);
+            Alert.alert('Error', 'Failed to delete some recipes. Please try again.');
+        }
     };
 
     const handleOpenSavedRecipesModal = async () => {
@@ -1420,6 +1405,36 @@ export default function PlannerScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
+            )}
+
+            {/* Delete Recipe Confirmation Modal */}
+            {confirmationModal.type === 'deleteRecipe' && confirmationModal.recipeId && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={() => executeDeleteRecipe(confirmationModal.dayIndex!, confirmationModal.recipeId!)}
+                    title="Delete Recipe"
+                    message={`Are you sure you want to remove "${confirmationModal.recipeTitle}" from your meal plan?`}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    icon="trash-outline"
+                    isDestructive={true}
+                />
+            )}
+
+            {/* Bulk Delete Confirmation Modal */}
+            {confirmationModal.type === 'bulkDelete' && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={() => executeBulkDelete(confirmationModal.deleteCount!)}
+                    title="Delete Recipes"
+                    message={`Are you sure you want to remove ${confirmationModal.deleteCount} recipe${confirmationModal.deleteCount! > 1 ? 's' : ''} from your meal plan?`}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    icon="trash"
+                    isDestructive={true}
+                />
             )}
         </View>
     );
