@@ -22,6 +22,7 @@ type RootStackParamList = {
         viewMode: string
     };
     GeminiTest: undefined;
+    Setting: undefined;
 };
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -639,6 +640,8 @@ export default function SearchScreen() {
             <Header
                 title="Search Recipes"
                 showBackButton={false}
+                rightIcon='settings'
+                onRightAction={() => navigation.navigate('Setting')}
                 onBack={() => navigation.goBack()}
             />
 

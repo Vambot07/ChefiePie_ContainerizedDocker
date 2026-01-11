@@ -652,11 +652,17 @@ export const HomeScreen = () => {
                         }
                     >
                         {/* MODERN HEADER */}
-                        <View className="px-4 mb-2 pt-2">
-                            <View className="flex-row justify-between items-center">
+                        <View className="px-4 py-4">
+                            <View className="flex-row items-center justify-between">
+                                {/* Left: Profile Section */}
                                 <TouchableOpacity
-                                    onPress={() => navigation.navigate('Profile', { userId: userId, viewMode: 'profile' })}
-                                    className="flex-row items-center"
+                                    onPress={() =>
+                                        navigation.navigate('Profile', {
+                                            userId: userId,
+                                            viewMode: 'profile',
+                                        })
+                                    }
+                                    className="flex-row items-center flex-1"
                                 >
                                     <View
                                         className="w-14 h-14 rounded-full items-center justify-center"
@@ -672,31 +678,50 @@ export const HomeScreen = () => {
                                         }}
                                     >
                                         {profileImage ? (
-                                            <Image source={{ uri: profileImage }} className="w-12 h-12 rounded-full" />
+                                            <Image
+                                                source={{ uri: profileImage }}
+                                                className="w-12 h-12 rounded-full"
+                                            />
                                         ) : (
-                                            <Fontisto name="male" size={22} color={colors.lightBrown} />
+                                            <Fontisto
+                                                name="male"
+                                                size={22}
+                                                color={colors.lightBrown}
+                                            />
                                         )}
                                     </View>
+
                                     <View className="ml-3">
-                                        <Text className="text-gray-500 text-xs font-medium">Welcome back!</Text>
-                                        <Text className="text-gray-800 text-lg font-bold">{username || 'Guest'}</Text>
+                                        <Text className="text-gray-500 text-xs font-medium">
+                                            Welcome back!
+                                        </Text>
+                                        <Text className="text-gray-800 text-lg font-bold">
+                                            {username || 'Guest'}
+                                        </Text>
                                     </View>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    className="w-11 h-11 rounded-full items-center justify-center"
-                                    style={{
-                                        backgroundColor: colors.lightPeach,
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.1,
-                                        shadowRadius: 3,
-                                        elevation: 2,
-                                    }}
-                                    onPress={() => navigation.navigate('Setting')}
-                                >
-                                    <Ionicons name="settings-outline" size={22} color="#FF9966" />
-                                </TouchableOpacity>
+                                {/* Right: Settings Button */}
+                                <View className="w-20 items-end">
+                                    <TouchableOpacity
+                                        className="w-11 h-11 rounded-full items-center justify-center"
+                                        style={{
+                                            backgroundColor: colors.lightPeach,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.1,
+                                            shadowRadius: 3,
+                                            elevation: 2,
+                                        }}
+                                        onPress={() => navigation.navigate('Setting')}
+                                    >
+                                        <Ionicons
+                                            name="settings"
+                                            size={22}
+                                            color="#FF9966"
+                                        />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
 
                             {/* GREETING */}
@@ -705,17 +730,19 @@ export const HomeScreen = () => {
                                     style={{
                                         fontFamily: 'ArchivoBlack_400Regular',
                                         fontSize: 30,
-                                        color: '#1F2937'
+                                        color: '#1F2937',
                                     }}
                                 >
                                     What's cooking?
                                 </Text>
+
                                 <Text
                                     className="mt-1 text-base"
                                     style={{
                                         fontFamily: 'Oswald_400Regular',
-                                        color: '#1F2937'
-                                    }}>
+                                        color: '#1F2937',
+                                    }}
+                                >
                                     Discover delicious recipes for today 🍳
                                 </Text>
                             </View>
@@ -811,20 +838,39 @@ export const HomeScreen = () => {
                             <View className="px-5 pt-5 pb-3 flex-row justify-between items-center">
                                 <View>
                                     <View className="flex-row items-center mb-1">
-                                        <Ionicons name="restaurant" size={20} color="#FF9966" />
-                                        <Text className="text-xl font-bold text-gray-800 ml-2">Today's Menu</Text>
+
+                                        {/* Icon background */}
+                                        <View
+                                            className="w-9 h-9 rounded-full items-center justify-center"
+                                            style={{ backgroundColor: '#FFF4E0' }}
+                                        >
+                                            <Ionicons name="restaurant" size={18} color="#FF9966" />
+                                        </View>
+
+                                        <Text className="text-xl font-bold text-gray-800 ml-3">
+                                            Today's Menu
+                                        </Text>
                                     </View>
-                                    <Text className="text-sm text-gray-500 ml-7">
-                                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+
+                                    <Text className="text-sm text-gray-500 ml-12">
+                                        {new Date().toLocaleDateString('en-US', {
+                                            weekday: 'long',
+                                            month: 'short',
+                                            day: 'numeric'
+                                        })}
                                     </Text>
                                 </View>
+
                                 <TouchableOpacity
                                     className="bg-orange-50 px-4 py-2 rounded-full"
                                     onPress={() => navigation.navigate('Planner', {})}
                                 >
-                                    <Text className="text-orange-600 font-semibold text-sm">View All</Text>
+                                    <Text className="text-orange-600 font-semibold text-sm">
+                                        View All
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
+
                             {loadingStats ? (
                                 <ScrollView
                                     horizontal
@@ -1111,7 +1157,7 @@ export const HomeScreen = () => {
                                 elevation: 3,
                             }}
                         >
-                            <View className="flex-row items-center px-5 pt-5 pb-3"
+                            <View className="flex-row rounded-full items-center px-5 pt-5 pb-3"
                                 style={{ backgroundColor: colors.lightPeach }}>
                                 <View className="w-10 h-10 rounded-full items-center justify-center mr-2" style={{ backgroundColor: '#FFF4E0' }}>
                                     <Ionicons name="grid" size={20} color="#FF9966" />

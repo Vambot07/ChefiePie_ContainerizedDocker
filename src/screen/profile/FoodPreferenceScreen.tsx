@@ -18,6 +18,7 @@ import { useAuth } from '~/context/AuthContext';
 import Header from '~/components/partials/Header';
 import EditModal from '~/components/modal/EditModal';
 import Item from '~/components/partials/Item';
+import SuccessModal from '~/components/modal/SuccessModal';
 
 // EXTRACT COMPONENT KELUAR - Put BEFORE FoodPreferenceScreen
 const IngredientsToAvoidContent = React.memo(({
@@ -128,6 +129,8 @@ const FoodPreferenceScreen = () => {
 
     const [customIngredient, setCustomIngredient] = useState<string>('');
     const [saving, setSaving] = useState(false);
+
+    const [showSuccessUpdate, setShowSuccessUpdate] = useState(false);
 
     // Dietary restriction definitions
     const dietaryDefinitions: { [key: string]: string } = {
@@ -243,8 +246,7 @@ const FoodPreferenceScreen = () => {
                 throw new Error('Failed to save preferences');
             }
 
-            Alert.alert('Success', 'Food preferences saved successfully!');
-            navigation.goBack();
+            setShowSuccessUpdate(true);
 
         } catch (error) {
             console.error('❌ Error saving preferences:', error);
@@ -470,6 +472,16 @@ const FoodPreferenceScreen = () => {
                     ingredientOptions={ingredientOptions}
                 />
             </EditModal>
+
+            <SuccessModal
+                visible={showSuccessUpdate}
+                title="Success"
+                message="Food preferences saved successfully!"
+                onClose={() => {
+                    setShowSuccessUpdate(false),
+                        navigation.goBack()
+                }}
+            />
         </View>
     );
 };

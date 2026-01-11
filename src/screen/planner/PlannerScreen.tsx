@@ -18,6 +18,7 @@ import { getSavedRecipes } from '~/controller/recipe';
 import { RootStackParamList } from '~/navigation/AppStack';
 import colors from '~/utils/color';
 import ConfirmationModal from '~/components/modal/ConfirmationModal';
+import SuccessModal from '~/components/modal/SuccessModal';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -94,11 +95,12 @@ const RecipeCard = ({ recipe, navigation, onDelete, onSwap, deleteMode, isSelect
 
                 {!deleteMode && onSwap && (
                     <TouchableOpacity
-                        className="absolute top-2 left-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
+                        className="absolute top-2 left-2 rounded-full w-8 h-8 items-center justify-center shadow"
                         onPress={(e) => {
                             e.stopPropagation();
                             onSwap(recipe.id);
                         }}
+                        style={{ backgroundColor: colors.primary }}
                     >
                         <AntDesign name="swap" size={18} color="white" />
                     </TouchableOpacity>
@@ -106,7 +108,7 @@ const RecipeCard = ({ recipe, navigation, onDelete, onSwap, deleteMode, isSelect
 
                 {!deleteMode && onDelete && (
                     <TouchableOpacity
-                        className="absolute top-2 right-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
+                        className="absolute top-2 right-2 bg-red-500 rounded-full w-8 h-8 items-center justify-center shadow"
                         onPress={(e) => {
                             e.stopPropagation();
                             onDelete(recipe.id);
@@ -161,20 +163,15 @@ export default function PlannerScreen() {
 
     const [confirmationModal, setConfirmationModal] = useState<{
         visible: boolean;
-        type: 'delete' | null;
-        itemToDelete?: any;
+        type: 'deleteRecipe' | 'bulkDelete' | null;
+        dayIndex?: number;
+        recipeId?: string;
+        recipeTitle?: string;
+        deleteCount?: number;
     }>({
         visible: false,
         type: null,
     });
-
-    const handleShowConfirmationModal = (type: 'delete', itemToDelete?: any) => {
-        setConfirmationModal({
-            visible: true,
-            type: type,
-            itemToDelete: itemToDelete,
-        });
-    };
 
     const buttonRefs = useRef<{ [key: string]: View | null }>({});
     const userId = user?.userId;
@@ -509,39 +506,36 @@ export default function PlannerScreen() {
     }
 
     const handleDeleteRecipe = (dayIndex: number, recipeId: string) => {
-        Alert.alert(
-            'Delete Recipe',
-            'Are you sure you want to remove this recipe from your meal plan?',
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel'
-                },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setRecipesByDay(prev => {
-                            const updated = { ...prev };
-                            if (updated[dayIndex]) {
-                                updated[dayIndex] = updated[dayIndex].filter(recipe => recipe.id !== recipeId);
+        // Find recipe title
+        const recipe = recipesByDay[dayIndex]?.find(r => r.id === recipeId);
 
-                                if (updated[dayIndex].length === 0) {
-                                    delete updated[dayIndex];
-                                }
-                            }
-                            return updated;
-                        });
+        setConfirmationModal({
+            visible: true,
+            type: 'deleteRecipe',
+            dayIndex,
+            recipeId,
+            recipeTitle: recipe?.title || 'this recipe',
+        });
+    };
 
-                        if (userId) {
-                            await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
-                            // Invalidate cache after deletion
-                            invalidateWeekCache();
-                        }
-                    }
+    const executeDeleteRecipe = async (dayIndex: number, recipeId: string) => {
+        setRecipesByDay(prev => {
+            const updated = { ...prev };
+            if (updated[dayIndex]) {
+                updated[dayIndex] = updated[dayIndex].filter(recipe => recipe.id !== recipeId);
+
+                if (updated[dayIndex].length === 0) {
+                    delete updated[dayIndex];
                 }
-            ]
-        );
+            }
+            return updated;
+        });
+
+        if (userId) {
+            await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
+            // Invalidate cache after deletion
+            invalidateWeekCache();
+        }
     };
 
     const toggleDeleteMode = () => {
@@ -580,68 +574,60 @@ export default function PlannerScreen() {
             return;
         }
 
-        Alert.alert(
-            'Delete Recipes',
-            `Are you sure you want to remove ${count} recipe${count > 1 ? 's' : ''} from your meal plan?`,
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel'
-                },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            // Delete from state
-                            setRecipesByDay(prev => {
-                                const updated = { ...prev };
+        setConfirmationModal({
+            visible: true,
+            type: 'bulkDelete',
+            deleteCount: count,
+        });
+    };
 
-                                Object.keys(selectedRecipesToDelete).forEach(dayIndexStr => {
-                                    const dayIndex = Number(dayIndexStr);
-                                    const recipeIdsToDelete = selectedRecipesToDelete[dayIndex];
+    const executeBulkDelete = async (count: number) => {
+        try {
+            // Delete from state
+            setRecipesByDay(prev => {
+                const updated = { ...prev };
 
-                                    if (updated[dayIndex]) {
-                                        updated[dayIndex] = updated[dayIndex].filter(
-                                            recipe => !recipeIdsToDelete.includes(recipe.id)
-                                        );
+                Object.keys(selectedRecipesToDelete).forEach(dayIndexStr => {
+                    const dayIndex = Number(dayIndexStr);
+                    const recipeIdsToDelete = selectedRecipesToDelete[dayIndex];
 
-                                        if (updated[dayIndex].length === 0) {
-                                            delete updated[dayIndex];
-                                        }
-                                    }
-                                });
+                    if (updated[dayIndex]) {
+                        updated[dayIndex] = updated[dayIndex].filter(
+                            recipe => !recipeIdsToDelete.includes(recipe.id)
+                        );
 
-                                return updated;
-                            });
-
-                            // Delete from Firebase
-                            if (userId) {
-                                for (const dayIndexStr of Object.keys(selectedRecipesToDelete)) {
-                                    const dayIndex = Number(dayIndexStr);
-                                    const recipeIds = selectedRecipesToDelete[dayIndex];
-
-                                    for (const recipeId of recipeIds) {
-                                        await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
-                                    }
-                                }
-
-                                invalidateWeekCache();
-                            }
-
-                            // Reset delete mode
-                            setDeleteMode(false);
-                            setSelectedRecipesToDelete({});
-
-                            console.log(`✅ Deleted ${count} recipe(s) from meal plan`);
-                        } catch (error) {
-                            console.error('❌ Error deleting recipes:', error);
-                            Alert.alert('Error', 'Failed to delete some recipes. Please try again.');
+                        if (updated[dayIndex].length === 0) {
+                            delete updated[dayIndex];
                         }
                     }
+                });
+
+                return updated;
+            });
+
+            // Delete from Firebase
+            if (userId) {
+                for (const dayIndexStr of Object.keys(selectedRecipesToDelete)) {
+                    const dayIndex = Number(dayIndexStr);
+                    const recipeIds = selectedRecipesToDelete[dayIndex];
+
+                    for (const recipeId of recipeIds) {
+                        await deleteRecipeFromDay(userId, weekOffset, dayIndex, recipeId);
+                    }
                 }
-            ]
-        );
+
+                invalidateWeekCache();
+            }
+
+            // Reset delete mode
+            setDeleteMode(false);
+            setSelectedRecipesToDelete({});
+
+            console.log(`✅ Deleted ${count} recipe(s) from meal plan`);
+        } catch (error) {
+            console.error('❌ Error deleting recipes:', error);
+            Alert.alert('Error', 'Failed to delete some recipes. Please try again.');
+        }
     };
 
     const handleOpenSavedRecipesModal = async () => {
@@ -933,6 +919,8 @@ export default function PlannerScreen() {
             <Header
                 title="Meal Planner"
                 showBackButton={false}
+                rightIcon='settings'
+                onRightAction={() => navigation.navigate('Setting')}
                 onBack={() => navigation.goBack()}
             />
 
@@ -1024,7 +1012,7 @@ export default function PlannerScreen() {
                                             className={`font-medium text-sm ${deleteMode ? 'text-red-600' : 'text-gray-600'
                                                 }`}
                                         >
-                                            {deleteMode ? 'Cancel Delete' : 'Delete Recipes'}
+                                            {deleteMode ? 'Cancel Delete' : 'Multiple Delete'}
                                         </Text>
 
                                         {deleteMode ?
@@ -1033,21 +1021,19 @@ export default function PlannerScreen() {
                                                     Tap recipes
                                                 </Text>
                                             ) :
-                                            <Text className="text-xs text-gray-400">
-                                                Multiple Select
-                                            </Text>
+                                            <></>
                                         }
                                     </View>
                                 </View>
 
 
-                                {deleteMode && getSelectedRecipesCount() > 0 && (
+                                {/* {deleteMode && getSelectedRecipesCount() > 0 && (
                                     <View className="bg-red-500 px-2 py-0.5 rounded-full">
                                         <Text className="text-white font-bold text-xs">
                                             {getSelectedRecipesCount()}
                                         </Text>
                                     </View>
-                                )}
+                                )} */}
                             </TouchableOpacity>
                         </View>
 
@@ -1366,60 +1352,65 @@ export default function PlannerScreen() {
                     style={{
                         position: 'absolute',
                         bottom: 24,
-                        left: 24,
                         right: 24,
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: 20,
+                        backgroundColor: '#EF4444',
+                        borderRadius: 16,
                         shadowColor: '#000',
                         shadowOffset: { width: 0, height: 4 },
                         shadowOpacity: 0.3,
                         shadowRadius: 8,
                         elevation: 8,
-                        padding: 16,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 12,
+                        paddingHorizontal: 16,
                     }}
                 >
-                    <View className="flex-row items-center justify-between mb-3">
-                        <View className="flex-row items-center">
-                            <View className="w-10 h-10 bg-red-100 rounded-full items-center justify-center mr-3">
-                                <Text className="text-red-600 font-bold text-lg">
-                                    {getSelectedRecipesCount()}
-                                </Text>
-                            </View>
-                            <View>
-                                <Text className="font-bold text-gray-800">
-                                    {getSelectedRecipesCount()} Recipe{getSelectedRecipesCount() !== 1 ? 's' : ''}
-                                </Text>
-                                <Text className="text-xs text-gray-500">Ready to delete</Text>
-                            </View>
+                    <TouchableOpacity
+                        onPress={handleBulkDelete}
+                        className="flex-row items-center"
+                    >
+                        <View className="w-8 h-8 bg-white bg-opacity-20 rounded-full items-center justify-center mr-2">
+                            <Text className="text-black font-bold">
+                                {getSelectedRecipesCount()}
+                            </Text>
                         </View>
-
-                        <TouchableOpacity
-                            onPress={() => setSelectedRecipesToDelete({})}
-                            className="px-3 py-1 bg-gray-100 rounded-full"
-                        >
-                            <Text className="text-gray-600 font-medium text-sm">Clear</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View className="flex-row gap-2" style={{ gap: 8 }}>
-                        <TouchableOpacity
-                            onPress={toggleDeleteMode}
-                            className="flex-1 py-3 bg-gray-100 rounded-xl"
-                        >
-                            <Text className="text-gray-700 text-center font-bold">Cancel</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={handleBulkDelete}
-                            className="flex-1 py-3 bg-red-500 rounded-xl"
-                        >
-                            <View className="flex-row items-center justify-center">
-                                <Ionicons name="trash" size={18} color="white" />
-                                <Text className="text-white text-center font-bold ml-1">Delete</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
+                        <Ionicons name="trash" size={20} color="white" />
+                        <Text className="text-white font-bold ml-2">
+                            Delete Selected
+                        </Text>
+                    </TouchableOpacity>
                 </View>
+            )}
+
+            {/* Delete Recipe Confirmation Modal */}
+            {confirmationModal.type === 'deleteRecipe' && confirmationModal.recipeId && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={() => executeDeleteRecipe(confirmationModal.dayIndex!, confirmationModal.recipeId!)}
+                    title="Delete Recipe"
+                    message={`Are you sure you want to remove "${confirmationModal.recipeTitle}" from your meal plan?`}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    icon="trash-outline"
+                    isDestructive={true}
+                />
+            )}
+
+            {/* Bulk Delete Confirmation Modal */}
+            {confirmationModal.type === 'bulkDelete' && (
+                <ConfirmationModal
+                    visible={confirmationModal.visible}
+                    onClose={() => setConfirmationModal({ visible: false, type: null })}
+                    onConfirm={() => executeBulkDelete(confirmationModal.deleteCount!)}
+                    title="Delete Recipes"
+                    message={`Are you sure you want to remove ${confirmationModal.deleteCount} recipe${confirmationModal.deleteCount! > 1 ? 's' : ''} from your meal plan?`}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    icon="trash"
+                    isDestructive={true}
+                />
             )}
         </View>
     );
