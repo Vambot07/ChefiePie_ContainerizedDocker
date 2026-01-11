@@ -1,13 +1,17 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 interface SuccessModalProps {
     visible: boolean;
     title?: string;
-    message: string;
+    message: React.ReactNode;
     buttonText?: string;
     onClose: () => void;
+    icon?: keyof typeof Ionicons.glyphMap | keyof typeof MaterialIcons.glyphMap;
+    iconType?: 'ionicons' | 'material';
+    iconColor?: string;
+    iconBgColor?: string;
 }
 
 const SuccessModal: React.FC<SuccessModalProps> = ({
@@ -16,6 +20,10 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
     message,
     buttonText = 'OK',
     onClose,
+    icon = 'checkmark-circle',
+    iconType = 'ionicons',
+    iconColor = '#22C55E',
+    iconBgColor = '#DCFCE7',
 }) => {
     return (
         <Modal
@@ -41,12 +49,23 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
                     }}
                 >
                     {/* Icon */}
-                    <View className="w-16 h-16 rounded-full bg-green-100 items-center justify-center mb-4">
-                        <Ionicons
-                            name="checkmark-circle"
-                            size={42}
-                            color="#22C55E"
-                        />
+                    <View
+                        className="w-16 h-16 rounded-full items-center justify-center mb-4"
+                        style={{ backgroundColor: iconBgColor }}
+                    >
+                        {iconType === 'material' ? (
+                            <MaterialIcons
+                                name={icon as keyof typeof MaterialIcons.glyphMap}
+                                size={42}
+                                color={iconColor}
+                            />
+                        ) : (
+                            <Ionicons
+                                name={icon as keyof typeof Ionicons.glyphMap}
+                                size={42}
+                                color={iconColor}
+                            />
+                        )}
                     </View>
 
                     {/* Title */}

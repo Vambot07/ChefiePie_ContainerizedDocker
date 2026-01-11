@@ -12,6 +12,7 @@ import colors from '~/utils/color'
 type RootStackParamList = {
     AddRecipe: undefined;
     ViewSavedRecipe: { recipeId: string };
+    Setting: undefined;
 };
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -123,6 +124,8 @@ export default function SavedScreen() {
             <Header
                 title="Saved Recipes"
                 showBackButton={false}
+                rightIcon='settings'
+                onRightAction={() => navigation.navigate('Setting')}
             />
 
             {loading ? (

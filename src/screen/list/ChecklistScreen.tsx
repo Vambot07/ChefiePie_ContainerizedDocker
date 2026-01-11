@@ -14,6 +14,10 @@ import {
 import Header from '../../components/partials/Header';
 import ConfirmationModal from '~/components/modal/ConfirmationModal';
 import colors from '~/utils/color';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '~/navigation/AppStack';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // Interfaces
 interface ChecklistItem {
@@ -27,12 +31,13 @@ interface ChecklistItem {
 
 // Main Component
 const ChecklistScreen = () => {
+
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'shopping' | 'history'>('shopping');
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp>();
 
     // Add ingredient input state
     const [newItemName, setNewItemName] = useState('');
@@ -349,7 +354,7 @@ const ChecklistScreen = () => {
 
     const renderHistoryList = () => (
         <View className="rounded-2xl p-4 mt-4"
-        style={{backgroundColor: colors.secondary}}>
+            style={{ backgroundColor: colors.secondary }}>
             <View className="flex-row items-center justify-between mb-2">
                 <Text className="text-xl font-bold text-gray-800 mb-2">My History Items</Text>
                 {historyItems.length > 0 && (
@@ -409,7 +414,11 @@ const ChecklistScreen = () => {
     return (
         <View className="flex-1"
             style={{ backgroundColor: colors.secondary }}>
-            <Header title="Your List" showBackButton={false} />
+            <Header title="Your List"
+                showBackButton={false}
+                rightIcon='settings'
+                onRightAction={() => navigation.navigate('Setting')}
+                onBack={() => navigation.goBack()} />
             {/* Tabs */}
             <View className="flex-row p-4">
                 <TouchableOpacity

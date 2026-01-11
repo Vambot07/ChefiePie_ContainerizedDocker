@@ -95,11 +95,12 @@ const RecipeCard = ({ recipe, navigation, onDelete, onSwap, deleteMode, isSelect
 
                 {!deleteMode && onSwap && (
                     <TouchableOpacity
-                        className="absolute top-2 left-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
+                        className="absolute top-2 left-2 rounded-full w-8 h-8 items-center justify-center shadow"
                         onPress={(e) => {
                             e.stopPropagation();
                             onSwap(recipe.id);
                         }}
+                        style={{ backgroundColor: colors.primary }}
                     >
                         <AntDesign name="swap" size={18} color="white" />
                     </TouchableOpacity>
@@ -107,7 +108,7 @@ const RecipeCard = ({ recipe, navigation, onDelete, onSwap, deleteMode, isSelect
 
                 {!deleteMode && onDelete && (
                     <TouchableOpacity
-                        className="absolute top-2 right-2 bg-black rounded-full w-8 h-8 items-center justify-center shadow"
+                        className="absolute top-2 right-2 bg-red-500 rounded-full w-8 h-8 items-center justify-center shadow"
                         onPress={(e) => {
                             e.stopPropagation();
                             onDelete(recipe.id);
@@ -918,6 +919,8 @@ export default function PlannerScreen() {
             <Header
                 title="Meal Planner"
                 showBackButton={false}
+                rightIcon='settings'
+                onRightAction={() => navigation.navigate('Setting')}
                 onBack={() => navigation.goBack()}
             />
 
@@ -1009,7 +1012,7 @@ export default function PlannerScreen() {
                                             className={`font-medium text-sm ${deleteMode ? 'text-red-600' : 'text-gray-600'
                                                 }`}
                                         >
-                                            {deleteMode ? 'Cancel Delete' : 'Delete Recipes'}
+                                            {deleteMode ? 'Cancel Delete' : 'Multiple Delete'}
                                         </Text>
 
                                         {deleteMode ?
@@ -1018,21 +1021,19 @@ export default function PlannerScreen() {
                                                     Tap recipes
                                                 </Text>
                                             ) :
-                                            <Text className="text-xs text-gray-400">
-                                                Multiple Select
-                                            </Text>
+                                            <></>
                                         }
                                     </View>
                                 </View>
 
 
-                                {deleteMode && getSelectedRecipesCount() > 0 && (
+                                {/* {deleteMode && getSelectedRecipesCount() > 0 && (
                                     <View className="bg-red-500 px-2 py-0.5 rounded-full">
                                         <Text className="text-white font-bold text-xs">
                                             {getSelectedRecipesCount()}
                                         </Text>
                                     </View>
-                                )}
+                                )} */}
                             </TouchableOpacity>
                         </View>
 
@@ -1351,59 +1352,34 @@ export default function PlannerScreen() {
                     style={{
                         position: 'absolute',
                         bottom: 24,
-                        left: 24,
                         right: 24,
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: 20,
+                        backgroundColor: '#EF4444',
+                        borderRadius: 16,
                         shadowColor: '#000',
                         shadowOffset: { width: 0, height: 4 },
                         shadowOpacity: 0.3,
                         shadowRadius: 8,
                         elevation: 8,
-                        padding: 16,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 12,
+                        paddingHorizontal: 16,
                     }}
                 >
-                    <View className="flex-row items-center justify-between mb-3">
-                        <View className="flex-row items-center">
-                            <View className="w-10 h-10 bg-red-100 rounded-full items-center justify-center mr-3">
-                                <Text className="text-red-600 font-bold text-lg">
-                                    {getSelectedRecipesCount()}
-                                </Text>
-                            </View>
-                            <View>
-                                <Text className="font-bold text-gray-800">
-                                    {getSelectedRecipesCount()} Recipe{getSelectedRecipesCount() !== 1 ? 's' : ''}
-                                </Text>
-                                <Text className="text-xs text-gray-500">Ready to delete</Text>
-                            </View>
+                    <TouchableOpacity
+                        onPress={handleBulkDelete}
+                        className="flex-row items-center"
+                    >
+                        <View className="w-8 h-8 bg-white bg-opacity-20 rounded-full items-center justify-center mr-2">
+                            <Text className="text-black font-bold">
+                                {getSelectedRecipesCount()}
+                            </Text>
                         </View>
-
-                        <TouchableOpacity
-                            onPress={() => setSelectedRecipesToDelete({})}
-                            className="px-3 py-1 bg-gray-100 rounded-full"
-                        >
-                            <Text className="text-gray-600 font-medium text-sm">Clear</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View className="flex-row gap-2" style={{ gap: 8 }}>
-                        <TouchableOpacity
-                            onPress={toggleDeleteMode}
-                            className="flex-1 py-3 bg-gray-100 rounded-xl"
-                        >
-                            <Text className="text-gray-700 text-center font-bold">Cancel</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={handleBulkDelete}
-                            className="flex-1 py-3 bg-red-500 rounded-xl"
-                        >
-                            <View className="flex-row items-center justify-center">
-                                <Ionicons name="trash" size={18} color="white" />
-                                <Text className="text-white text-center font-bold ml-1">Delete</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
+                        <Ionicons name="trash" size={20} color="white" />
+                        <Text className="text-white font-bold ml-2">
+                            Delete Selected
+                        </Text>
+                    </TouchableOpacity>
                 </View>
             )}
 

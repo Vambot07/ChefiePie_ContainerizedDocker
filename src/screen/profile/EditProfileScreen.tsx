@@ -20,6 +20,7 @@ import { uploadProfileToFirebase, updateProfileImage } from '~/utils/uploadImage
 import Header from '~/components/partials/Header';
 import EditModal from '~/components/modal/EditModal';
 import ImagePickerModal from '~/components/modal/ImagePickerModal';
+import SuccessModal from '~/components/modal/SuccessModal';
 
 const EditProfileScreen = () => {
     const navigation = useNavigation();
@@ -45,6 +46,8 @@ const EditProfileScreen = () => {
     const [showEditTiktok, setShowEditTiktok] = useState(false);
     const [showImagePicker, setShowImagePicker] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    const [showSuccessUpdate, setShowSuccessUpdate] = useState(false);
 
     const maxBioLength = 255;
 
@@ -307,9 +310,7 @@ const EditProfileScreen = () => {
             if (!result.success) {
                 throw new Error('Failed to update profile');
             }
-
-            Alert.alert("Success", "Profile updated successfully!");
-            navigation.goBack();
+            setShowSuccessUpdate(true);
 
         } catch (error) {
             console.error("❌ Error updating profile:", error);
@@ -643,6 +644,16 @@ const EditProfileScreen = () => {
                     )}
                 </TouchableOpacity>
             </View>
+
+            <SuccessModal
+                visible={showSuccessUpdate}
+                title="Success"
+                message="Profile updated successfully!"
+                onClose={() => {
+                    setShowSuccessUpdate(false),
+                    navigation.goBack()
+                }}
+            />
         </View>
     );
 };

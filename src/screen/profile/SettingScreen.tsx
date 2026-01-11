@@ -53,6 +53,8 @@ const SettingScreen = () => {
 
     const [showLogoutConfirmation, setShowLogoutConfirmation] = useState<boolean>(false);
     const [showLogoutSuccessModal, setShowLogoutSuccessModal] = useState<boolean>(false);
+    const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
+    const [showPriSecModal, setShowPriSecModal] = useState<boolean>(false);
 
 
 
@@ -308,7 +310,7 @@ const SettingScreen = () => {
                         <Item
                             title="Privacy & Security"
                             subtitle="Manage your privacy settings"
-                            onPress={() => Alert.alert('Coming Soon', 'Privacy settings will be available soon!')}
+                            onPress={() => setShowPriSecModal(true)}
                             icon="shield-checkmark-outline"
                         />
 
@@ -317,7 +319,7 @@ const SettingScreen = () => {
                         <Item
                             title="About"
                             subtitle="App version and information"
-                            onPress={() => Alert.alert('About ChefiePie', 'Version 1.0.0\nBuilt with React Native & Expo')}
+                            onPress={() => setShowAboutModal(true)}
                             icon="information-circle-outline"
                         />
                     </View>
@@ -493,6 +495,17 @@ const SettingScreen = () => {
             </EditModal>
 
             <SuccessModal
+                visible={showPriSecModal}
+                title="Coming Soon"
+                message="Privacy settings will be available soon!"
+                icon='add-moderator'
+                iconType='material'
+                onClose={() =>
+                    setShowPriSecModal(false)
+                }
+            />
+
+            <SuccessModal
                 visible={showLogoutSuccessModal}
                 title="Success"
                 message="You successfully logged out!"
@@ -501,6 +514,26 @@ const SettingScreen = () => {
                     await handleLogout();
                 }}
             />
+
+            <SuccessModal
+                visible={showAboutModal}
+                title="About ChefiePie"
+                message={
+                    <Text className="text-center">
+                        <Text className="font-bold text-gray-800">
+                            Version 1.0.0
+                        </Text>
+                        {'\n'}
+                        <Text className="text-gray-500">
+                            Built with React Native & Expo
+                        </Text>
+                    </Text>
+                }
+                icon="app-settings-alt"
+                iconType="material"
+                onClose={() => setShowAboutModal(false)}
+            />
+
 
             <ConfirmationModal
                 visible={showLogoutConfirmation}
