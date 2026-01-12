@@ -12,6 +12,7 @@ import {
     ExpoSpeechRecognitionModule,
     useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
+import { Audio } from 'expo-av';
 import colors from '~/utils/color';
 
 // Create enhanced ScrollView with scroll-into-view functionality
@@ -59,6 +60,7 @@ const ViewSavedRecipeScreen = () => {
     const lastSpeechEndTime = useRef<number>(0); // NEW: Timestamp of last speech end for cooldown
     const lastSpeechLength = useRef<number>(0); // NEW: Length of last speech for dynamic cooldown
     const recentAppSpeech = useRef<string[]>([]); // NEW: Track recent app speech for echo detection
+    const alarmSound = useRef<Audio.Sound | null>(null); // NEW: Alarm sound reference
 
     const shadowStyle = Platform.select({
         android: { elevation: 3 },
@@ -74,6 +76,37 @@ const ViewSavedRecipeScreen = () => {
     useEffect(() => {
         voiceModeRef.current = voiceMode;
     }, [voiceMode]);
+
+    // Load alarm sound on mount
+    useEffect(() => {
+        const loadAlarmSound = async () => {
+            try {
+                await Audio.setAudioModeAsync({
+                    playsInSilentModeIOS: true,
+                    staysActiveInBackground: false,
+                });
+
+                // Use a simple notification beep sound
+                // You can replace this with a custom alarm.mp3 file in assets folder
+                const { sound } = await Audio.Sound.createAsync(
+                    { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
+                    { shouldPlay: false, isLooping: true, volume: 1.0 }
+                );
+                alarmSound.current = sound;
+            } catch (error) {
+                console.error('Failed to load alarm sound:', error);
+            }
+        };
+
+        loadAlarmSound();
+
+        // Cleanup alarm sound on unmount
+        return () => {
+            if (alarmSound.current) {
+                alarmSound.current.unloadAsync();
+            }
+        };
+    }, []);
 
     // Helper function to cleanup voice assistant
     const cleanupVoiceAssistant = useCallback(() => {
@@ -397,7 +430,7 @@ const ViewSavedRecipeScreen = () => {
                 continuous: true, // Keep continuous for better UX
                 requiresOnDeviceRecognition: false,
                 addsPunctuation: false,
-                contextualStrings: ['next', 'previous', 'repeat', 'pause', 'stop', 'wait', 'timer', 'minutes'],
+                contextualStrings: ['next', 'previous', 'repeat', 'pause', 'stop', 'wait', 'timer', 'minutes', 'seconds'],
             });
 
             setIsListening(true);
@@ -874,13 +907,13 @@ const ViewSavedRecipeScreen = () => {
             stopVoiceAssistant();
         }
         else if (command.includes('wait') || command.includes('timer')) {
-            const minutes = extractMinutes(command);
-            if (minutes > 0) {
+            const { minutes, seconds, totalSeconds } = extractTime(command);
+            if (totalSeconds > 0) {
                 Vibration.vibrate(100);
-                startTimer(minutes);
+                startTimer(totalSeconds, minutes, seconds);
             } else {
                 Vibration.vibrate([50, 50, 50]); // Error pattern
-                speak('Sorry, I could not understand the time. Please say, for example, wait 5 minutes');
+                speak('Sorry, I could not understand the time. Please say, for example, wait 5 minutes or wait 30 seconds');
             }
         }
         else {
@@ -915,24 +948,43 @@ const ViewSavedRecipeScreen = () => {
         }
     };
 
-    const extractMinutes = (command: string): number => {
-        const match = command.match(/(\d+)\s*(minute|min)/i);
-        return match ? parseInt(match[1]) : 0;
+    const extractTime = (command: string): { minutes: number; seconds: number; totalSeconds: number } => {
+        // Extract minutes
+        const minuteMatch = command.match(/(\d+)\s*(minute|min)/i);
+        const minutes = minuteMatch ? parseInt(minuteMatch[1]) : 0;
+
+        // Extract seconds
+        const secondMatch = command.match(/(\d+)\s*(second|sec)/i);
+        const seconds = secondMatch ? parseInt(secondMatch[1]) : 0;
+
+        const totalSeconds = (minutes * 60) + seconds;
+
+        return { minutes, seconds, totalSeconds };
     };
 
-    const startTimer = (minutes: number) => {
-        setTimerMinutes(minutes);
-        setTimerSeconds(minutes * 60);
+    const startTimer = (totalSeconds: number, minutes: number, seconds: number) => {
+        setTimerMinutes(Math.ceil(totalSeconds / 60));
+        setTimerSeconds(totalSeconds);
         setTimerActive(true);
         setShowTimerModal(true);
 
-        speak(`Starting timer for ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+        // Build announcement message
+        let announcement = 'Starting timer for ';
+        if (minutes > 0 && seconds > 0) {
+            announcement += `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} and ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+        } else if (minutes > 0) {
+            announcement += `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+        } else {
+            announcement += `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+        }
+
+        speak(announcement);
 
         if (timerRef.current) {
             clearInterval(timerRef.current);
         }
 
-        let remainingSeconds = minutes * 60;
+        let remainingSeconds = totalSeconds;
 
         timerRef.current = setInterval(() => {
             remainingSeconds -= 1;
@@ -944,12 +996,41 @@ const ViewSavedRecipeScreen = () => {
                 }
                 setTimerActive(false);
                 setShowTimerModal(false);
+                playAlarm();
                 Vibration.vibrate([500, 200, 500, 200, 500]);
                 speak('Timer finished! Ready to continue cooking?');
             } else {
                 setTimerMinutes(Math.ceil(remainingSeconds / 60));
             }
         }, 1000);
+    };
+
+    const playAlarm = async () => {
+        try {
+            if (alarmSound.current) {
+                await alarmSound.current.replayAsync();
+                await alarmSound.current.playAsync();
+
+                // Stop alarm after 10 seconds
+                setTimeout(async () => {
+                    if (alarmSound.current) {
+                        await alarmSound.current.stopAsync();
+                    }
+                }, 10000);
+            }
+        } catch (error) {
+            console.error('Failed to play alarm:', error);
+        }
+    };
+
+    const stopAlarm = async () => {
+        try {
+            if (alarmSound.current) {
+                await alarmSound.current.stopAsync();
+            }
+        } catch (error) {
+            console.error('Failed to stop alarm:', error);
+        }
     };
 
     const cancelTimer = () => {
@@ -960,6 +1041,7 @@ const ViewSavedRecipeScreen = () => {
         setTimerActive(false);
         setTimerSeconds(0);
         setShowTimerModal(false);
+        stopAlarm();
         speak('Timer cancelled');
     };
 
@@ -995,6 +1077,7 @@ const ViewSavedRecipeScreen = () => {
                 setTimerActive(false);
                 setTimerPaused(false);
                 setShowTimerModal(false);
+                playAlarm();
                 Vibration.vibrate([500, 200, 500, 200, 500]);
                 speak('Timer finished! Ready to continue cooking?');
             }
