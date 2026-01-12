@@ -283,66 +283,53 @@ export const HomeScreen = () => {
 
     // --- LOAD RECIPES BY CATEGORY ---
     const loadRecipes = async () => {
-        // ⚠️ SPOONACULAR API DISABLED - Uncomment below to re-enable
-        console.log('⚠️ Spoonacular API call skipped (loadRecipes)');
-        setLoadingCategories(false);
-        setInitialLoading(false);
-        setCategoryRecipes([]); // Set empty array instead of calling API
-        return;
 
+        try {
+            setLoadingCategories(true);
+            const results = await fetchRecipesByCategory(activeCategory, 30);
 
-        // try {
-        //     setLoadingCategories(true);
-        //     const results = await fetchRecipesByCategory(activeCategory, 30);
+            const recipesData =
+                activeCategory === 'All' ? results.recipes || [] : results.results || [];
 
-        //     const recipesData =
-        //         activeCategory === 'All' ? results.recipes || [] : results.results || [];
+            const transformedRecipes = recipesData.map((recipe: any, index: number) => ({
+                id: recipe.id?.toString() || index.toString(),
+                title: recipe.title || 'Untitled Recipe',
+                image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+                time: recipe.readyInMinutes ? `${recipe.readyInMinutes} Mins` : 'N/A',
+            }));
 
-        //     const transformedRecipes = recipesData.map((recipe: any, index: number) => ({
-        //         id: recipe.id?.toString() || index.toString(),
-        //         title: recipe.title || 'Untitled Recipe',
-        //         image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
-        //         time: recipe.readyInMinutes ? `${recipe.readyInMinutes} Mins` : 'N/A',
-        //     }));
-
-        //     setCategoryRecipes(transformedRecipes);
-        // } catch (error) {
-        //     console.log('Error fetching recipes:', error);
-        //     Alert.alert('Error', 'Failed to fetch recipes');
-        // } finally {
-        //     setInitialLoading(false);
-        //     setLoadingCategories(false);
-        // }
+            setCategoryRecipes(transformedRecipes);
+        } catch (error) {
+            console.log('Error fetching recipes:', error);
+            Alert.alert('Error', 'Failed to fetch recipes');
+        } finally {
+            setInitialLoading(false);
+            setLoadingCategories(false);
+        }
     };
 
     // --- LOAD RECIPES BY INGREDIENTS ---
     const loadRecipesByIngredients = async (ingredientsList: string[]) => {
-        // ⚠️ SPOONACULAR API DISABLED - Uncomment below to re-enable
-        console.log('⚠️ Spoonacular API call skipped (loadRecipesByIngredients)');
-        setLoadingIngredients(false);
-        setInitialLoading(false);
-        setIngredientRecipes([]); // Set empty array instead of calling API
-        return;
 
-        // try {
-        //     setLoadingIngredients(true);
-        //     const results = await fetchRecipesByIngredients(ingredientsList, 30);
+        try {
+            setLoadingIngredients(true);
+            const results = await fetchRecipesByIngredients(ingredientsList, 30);
 
-        //     const transformedRecipes = results.map((recipe: any, index: number) => ({
-        //         id: recipe.id?.toString() || index.toString(),
-        //         title: recipe.title || 'Untitled Recipe',
-        //         image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
-        //         time: 'See more',
-        //     }));
+            const transformedRecipes = results.map((recipe: any, index: number) => ({
+                id: recipe.id?.toString() || index.toString(),
+                title: recipe.title || 'Untitled Recipe',
+                image: recipe.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+                time: 'See more',
+            }));
 
-        //     setIngredientRecipes(transformedRecipes);
-        // } catch (error) {
-        //     console.log('Error fetching recipes by ingredients:', error);
-        //     Alert.alert('Error', 'Failed to fetch recipes');
-        // } finally {
-        //     setInitialLoading(false);
-        //     setLoadingIngredients(false);
-        // }
+            setIngredientRecipes(transformedRecipes);
+        } catch (error) {
+            console.log('Error fetching recipes by ingredients:', error);
+            Alert.alert('Error', 'Failed to fetch recipes');
+        } finally {
+            setInitialLoading(false);
+            setLoadingIngredients(false);
+        }
     };
 
     // --- HANDLE INGREDIENT SELECTION (TEMPORARY) ---
