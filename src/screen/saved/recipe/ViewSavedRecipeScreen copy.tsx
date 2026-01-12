@@ -306,7 +306,13 @@ const ViewSavedRecipeScreen = () => {
         // Handle actual errors that require user attention
         switch (event.error) {
             case 'network':
-                Alert.alert('Network Error', 'Please check your internet connection');
+                console.log('⚠️ Network error - will retry speech recognition...');
+                // Auto-retry after network error (don't show alert immediately)
+                if (wakeWordListening && !voiceMode && !isSpeaking) {
+                    setTimeout(() => startWakeWordListening(), 2000);
+                } else if (voiceMode && !isPaused && !isSpeaking) {
+                    setTimeout(() => startListening(), 2000);
+                }
                 break;
             case 'not-allowed':
                 Alert.alert('Permission Denied', 'Microphone access is required for voice commands');
@@ -333,12 +339,12 @@ const ViewSavedRecipeScreen = () => {
                 try {
                     console.log('Fetching recipe with ID:', recipeId);
                     const recipeData = await getRecipeById(recipeId);
-                    console.log('Fetched recipe data:', recipeData);
                     if (!recipeData) {
-                        Alert.alert('Error', 'No recipe Data found');
+                        Alert.alert('Error', 'No recipe ID found.');
                         navigation.goBack();
                         return;
                     }
+                    console.log('Fetched recipe data:', recipeData);
                     const cleanedIntro = recipeData.intro?.replace(/<[^>]+>/g, '') || '';
                     const recipeToSet = {
                         ...recipeData,
@@ -1758,57 +1764,52 @@ const ViewSavedRecipeScreen = () => {
                     <Pressable
                         style={{
                             flex: 1,
-                            backgroundColor: 'rgba(0,0,0,0.5)',
+                            backgroundColor: 'rgba(0,0,0,0.4)',
                             justifyContent: 'center',
                             alignItems: 'center',
-                            padding: 20,
+                            padding: 16,
                         }}
                         onPress={() => setShowWakeWordModal(false)}
                     >
                         <Pressable
                             style={{
                                 backgroundColor: 'white',
-                                borderRadius: 16,
-                                padding: 24,
+                                borderRadius: 14,
+                                padding: 16,
                                 width: '100%',
-                                maxWidth: 350,
+                                maxWidth: 300,
                             }}
                             onPress={(e) => e.stopPropagation()}
                         >
-                            <View className="flex-row items-center justify-between mb-4">
+                            {/* Header */}
+                            <View className="flex-row items-center justify-between mb-3">
                                 <View className="flex-row items-center">
-                                    <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center mr-3">
-                                        <Ionicons name="mic" size={24} color="#3B82F6" />
-                                    </View>
-                                    <Text className="text-xl font-bold text-gray-900">Voice Assistant</Text>
+                                    <Ionicons name="mic" size={20} color="#3B82F6" />
+                                    <Text className="ml-2 text-base font-bold text-gray-900">
+                                        Voice Assistant
+                                    </Text>
                                 </View>
                                 <TouchableOpacity onPress={() => setShowWakeWordModal(false)}>
-                                    <Ionicons name="close-circle" size={28} color="#9CA3AF" />
+                                    <Ionicons name="close" size={22} color="#9CA3AF" />
                                 </TouchableOpacity>
                             </View>
 
-                            <View className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-                                <View className="flex-row items-center mb-2">
-                                    <View className="w-3 h-3 rounded-full bg-green-500 mr-2" />
-                                    <Text className="font-bold text-blue-800 text-base">
-                                        Listening for Wake Word
+                            {/* Status */}
+                            <View className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <View className="flex-row items-center mb-1">
+                                    <View className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+                                    <Text className="font-semibold text-blue-800 text-sm">
+                                        Listening
                                     </Text>
                                 </View>
-                                <Text className="text-blue-700 text-sm leading-5">
-                                    Say <Text className="font-bold">"Hi Chefiepie"</Text> to activate the voice cooking assistant
-                                </Text>
-                            </View>
 
-                            <View className="bg-gray-50 rounded-xl p-4 mb-4">
-                                <Text className="font-bold text-gray-800 mb-2">How it works:</Text>
-                                <Text className="text-gray-600 text-sm leading-5">
-                                    • The app is listening for the wake word{'\n'}
-                                    • Once activated, you can ask questions{'\n'}
-                                    • Use voice commands like "next", "repeat", or "pause"
+                                <Text className="text-blue-700 text-xs leading-4">
+                                    Say <Text className="font-bold">“Hi Chefiepie”</Text> to activate
                                 </Text>
                             </View>
                         </Pressable>
                     </Pressable>
+
                 </Modal>
 
 
