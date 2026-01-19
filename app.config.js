@@ -25,6 +25,12 @@ module.exports = {
           cameraPermission: "Allow Chefie Pie to access your camera to take photos of ingredients for recipe suggestions."
         }
       ],
+      [
+        "expo-av",
+    {
+      "microphonePermission": "Allow ChefiePie to access your microphone."
+    }
+      ],
       "expo-font",
       "@react-native-google-signin/google-signin"
     ],

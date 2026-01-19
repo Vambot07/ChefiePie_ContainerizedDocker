@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking, Vibration, Platform, BackHandler, Modal, Pressable } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Linking, Vibration, Platform, BackHandler, Modal, Pressable, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -14,6 +14,8 @@ import {
 } from 'expo-speech-recognition';
 import { Audio } from 'expo-av';
 import colors from '~/utils/color';
+import ConfirmationModal from '~/components/modal/ConfirmationModal';
+import SuccessModal from '~/components/modal/SuccessModal';
 
 // Create enhanced ScrollView with scroll-into-view functionality
 const EnhancedScrollView = wrapScrollView(ScrollView);
@@ -46,12 +48,19 @@ const ViewSavedRecipeScreen = () => {
     const [timerActive, setTimerActive] = useState<boolean>(false);
     const [timerMinutes, setTimerMinutes] = useState<number>(0);
     const [recognizedText, setRecognizedText] = useState<string>('');
+    const [assistantText, setAssistantText] = useState<string>(''); // NEW: Track what assistant is saying
     const [speechRate, setSpeechRate] = useState<number>(0.75); // Adjustable speech rate (0.5 = slow, 0.75 = normal, 1.0 = fast)
     const [showIntroModal, setShowIntroModal] = useState<boolean>(false);
     const [wakeWordListening, setWakeWordListening] = useState<boolean>(false); // NEW: Wake word detection mode
     const [isProcessingAI, setIsProcessingAI] = useState<boolean>(false); // NEW: AI processing state
     const [showWakeWordModal, setShowWakeWordModal] = useState<boolean>(false); // NEW: Modal for wake word indicator
     const [activationStage, setActivationStage] = useState<'idle' | 'ready' | 'command'>('idle'); // NEW: Activation flow stage
+    const [autoShowModal, setAutoShowModal] = useState<boolean>(false); // Auto-show modal when listening/speaking
+
+    // Confirmation and Success Modal states
+    const [showUnsaveConfirmation, setShowUnsaveConfirmation] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
@@ -76,6 +85,23 @@ const ViewSavedRecipeScreen = () => {
     useEffect(() => {
         voiceModeRef.current = voiceMode;
     }, [voiceMode]);
+
+    // Auto-show modal when user speaks or app speaks
+    useEffect(() => {
+        if (voiceMode && (isListening || isSpeaking || isProcessingAI || recognizedText || assistantText)) {
+            setAutoShowModal(true);
+            setShowWakeWordModal(true);
+        } else if (!isListening && !isSpeaking && !isProcessingAI && !recognizedText && !assistantText) {
+            // Auto-hide after 2 seconds of inactivity
+            const timer = setTimeout(() => {
+                setAutoShowModal(false);
+                if (autoShowModal) {
+                    setShowWakeWordModal(false);
+                }
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [voiceMode, isListening, isSpeaking, isProcessingAI, recognizedText, assistantText]);
 
     // Load alarm sound on mount
     useEffect(() => {
@@ -232,21 +258,10 @@ const ViewSavedRecipeScreen = () => {
         }
 
         if (transcript) {
-            // ECHO FILTER: Check if recognized text matches recent app speech
-            const isEcho = recentAppSpeech.current.some(appSpeech => {
-                // Check if the transcript is similar to what the app just said
-                const similarity = transcript.includes(appSpeech.substring(0, Math.min(20, appSpeech.length))) ||
-                    appSpeech.includes(transcript.substring(0, Math.min(20, transcript.length)));
-                return similarity;
-            });
-
-            if (isEcho) {
-                console.log('🔇 Ignoring recognition - detected echo of app speech:', transcript);
-                return;
-            }
-
             console.log('✅ Valid command received:', transcript);
             setRecognizedText(transcript);
+            // Clear previous assistant text when new command is received
+            setAssistantText('');
 
             // Check for wake word if in wake word listening mode
             if (wakeWordListening && !voiceMode) {
@@ -264,7 +279,7 @@ const ViewSavedRecipeScreen = () => {
                 }
             }
 
-            // Handle activation flow stages
+            // Handle activation flow stages - CHECK BEFORE ECHO FILTER
             if (activationStage === 'ready') {
                 // Waiting for user to say "ready"
                 if (transcript.includes('ready') || transcript.includes('start') || transcript.includes('begin')) {
@@ -277,7 +292,9 @@ const ViewSavedRecipeScreen = () => {
                     }, 500);
                     return;
                 }
-            } else if (activationStage === 'command') {
+            }
+
+            if (activationStage === 'command') {
                 // Waiting for "first step" or a question
                 if (transcript.includes('first step') || transcript.includes('start step') || transcript.includes('begin step')) {
                     console.log('✅ User requested first step');
@@ -294,6 +311,31 @@ const ViewSavedRecipeScreen = () => {
                     setActivationStage('idle');
                     setVoiceMode(true); // Enable voice mode for continuing conversation
                     handleInitialQuestion(transcript);
+                    return;
+                }
+            }
+
+            // ECHO FILTER: Check if recognized text matches recent app speech
+            // Skip echo check during activation stages to avoid blocking expected responses
+            if (activationStage === 'idle' && !wakeWordListening) {
+                const isEcho = recentAppSpeech.current.some(appSpeech => {
+                    // Check if the transcript is similar to what the app just said
+                    // Use longer substring (40 chars) for better matching
+                    const checkLength = Math.min(40, appSpeech.length, transcript.length);
+                    const similarity = transcript.includes(appSpeech.substring(0, checkLength)) ||
+                        appSpeech.includes(transcript.substring(0, checkLength));
+
+                    // Also check for significant word overlap (more than 60% of words match)
+                    const transcriptWords = transcript.split(' ').filter(w => w.length > 3);
+                    const appSpeechWords = appSpeech.split(' ').filter(w => w.length > 3);
+                    const matchingWords = transcriptWords.filter(word => appSpeechWords.includes(word));
+                    const overlapRatio = matchingWords.length / Math.max(transcriptWords.length, 1);
+
+                    return similarity || overlapRatio > 0.6;
+                });
+
+                if (isEcho) {
+                    console.log('🔇 Ignoring recognition - detected echo of app speech:', transcript);
                     return;
                 }
             }
@@ -482,6 +524,9 @@ const ViewSavedRecipeScreen = () => {
     const speak = (text: string, skipEchoTracking = false) => {
         console.log('🔊 Speaking:', text.substring(0, 50) + '...');
 
+        // Set assistant text to display in UI
+        setAssistantText(text);
+
         // Track speech length for dynamic cooldown
         lastSpeechLength.current = text.length;
 
@@ -529,6 +574,7 @@ const ViewSavedRecipeScreen = () => {
                     setTimeout(() => {
                         isSpeakingRef.current = false;
                         setIsSpeaking(false);
+                        // Don't clear assistant text - let it stay until next command
                     }, 500); // Increased to 500ms buffer after speech ends
 
                     // Resume listening after speech is done (only if still in voice mode)
@@ -562,6 +608,11 @@ const ViewSavedRecipeScreen = () => {
         const greeting = "Voice assistant on. Say ready to start.";
 
         console.log('🔊 Starting activation flow...');
+
+        // Set activation stage to 'ready' immediately
+        setActivationStage('ready');
+        setWakeWordListening(false); // Stop wake word listening
+
         isSpeakingRef.current = true;
         setIsSpeaking(true);
 
@@ -849,6 +900,34 @@ const ViewSavedRecipeScreen = () => {
                 setIsSpeaking(false);
             }
         });
+    };
+
+    const pauseVoiceAssistant = () => {
+        console.log('⏸ Pausing voice assistant');
+        setIsPaused(true);
+        stopListening();
+        Speech.stop();
+        speak('Voice assistant paused. Say resume to continue.');
+    };
+
+    const resumeVoiceAssistant = () => {
+        console.log('▶ Resuming voice assistant');
+        setIsPaused(false);
+        speak(`Resuming. You are on step ${currentStep + 1}.`);
+    };
+
+    const manualInterrupt = () => {
+        console.log('⏹ Manual interrupt - stopping speech');
+        Speech.stop();
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+
+        // Restart listening if voice mode is active and not paused
+        if (voiceMode && !isPaused) {
+            setTimeout(() => {
+                startListening();
+            }, 500);
+        }
     };
 
     const handleVoiceCommand = async (command: string) => {
@@ -1148,17 +1227,21 @@ const ViewSavedRecipeScreen = () => {
     const handleUnsaveRecipe = async () => {
         if (!recipe) return;
         setLoadingAction('unsaving');
+        setShowUnsaveConfirmation(false); // Close confirmation modal
         try {
             await unsaveRecipe(recipe.id);
             setIsSaved(false);
-            Alert.alert('Success', 'Recipe has been unsaved.', [
-                { text: 'OK', onPress: () => navigation.goBack() }
-            ]);
+            setSuccessMessage('Recipe has been unsaved successfully.');
+            setShowSuccessModal(true);
         } catch (error) {
             Alert.alert('Error', error instanceof Error ? error.message : 'Failed to unsave recipe');
         } finally {
             setLoadingAction(null);
         }
+    };
+
+    const onUnsavePress = () => {
+        setShowUnsaveConfirmation(true);
     };
 
     const toggleIngredientSelection = (ingredient: any) => {
@@ -1286,69 +1369,49 @@ const ViewSavedRecipeScreen = () => {
                                 className="w-full h-56 rounded-2xl"
                             />
 
+                            {/* YouTube Video Link - Top Left */}
                             {recipe.youtube && (
-                                <>
-                                    <TouchableOpacity
-                                        onPress={handleYouTubeLink}
-                                        className="absolute top-3 left-5 bg-black/30 px-3 py-1 rounded-full flex-row items-center"
-                                    >
-                                        <Ionicons name="logo-youtube" size={16} color="#fff" />
-                                        <Text className="text-white ml-2 text-xs">Watch on YouTube</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        onPress={handleYouTubeLink}
-                                        style={{
-                                            position: 'absolute',
-                                            top: "50%",
-                                            left: "50%",
-                                            transform: [{ translateX: -24 }, { translateY: -24 }],
-                                        }}
-                                    >
-                                        <Ionicons name="play-circle" size={48} color="#fff" />
-                                    </TouchableOpacity>
-                                </>
+                                <TouchableOpacity
+                                    onPress={handleYouTubeLink}
+                                    className="absolute top-3 left-5 bg-red-600/90 px-3 py-2 rounded-full flex-row items-center"
+                                    style={{ ...shadowStyle }}
+                                >
+                                    <Ionicons name="logo-youtube" size={18} color="#fff" />
+                                    <Text className="text-white ml-2 text-xs font-bold">Watch Video</Text>
+                                </TouchableOpacity>
                             )}
 
-                            {!recipe.youtube && recipe.sourceUrl && (
+                            {/* Source URL Link - Bottom Right (if both exist) OR Center (if only sourceUrl) */}
+                            {recipe.sourceUrl && (
                                 <TouchableOpacity
                                     onPress={handleSourceURL}
-                                    onLayout={(e) => {
-                                        const { width, height } = e.nativeEvent.layout;
-                                        setOverlaySize({ w: width, h: height });
-                                    }}
-                                    style={{
+                                    className={recipe.youtube ? "absolute bottom-3 left-5 bg-blue-600/90 px-3 py-2 rounded-full flex-row items-center" : ""}
+                                    style={recipe.youtube ? { ...shadowStyle } : {
                                         position: 'absolute',
                                         top: '50%',
                                         left: '50%',
                                         transform: [
-                                            { translateX: -(overlaySize.w / 2) },
-                                            { translateY: -(overlaySize.h / 2) }
+                                            { translateX: -80 },
+                                            { translateY: -30 }
                                         ],
-                                        justifyContent: 'center',
+                                        backgroundColor: 'rgba(37, 99, 235, 0.9)',
+                                        paddingVertical: 12,
+                                        paddingHorizontal: 20,
+                                        borderRadius: 16,
+                                        flexDirection: 'row',
                                         alignItems: 'center',
+                                        ...shadowStyle
                                     }}
                                 >
-                                    <View
-                                        style={{
-                                            backgroundColor: 'rgba(0,0,0,0.4)',
-                                            paddingVertical: 10,
-                                            paddingHorizontal: 18,
-                                            borderRadius: 16,
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <Ionicons name="link-sharp" size={48} color="#fff" />
-                                        <Text className="font-bold text-base text-white mt-1">
-                                            Go to Recipe Page
-                                        </Text>
-                                    </View>
+                                    <Ionicons name="link-outline" size={recipe.youtube ? 18 : 24} color="#fff" />
+                                    <Text className={recipe.youtube ? "text-white ml-2 text-xs font-bold" : "text-white ml-2 text-sm font-bold"}>
+                                        {recipe.youtube ? "Recipe Link" : "View Recipe Source"}
+                                    </Text>
                                 </TouchableOpacity>
                             )}
 
                             {(recipe.youtube || recipe.sourceUrl) && (
-                                <View className="absolute bottom-3 right-5 bg-black/60 px-2 py-1 rounded-full flex-row items-center">
+                                <View className="absolute top-3 right-5 bg-black/60 px-2 py-1 rounded-full flex-row items-center">
                                     <Ionicons name="time-outline" size={14} color="#fff" />
                                     <Text className="ml-1 text-xs text-white">{recipe.totalTime} Mins</Text>
                                 </View>
@@ -1373,7 +1436,7 @@ const ViewSavedRecipeScreen = () => {
                             </View>
                             <TouchableOpacity
                                 className={`px-4 py-2 rounded-full ${isSaved ? 'bg-red-500' : 'bg-gray-400'}`}
-                                onPress={handleUnsaveRecipe}
+                                onPress={onUnsavePress}
                                 disabled={!!loadingAction || !isSaved}
                             >
                                 <Text className="text-white font-semibold">
@@ -1669,124 +1732,105 @@ const ViewSavedRecipeScreen = () => {
                     </TouchableOpacity>
                 )}
 
-                {/* Wake Word Detection Floating Icon */}
-                {wakeWordListening && !voiceMode && (
+                {/* Floating Voice Assistant Button with Status */}
+                {(voiceMode || wakeWordListening) ? (
                     <TouchableOpacity
                         onPress={() => setShowWakeWordModal(true)}
                         style={{
                             position: 'absolute',
-                            top: 90,
+                            top: 160,
+                            right: 20,
+                            backgroundColor: isProcessingAI ? '#A855F7' : isSpeaking ? '#3B82F6' : isListening ? '#10B981' : '#6B7280',
+                            width: 64,
+                            height: 64,
+                            borderRadius: 32,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 40,
+                            ...shadowStyle,
+                            shadowColor: isProcessingAI ? '#A855F7' : isSpeaking ? '#3B82F6' : isListening ? '#10B981' : '#6B7280',
+                            shadowOpacity: 0.4,
+                            shadowRadius: 10,
+                            elevation: 8,
+                        }}
+                    >
+                        {/* Animated Ring */}
+                        {isListening && (
+                            <>
+                                <View style={{
+                                    position: 'absolute',
+                                    width: 80,
+                                    height: 80,
+                                    borderRadius: 40,
+                                    backgroundColor: '#10B981',
+                                    opacity: 0.3,
+                                }} />
+                                <View style={{
+                                    position: 'absolute',
+                                    width: 72,
+                                    height: 72,
+                                    borderRadius: 36,
+                                    backgroundColor: '#10B981',
+                                    opacity: 0.2,
+                                }} />
+                            </>
+                        )}
+
+                        <Ionicons
+                            name={isListening ? "mic" : isSpeaking ? "volume-high" : isProcessingAI ? "sparkles" : "mic-off"}
+                            size={32}
+                            color="white"
+                        />
+
+                        {/* Status Badge */}
+                        <View style={{
+                            position: 'absolute',
+                            bottom: -2,
+                            right: -2,
+                            backgroundColor: 'white',
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 8,
+                            borderWidth: 2,
+                            borderColor: isProcessingAI ? '#A855F7' : isSpeaking ? '#3B82F6' : isListening ? '#10B981' : '#6B7280',
+                        }}>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#374151' }}>
+                                {isProcessingAI ? '🤖' : isSpeaking ? '🔊' : isListening ? '👂' : '💬'}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity
+                        onPress={() => setShowWakeWordModal(true)}
+                        style={{
+                            position: 'absolute',
+                            top: 160,
                             right: 20,
                             backgroundColor: '#3B82F6',
-                            width: 50,
-                            height: 50,
-                            borderRadius: 25,
+                            width: 56,
+                            height: 56,
+                            borderRadius: 28,
                             justifyContent: 'center',
                             alignItems: 'center',
                             zIndex: 40,
                             ...shadowStyle,
                         }}
                     >
+                        <Ionicons name="mic" size={28} color="white" />
                         <View style={{
                             position: 'absolute',
-                            top: 0,
-                            right: 0,
-                            width: 12,
-                            height: 12,
-                            borderRadius: 6,
+                            top: 2,
+                            right: 2,
+                            width: 14,
+                            height: 14,
+                            borderRadius: 7,
                             backgroundColor: '#22C55E',
+                            borderWidth: 2,
+                            borderColor: 'white',
                         }} />
-                        <Ionicons name="mic" size={24} color="white" />
                     </TouchableOpacity>
                 )}
 
-                {/* Voice Assistant Overlay */}
-                {voiceMode && (
-                    <View className="absolute top-20 left-4 right-4 bg-white rounded-2xl p-4 z-40" style={shadowStyle}>
-                        <View className="flex-row items-center justify-between mb-2">
-                            <View className="flex-row items-center">
-                                <View className={`w-3 h-3 rounded-full mr-2 ${isProcessingAI ? 'bg-purple-500' :
-                                    isSpeaking ? 'bg-blue-500' :
-                                        isListening ? 'bg-green-500' :
-                                            'bg-gray-400'
-                                    }`} />
-                                <Text className="font-bold text-gray-800">
-                                    {isProcessingAI ? '🤖 AI Thinking...' : isSpeaking ? 'Speaking...' : 'Voice Assistant'}
-                                </Text>
-                            </View>
-                            <Text className="text-sm text-gray-600">
-                                Step {currentStep + 1}/{recipe.steps?.length || 0}
-                            </Text>
-                        </View>
-
-                        {/* AI Processing Indicator */}
-                        {isProcessingAI && (
-                            <View className="bg-purple-50 p-2 rounded-lg mb-2">
-                                <Text className="text-xs text-purple-700 text-center">
-                                    🧠 Processing your question with AI...
-                                </Text>
-                            </View>
-                        )}
-
-                        {/* Speech Rate Controls */}
-                        <View className="bg-gray-50 p-2 rounded-lg mb-2">
-                            <Text className="text-xs text-gray-600 mb-2 text-center">Speech Speed</Text>
-                            <View className="flex-row justify-around">
-                                <TouchableOpacity
-                                    onPress={() => setSpeechRate(0.5)}
-                                    className={`px-3 py-1.5 rounded-lg ${speechRate === 0.5 ? 'bg-orange-500' : 'bg-gray-200'}`}
-                                    disabled={isSpeaking}
-                                >
-                                    <Text className={`text-xs font-semibold ${speechRate === 0.5 ? 'text-white' : 'text-gray-600'}`}>
-                                        Slow
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setSpeechRate(0.75)}
-                                    className={`px-3 py-1.5 rounded-lg ${speechRate === 0.75 ? 'bg-orange-500' : 'bg-gray-200'}`}
-                                    disabled={isSpeaking}
-                                >
-                                    <Text className={`text-xs font-semibold ${speechRate === 0.75 ? 'text-white' : 'text-gray-600'}`}>
-                                        Normal
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setSpeechRate(1.0)}
-                                    className={`px-3 py-1.5 rounded-lg ${speechRate === 1.0 ? 'bg-orange-500' : 'bg-gray-200'}`}
-                                    disabled={isSpeaking}
-                                >
-                                    <Text className={`text-xs font-semibold ${speechRate === 1.0 ? 'text-white' : 'text-gray-600'}`}>
-                                        Fast
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        {timerActive && (
-                            <View className="bg-blue-50 p-3 rounded-lg mb-2">
-                                <Text className="text-center font-semibold text-blue-700">
-                                    ⏱ Timer: {timerMinutes} {timerMinutes === 1 ? 'minute' : 'minutes'} remaining
-                                </Text>
-                            </View>
-                        )}
-
-                        {recognizedText && !isSpeaking && (
-                            <View className="bg-gray-50 p-2 rounded-lg mb-2">
-                                <Text className="text-xs text-gray-600">Heard: "{recognizedText}"</Text>
-                            </View>
-                        )}
-
-                        <Text className="text-xs text-gray-500 text-center">
-                            {isProcessingAI
-                                ? 'AI is thinking about your question...'
-                                : isSpeaking
-                                    ? 'Tap interrupt button to stop speaking'
-                                    : isPaused
-                                        ? 'Paused - Say "resume" to continue'
-                                        : 'Say commands (next/previous/repeat) or ask questions about the recipe'}
-                        </Text>
-                    </View>
-                )}
 
                 {/* Intro Modal */}
                 <Modal
@@ -1831,7 +1875,7 @@ const ViewSavedRecipeScreen = () => {
                     </Pressable>
                 </Modal>
 
-                {/* Wake Word Modal */}
+                {/* Voice Assistant Control Modal - Compact Top Version */}
                 <Modal
                     visible={showWakeWordModal}
                     transparent={true}
@@ -1841,55 +1885,216 @@ const ViewSavedRecipeScreen = () => {
                     <Pressable
                         style={{
                             flex: 1,
-                            backgroundColor: 'rgba(0,0,0,0.5)',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            padding: 20,
                         }}
                         onPress={() => setShowWakeWordModal(false)}
                     >
                         <Pressable
                             style={{
-                                backgroundColor: 'white',
+                                backgroundColor: colors.lightPeach,
+                                marginTop: 60,
+                                marginHorizontal: 12,
                                 borderRadius: 16,
-                                padding: 24,
-                                width: '100%',
-                                maxWidth: 350,
+                                padding: 12,
+                                maxHeight: '85%',
+                                ...shadowStyle,
+                                shadowOpacity: 0.2,
+                                shadowRadius: 10,
+                                elevation: 8,
                             }}
                             onPress={(e) => e.stopPropagation()}
                         >
-                            <View className="flex-row items-center justify-between mb-4">
-                                <View className="flex-row items-center">
-                                    <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center mr-3">
-                                        <Ionicons name="mic" size={24} color="#3B82F6" />
+                            {/* Compact Header */}
+                            <View className="flex-row items-center justify-between mb-2">
+                                <View className="flex-row items-center flex-1">
+                                    <View className={`w-10 h-10 rounded-xl items-center justify-center mr-3`}
+                                        style={{
+                                            backgroundColor: isProcessingAI ? '#F3E8FF' : isSpeaking ? '#DBEAFE' : isListening ? '#D1FAE5' : '#E5E7EB',
+                                        }}>
+                                        <Ionicons
+                                            name={isListening ? "mic" : isSpeaking ? "volume-high" : isProcessingAI ? "sparkles" : "mic"}
+                                            size={20}
+                                            color={isProcessingAI ? '#A855F7' : isSpeaking ? '#3B82F6' : isListening ? '#10B981' : '#6B7280'}
+                                        />
                                     </View>
-                                    <Text className="text-xl font-bold text-gray-900">Voice Assistant</Text>
+                                    <View className="flex-1">
+                                        <Text className="text-base font-bold text-gray-900">
+                                            {voiceMode ? `Step ${currentStep + 1}/${recipe.steps?.length || 0}` : 'Voice Assistant'}
+                                        </Text>
+                                    </View>
                                 </View>
                                 <TouchableOpacity onPress={() => setShowWakeWordModal(false)}>
-                                    <Ionicons name="close-circle" size={28} color="#9CA3AF" />
+                                    <Ionicons name="close-circle" size={24} color="#9CA3AF" />
                                 </TouchableOpacity>
                             </View>
 
-                            <View className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                            {/* Scrollable Content */}
+                            <ScrollView
+                                showsVerticalScrollIndicator={false}
+                                style={{ flexGrow: 1 }}
+                                contentContainerStyle={{ paddingBottom: 8 }}
+    >
+                            {/* Status Card - Clean and Simple */}
+                            <View className={`rounded-xl p-3 mb-3`}
+                                style={{
+                                    backgroundColor: isProcessingAI ? '#F3E8FF' : isSpeaking ? '#DBEAFE' : isListening ? '#D1FAE5' : '#F3F4F6',
+                                }}>
+                                {/* Status Header */}
                                 <View className="flex-row items-center mb-2">
-                                    <View className="w-3 h-3 rounded-full bg-green-500 mr-2" />
-                                    <Text className="font-bold text-blue-800 text-base">
-                                        Listening for Wake Word
+                                    <View className="w-2 h-2 rounded-full mr-2"
+                                        style={{
+                                            backgroundColor: isProcessingAI ? '#A855F7' : isSpeaking ? '#3B82F6' : isListening ? '#10B981' : '#6B7280',
+                                        }} />
+                                    <Text className="font-bold text-sm"
+                                        style={{
+                                            color: isProcessingAI ? '#7C3AED' : isSpeaking ? '#2563EB' : isListening ? '#059669' : '#374151',
+                                        }}>
+                                        {isProcessingAI ? '🤖 AI Processing' :
+                                         isSpeaking ? '🔊 Speaking' :
+                                         isListening ? '👂 Listening' :
+                                         wakeWordListening ? '💬 Say "Ready"' :
+                                         voiceMode ? '✨ Voice Active' : '🎤 Ready to Start'}
                                     </Text>
                                 </View>
-                                <Text className="text-blue-700 text-sm leading-5">
-                                    Say <Text className="font-bold">"Hi Chefiepie"</Text> to activate the voice cooking assistant
-                                </Text>
+
+                                {/* What User Said - Large and Clear */}
+                                {recognizedText && (
+                                    <View className="bg-white rounded-lg px-3 py-2 mb-1" style={{
+                                        borderLeftWidth: 3,
+                                        borderLeftColor: '#10B981',
+                                    }}>
+                                        <Text className="text-xs text-gray-500 mb-0.5 font-semibold">You said:</Text>
+                                        <Text className="text-gray-900 text-sm font-medium">
+                                            "{recognizedText}"
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* What App is Saying */}
+                                {assistantText && (
+                                    <View className="bg-white rounded-lg px-3 py-2 mb-1" style={{
+                                        borderLeftWidth: 3,
+                                        borderLeftColor: '#3B82F6',
+                                    }}>
+                                        <Text className="text-xs text-gray-500 mb-0.5 font-semibold">Assistant:</Text>
+                                        <Text
+                                            className="text-gray-900 text-sm leading-5"
+                                            style={{ flexWrap: 'wrap' }}
+                                            numberOfLines={0}
+                                        >
+                                            {assistantText}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* Hints when listening and no text yet */}
+                                {!recognizedText && !assistantText && isListening && (
+                                    <View className="bg-white/50 rounded-lg px-2 py-1.5">
+                                        <Text className="text-xs text-center text-gray-600">
+                                            💡 Try: "next", "repeat", "timer"
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
 
-                            <View className="bg-gray-50 rounded-xl p-4 mb-4">
-                                <Text className="font-bold text-gray-800 mb-2">How it works:</Text>
-                                <Text className="text-gray-600 text-sm leading-5">
-                                    • The app is listening for the wake word{'\n'}
-                                    • Once activated, you can ask questions{'\n'}
-                                    • Use voice commands like "next", "repeat", or "pause"
-                                </Text>
-                            </View>
+                            {/* Timer Display */}
+                            {timerActive && (
+                                <View className="bg-blue-50 rounded-xl px-3 py-2 mb-2">
+                                    <Text className="text-center font-bold text-blue-700 text-sm">
+                                        ⏱ Timer: {timerMinutes} {timerMinutes === 1 ? 'min' : 'mins'}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* Action Buttons */}
+                            {voiceMode ? (
+                                <>
+                                    <View className="flex-row mb-2">
+                                        <TouchableOpacity
+                                            onPress={isPaused ? resumeVoiceAssistant : pauseVoiceAssistant}
+                                            className="flex-1 py-3 rounded-xl mr-1.5"
+                                            style={{
+                                                backgroundColor: isPaused ? '#10B981' : '#F59E0B',
+                                            }}
+                                        >
+                                            <Text className="text-white font-bold text-center text-sm">
+                                                {isPaused ? '▶ Resume' : '⏸ Pause'}
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            onPress={manualInterrupt}
+                                            className="flex-1 py-3 rounded-xl ml-1.5"
+                                            style={{
+                                                backgroundColor: isSpeaking ? '#EF4444' : '#D1D5DB',
+                                            }}
+                                            disabled={!isSpeaking}
+                                        >
+                                            <Text className={`font-bold text-center text-sm ${isSpeaking ? 'text-white' : 'text-gray-400'}`}>
+                                                ⏹ Stop
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Speech Speed */}
+                                    <View className="bg-gray-50 rounded-xl p-2 mb-2">
+                                        <Text className="text-xs text-gray-600 font-semibold mb-1.5 text-center">Speech Speed</Text>
+                                        <View className="flex-row justify-around">
+                                            {[
+                                                { rate: 0.5, label: 'Slow', icon: '🐢' },
+                                                { rate: 0.75, label: 'Normal', icon: '👤' },
+                                                { rate: 1.0, label: 'Fast', icon: '🚀' }
+                                            ].map((option) => (
+                                                <TouchableOpacity
+                                                    key={option.rate}
+                                                    onPress={() => setSpeechRate(option.rate)}
+                                                    className={`px-3 py-2 rounded-lg ${speechRate === option.rate ? 'bg-primary' : 'bg-white'}`}
+                                                    style={{
+                                                        borderWidth: 1.5,
+                                                        borderColor: speechRate === option.rate ? '#FF914D' : '#E5E7EB',
+                                                    }}
+                                                    disabled={isSpeaking}
+                                                >
+                                                    <Text className="text-center text-base mb-0.5">{option.icon}</Text>
+                                                    <Text className={`text-xs font-bold ${speechRate === option.rate ? 'text-white' : 'text-gray-600'}`}>
+                                                        {option.label}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    <TouchableOpacity
+                                        onPress={stopVoiceAssistant}
+                                        className="bg-red-500 py-3 rounded-xl"
+                                    >
+                                        <Text className="text-white font-bold text-center text-sm">
+                                            End Session
+                                        </Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <View className="bg-blue-50 rounded-xl p-3 mb-2">
+                                        <Text className="font-bold text-blue-800 mb-1.5 text-sm">Quick Guide:</Text>
+                                        <Text className="text-blue-700 text-xs leading-5">
+                                            • Say <Text className="font-bold">"Ready"</Text> to start{'\n'}
+                                            • Commands: "next", "repeat", "pause"{'\n'}
+                                            • Ask questions about the recipe{'\n'}
+                                            • Timers: "set timer for X minutes"
+                                        </Text>
+                                    </View>
+
+                                    <TouchableOpacity
+                                        onPress={startActivationFlow}
+                                        className="bg-primary py-3 rounded-xl"
+                                    >
+                                        <Text className="text-white font-bold text-center text-sm">
+                                            🎤 Start Voice Assistant
+                                        </Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                            </ScrollView>
                         </Pressable>
                     </Pressable>
                 </Modal>
@@ -2057,6 +2262,31 @@ const ViewSavedRecipeScreen = () => {
                         </View>
                     </View>
                 </Modal>
+
+                {/* Unsave Confirmation Modal */}
+                <ConfirmationModal
+                    visible={showUnsaveConfirmation}
+                    onClose={() => setShowUnsaveConfirmation(false)}
+                    onConfirm={handleUnsaveRecipe}
+                    title="Unsave Recipe"
+                    message={`Are you sure you want to unsave "${recipe?.title}"?`}
+                    confirmText="Unsave"
+                    cancelText="Cancel"
+                    icon="bookmark-outline"
+                    isDestructive={true}
+                />
+
+                {/* Success Modal */}
+                <SuccessModal
+                    visible={showSuccessModal}
+                    title="Success"
+                    message={successMessage}
+                    buttonText="OK"
+                    onClose={() => {
+                        setShowSuccessModal(false);
+                        navigation.goBack();
+                    }}
+                />
             </View>
         </View>
     );

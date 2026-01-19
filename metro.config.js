@@ -1,39 +1,39 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 
+/** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-//  Support .cjs files for Firebase
+// 1. Sokongan Firebase
 config.resolver.sourceExts.push("cjs");
+// Tetapkan false jika Firebase bermasalah, tapi cuba 'true' jika expo-speech-recognition gagal
+config.resolver.unstable_enablePackageExports = false; 
 
-//  Disable unstable package exports for Firebase
-config.resolver.unstable_enablePackageExports = false;
+// 2. Konfigurasi SVG
+const { transformer, resolver } = config;
 
-// Optimize caching and performance
-config.transformer.minifierConfig = {
-  keep_classnames: true,
-  keep_fnames: true,
-  mangle: {
+config.transformer = {
+  ...transformer,
+  // Menggunakan svg-transformer sebagai pemproses fail .svg
+  babelTransformerPath: require.resolve("react-native-svg-transformer"),
+  minifierConfig: {
     keep_classnames: true,
     keep_fnames: true,
+    mangle: {
+      keep_classnames: true,
+      keep_fnames: true,
+    },
   },
 };
 
-// Enable caching
+config.resolver = {
+  ...resolver,
+  assetExts: resolver.assetExts.filter((ext) => ext !== "svg"),
+  sourceExts: [...resolver.sourceExts, "svg"],
+};
+
+// 3. Performance
 config.resetCache = false;
 
-//  Add support for .svg files
-const assetExts = config.resolver.assetExts.filter(ext => ext !== "svg");
-const sourceExts = [...config.resolver.sourceExts, "svg"];
-
-// Use try-catch to handle cases where svg-transformer might not be installed yet
-try {
-  config.transformer.babelTransformerPath = require.resolve("react-native-svg-transformer");
-  config.resolver.assetExts = assetExts;
-  config.resolver.sourceExts = sourceExts;
-} catch (e) {
-  console.warn("react-native-svg-transformer not found, SVG support disabled");
-}
-
-//  Wrap with NativeWind config
+// 4. Gabungkan dengan NativeWind
 module.exports = withNativeWind(config, { input: './global.css' });
