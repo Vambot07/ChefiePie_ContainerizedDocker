@@ -8,10 +8,15 @@
     "prebuild": "expo prebuild",
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\" && prettier -c \"**/*.{js,jsx,ts,tsx,json}\"",
     "format": "eslint \"**/*.{js,jsx,ts,tsx}\" --fix && prettier \"**/*.{js,jsx,ts,tsx,json}\" --write",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "web:docker": "expo start --web --port 5000 --host lan"
   },
   "dependencies": {
     "@expo-google-fonts/archivo-black": "^0.4.1",
+    "@expo/metro-runtime": "~5.0.5",
+    "react-dom": "19.0.0",
+    "react-native-web": "~0.19.13",
+    "react-refresh": "^0.14.0",
     "@expo-google-fonts/merriweather": "^0.4.2",
     "@expo-google-fonts/oswald": "^0.4.2",
     "@expo-google-fonts/roboto-slab": "^0.4.2",

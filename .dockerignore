@@ -1,0 +1,8 @@
+node_modules
+.git
+.expo
+.vscode
+dist
+web-build
+npm-debug.log
+
